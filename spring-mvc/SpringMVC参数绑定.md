@@ -755,7 +755,113 @@ description The request sent by the client was syntactically incorrect.
 Apache Tomcat/7.0.47
 ```
 
-
-
 页面报出了400,代表请求参数错误。
+
+控制台也输出了错误 
+
+```
+[WARNING] Resolved [org.springframework.web.method.annotation.MethodArgumentTypeMismatchException: Failed to convert value of type 'java.lang.String' to required type 'java.util.Date'; nested exception is org.springframework.core.convert.ConversionFailedException: Failed to convert from type [java.lang.String] to type [java.util.Date] for value '2023-02-05'; nested exception is java.lang.IllegalArgumentException]
+```
+
+
+
+#### 解决方案
+
+创建一个从String转换到Date的方法，需要实现Converter接口，此接口存在两个泛型，来源与目标
+
+StringParseDateConverter.java
+
+```
+import org.springframework.core.convert.converter.Converter;
+
+public class StringParseDateConverter implements Converter<String, Date> {
+
+  private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+
+  @Override
+  public Date convert(String s) {
+
+    try {
+      Date time = DATE_FORMAT.parse(s);
+      return time;
+    } catch (ParseException e) {
+      e.printStackTrace();
+    }
+
+    return null;
+  }
+}
+```
+
+进行注册操作
+
+此时分为两步，
+
+第一步将String转换到Date的类注册码FormattingConversionServiceFactoryBean中
+
+第二步将 <mvc:annotation-driven conversion-service="formatStringToDate"/> 注册到适配器映射器中。
+
+
+
+```java
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        https://www.springframework.org/schema/context/spring-context.xsd
+        http://www.springframework.org/schema/mvc
+        https://www.springframework.org/schema/mvc/spring-mvc.xsd
+">
+
+    <!--开启controller扫描-->
+    <context:component-scan base-package="om.nullnull.lean.controller"/>
+
+    <!--配制视图解析-->
+    <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix" value="/WEB-INF/jsp/"/>
+        <property name="suffix" value=".jsp"/>
+    </bean>
+
+
+    <!--注册最最合适的处理器映射器，处理器适配器调用handler-->
+    <mvc:annotation-driven conversion-service="formatStringToDate"/>
+
+    <!--方案1，交给Tomcat容器处理
+    <mvc:default-servlet-handler />-->
+
+    <!-- 方案二：使用SpringMVC提供的静态资源处理   -->
+    <mvc:resources location="classpath:res/" mapping="/resource/**"/>
+
+
+    <bean id="formatStringToDate" class="org.springframework.format.support.FormattingConversionServiceFactoryBean">
+        <property name="converters">
+            <set>
+                <bean class="om.nullnull.lean.controller.StringParseDateConverter"/>
+            </set>
+        </property>
+    </bean>
+
+</beans>
+```
+
+
+
+再次测试
+
+http://127.0.0.1:8080/handle05?date=2023-02-05
+
+即可成功看到结果：
+
+```
+跳转成功！服务器时间：2023-02-05T18:58:46.069
+```
+
+
+
+
 
