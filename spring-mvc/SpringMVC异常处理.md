@@ -1,6 +1,6 @@
-# SpringMVC文件上传
+# SpringMVC异常处理
 
-## 1.添加文件上传的包
+## 1.基础的工程文件
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -114,7 +114,7 @@ commons-fileupload为文件上传的包
 
 
 
-## 2. 文件上传的配制
+## 2. springMVC的配制
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -152,89 +152,45 @@ commons-fileupload为文件上传的包
     <mvc:resources location="WEB-INF/js/" mapping="/js/**"/>
 
 
-    <bean id="formatStringToDate" class="org.springframework.format.support.FormattingConversionServiceFactoryBean">
-        <property name="converters">
-            <set>
-                <bean class="om.nullnull.lean.controller.StringParseDateConverter"/>
-            </set>
-        </property>
-    </bean>
-
-    <!--文件上传的配制,id为multipartResolver固定-->
-    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
-        <!--限制上传文件的大小，单位为字节-->
-        <property name="maxUploadSize" value="100000000" />
-    </bean>
 </beans>
 ```
 
+## 3.  单个Controller的异常处理
 
-
-## 3 配制上传的Controller
-
-FileUploadController.java
+ExceptionController的异常处理
 
 ```java
-package om.nullnull.lean.controller;
-
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.ModelAndView;
-
-import javax.servlet.http.HttpServletRequest;
-import java.io.File;
-import java.io.IOException;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-/**
- * SpringMvc对于Rest的支持
- *
- * @author liujun
- * @since 2023/2/3
- */
 @Controller
-public class FileUploadController {
+public class ExceptionController {
 
-  @RequestMapping(value = "/fileUpload")
-  public ModelAndView handler1(MultipartFile uploadFile, HttpServletRequest request)
-      throws IOException {
-    // 1，获取文件源名称
-    String originalName = uploadFile.getOriginalFilename();
-    // 获取文件扩展名
-    String suffixName = originalName.substring(originalName.lastIndexOf("."));
-
-    String newName = UUID.randomUUID().toString();
-    String newFullName = newName + suffixName;
-
-    String realPath = request.getSession().getServletContext().getRealPath("/uploads/");
-
-    File dataFile = new File(realPath, newFullName);
-    if (!dataFile.exists()) {
-      dataFile.mkdirs();
-    }
-
-    uploadFile.transferTo(dataFile);
-
+  @ExceptionHandler(ArithmeticException.class)
+  public ModelAndView exceptionHandler(
+      ArithmeticException exception, HttpServletResponse response) {
     ModelAndView result = new ModelAndView();
 
+    result.addObject("errorMsg", exception.getMessage());
     result.addObject("time", LocalDateTime.now());
-    result.setViewName("success");
+    result.setViewName("error");
+
+    return result;
+  }
+
+  @RequestMapping(
+      value = "/exception01",
+      method = {RequestMethod.GET})
+  public ModelAndView exceptionProcess() {
+    ModelAndView result = new ModelAndView();
+
+    int value = 100 / 0;
+
+    result.setViewName("success" + value);
 
     return result;
   }
 }
-
 ```
 
-
-
-
-
-## 4. 添加上传文件的jsp
+### 3.1 添加异常处理页面
 
 ```jsp
 <%@ page language="java" isELIgnored="false" contentType="text/html; charset=utf-8" pageEncoding="utf-8" %>
@@ -242,38 +198,119 @@ public class FileUploadController {
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>文件上传</title>
+    <title>error</title>
 </head>
 <body>
-<div>
-    <h2>文件上传的示例</h2>
-
-
-    <fieldset>
-        <p>SpringMVC进行文件上传</p>
-        <form method="post" action="/fileUpload" enctype="multipart/form-data">
-            <input type="file" name="uploadFile"/>
-            <input type="submit" value="上传"/>
-        </form>
-    </fieldset>
-
-
-</div>
+发生错误，服务器时间：${time}，异常信息：${errorMsg}
 </body>
 </html>
 ```
 
-注意此file的name属性名需要与参数名一致。
-
-## 5 测试
+## 3.2 测试 
 
 在浏览器中输入：
 
-http://127.0.0.1:8080/fileUpload.jsp
+http://127.0.0.1:8080/exception01
 
-选择文件上传进行测试
+便可看到结果:
 
-可以查看文件被成功的上传。
+```
+发生错误，服务器时间：2023-02-12T14:12:23.207，异常信息：/ by zero
+```
+
+
+
+
+
+## 4. 全局异常处理 
+
+### 4.1 添加全局的异常处理
+
+
+
+GlobExceptionHandler.java
+
+```java
+package om.nullnull.lean.controller;
+
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.ModelAndView;
+
+import java.time.LocalDateTime;
+
+/**
+ * 全局异常处理器
+ *
+ * @author liujun
+ * @since 2023/2/12
+ */
+@ControllerAdvice
+public class GlobExceptionHandler {
+
+  /**
+   * 专门用来处理用0做除数的异常
+   *
+   * @param e
+   * @return
+   */
+  @ExceptionHandler(ArithmeticException.class)
+  public ModelAndView handleException(ArithmeticException e) {
+
+    ModelAndView result = new ModelAndView();
+
+    result.addObject("errorMsg", "glob " + e.getMessage());
+    result.addObject("time", LocalDateTime.now());
+
+    result.setViewName("error");
+
+    return result;
+  }
+}
+```
+
+ExceptionController.java
+
+```
+@Controller
+public class ExceptionController {
+
+  @RequestMapping(
+      value = "/exception01",
+      method = {RequestMethod.GET})
+  public ModelAndView exceptionProcess() {
+    ModelAndView result = new ModelAndView();
+
+    int value = 100 / 0;
+
+    result.setViewName("success" + value);
+
+    return result;
+  }
+}
+```
+
+
+
+### 4.2 测试
+
+在浏览器中输入：
+
+http://127.0.0.1:8080/exception01
+
+结果：
+
+```
+发生错误，服务器时间：2023-02-12T14:21:03.230，异常信息：glob / by zero
+```
+
+
+
+## 5. 局部异常处理VS全局异常处理
+
+在Controller中配制了异常处理时，此异常仅针对当前异常生效。
+
+当全局异常与局部异常处理都存在时，在当前Controller能处理的情况下，优先在Controller处理，否则将使用全局的异常处理。
 
 
 

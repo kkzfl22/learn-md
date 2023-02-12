@@ -1,6 +1,6 @@
-# SpringMVC文件上传
+# SpringMVC重定向参数传递Flash属性
 
-## 1.添加文件上传的包
+## 1.基础的工程文件
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -110,11 +110,31 @@
 </project>
 ```
 
-commons-fileupload为文件上传的包
+
+
+src\main\webapp\WEB-INF\jsp\success.jsp
+
+```jsp
+<%@ page language="java" isELIgnored="false" contentType="text/html; charset=utf-8" pageEncoding="utf-8" %>
+
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>index</title>
+</head>
+<body>
+跳转成功！服务器时间：${time}
+</body>
+</html>
+```
 
 
 
-## 2. 文件上传的配制
+
+
+
+
+## 2. springMVC的配制
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -152,128 +172,110 @@ commons-fileupload为文件上传的包
     <mvc:resources location="WEB-INF/js/" mapping="/js/**"/>
 
 
-    <bean id="formatStringToDate" class="org.springframework.format.support.FormattingConversionServiceFactoryBean">
-        <property name="converters">
-            <set>
-                <bean class="om.nullnull.lean.controller.StringParseDateConverter"/>
-            </set>
-        </property>
-    </bean>
-
-    <!--文件上传的配制,id为multipartResolver固定-->
-    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
-        <!--限制上传文件的大小，单位为字节-->
-        <property name="maxUploadSize" value="100000000" />
-    </bean>
 </beans>
 ```
 
 
 
-## 3 配制上传的Controller
-
-FileUploadController.java
+## 3. 传统的在多个请求中传递参数
 
 ```java
-package om.nullnull.lean.controller;
-
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.ModelAndView;
-
-import javax.servlet.http.HttpServletRequest;
-import java.io.File;
-import java.io.IOException;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-/**
- * SpringMvc对于Rest的支持
- *
- * @author liujun
- * @since 2023/2/3
- */
 @Controller
-public class FileUploadController {
+public class RedirectController {
 
-  @RequestMapping(value = "/fileUpload")
-  public ModelAndView handler1(MultipartFile uploadFile, HttpServletRequest request)
-      throws IOException {
-    // 1，获取文件源名称
-    String originalName = uploadFile.getOriginalFilename();
-    // 获取文件扩展名
-    String suffixName = originalName.substring(originalName.lastIndexOf("."));
+  @RequestMapping(
+      value = "/redirect01",
+      method = {RequestMethod.GET})
+  public ModelAndView redirect01(String dataName) {
 
-    String newName = UUID.randomUUID().toString();
-    String newFullName = newName + suffixName;
+    ModelAndView view = new ModelAndView();
 
-    String realPath = request.getSession().getServletContext().getRealPath("/uploads/");
+    view.setViewName("redirect:redirect02?dataName=" + dataName);
 
-    File dataFile = new File(realPath, newFullName);
-    if (!dataFile.exists()) {
-      dataFile.mkdirs();
-    }
+    return view;
+  }
 
-    uploadFile.transferTo(dataFile);
+  @RequestMapping(
+      value = "/redirect02",
+      method = {RequestMethod.GET})
+  public ModelAndView redirect02(String dataName) {
 
-    ModelAndView result = new ModelAndView();
+    ModelAndView view = new ModelAndView();
 
-    result.addObject("time", LocalDateTime.now());
-    result.setViewName("success");
+    view.addObject("time", "value:" + dataName);
 
-    return result;
+    view.setViewName("success");
+
+    return view;
   }
 }
-
 ```
 
-
-
-
-
-## 4. 添加上传文件的jsp
-
-```jsp
-<%@ page language="java" isELIgnored="false" contentType="text/html; charset=utf-8" pageEncoding="utf-8" %>
-
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>文件上传</title>
-</head>
-<body>
-<div>
-    <h2>文件上传的示例</h2>
-
-
-    <fieldset>
-        <p>SpringMVC进行文件上传</p>
-        <form method="post" action="/fileUpload" enctype="multipart/form-data">
-            <input type="file" name="uploadFile"/>
-            <input type="submit" value="上传"/>
-        </form>
-    </fieldset>
-
-
-</div>
-</body>
-</html>
-```
-
-注意此file的name属性名需要与参数名一致。
-
-## 5 测试
+### 3.1 测试
 
 在浏览器中输入：
 
-http://127.0.0.1:8080/fileUpload.jsp
+http://127.0.0.1:8080/redirect01?dataName=nullnull
 
-选择文件上传进行测试
+使会看到浏览器跳转到了：
+http://127.0.0.1:8080/redirect02?dataName=nullnull
 
-可以查看文件被成功的上传。
+页面显示了
+
+跳转成功！服务器时间：value:nullnull
 
 
 
+## 4. 使用RedirectAttributes对象
+
+RedirectController.java
+
+```java
+@Controller
+public class RedirectController {
+
+  @RequestMapping(
+      value = "/redirect01",
+      method = {RequestMethod.GET})
+  public ModelAndView redirect01(String dataName, RedirectAttributes redirectAttributes) {
+
+    ModelAndView view = new ModelAndView();
+    redirectAttributes.addFlashAttribute("dataName", "RedirectAttributes--" + dataName);
+    view.setViewName("redirect:redirect02");
+    return view;
+  }
+
+  @RequestMapping(
+      value = "/redirect02",
+      method = {RequestMethod.GET})
+  public ModelAndView redirect02(@ModelAttribute("dataName") String dataName) {
+
+    ModelAndView view = new ModelAndView();
+    view.addObject("time", "value:" + dataName);
+    view.setViewName("success");
+
+    return view;
+  }
+}
+```
+
+### 4.1 测试
+
+在浏览器中输入：
+
+http://127.0.0.1:8080/redirect01?dataName=nullnull
+
+使会看到浏览器跳转到了：
+http://127.0.0.1:8080/redirect02
+
+页面显示了
+
+跳转成功！服务器时间：value:RedirectAttributes--nullnull
+
+
+
+## 5. 关于RedirectAttributes
+
+RedirectAttributes参数是将跳转的参数暂存到了Session中。
+
+在使用时需要配合@ModelAttribute注解一起使用
