@@ -1,0 +1,8 @@
+package com.nullnull.learn.po;
+/**
+ *
+ * @author liujun
+ * @since 2023/3/26
+ */
+public class Comment {
+}
