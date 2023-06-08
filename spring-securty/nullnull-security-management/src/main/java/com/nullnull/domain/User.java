@@ -14,7 +14,7 @@ import lombok.ToString;
 @TableName("t_user")
 public class User {
 
-  // @TableId(value = "ID", type = IdType.AUTO)
+  @TableId(value = "id", type = IdType.AUTO)
   private Integer id; // 用户ID
 
   @TableField private String username; // 用户名

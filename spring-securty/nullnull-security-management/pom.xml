@@ -15,7 +15,7 @@
     <description>nullnull-security-management</description>
 
     <properties>
-        <java.version>11</java.version>
+        <java.version>8</java.version>
     </properties>
 
     <dependencies>
@@ -49,10 +49,15 @@
             <version>3.3.2</version>
         </dependency>
         <!--添加mysql 依赖 -->
+        <!--        <dependency>-->
+        <!--            <groupId>mysql</groupId>-->
+        <!--            <artifactId>mysql-connector-java</artifactId>-->
+        <!--            <version>5.1.46</version>-->
+        <!--        </dependency>-->
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
-            <version>5.1.46</version>
+            <version>8.0.17</version>
         </dependency>
         <!--添加redis 依赖 -->
         <dependency>

@@ -3,6 +3,12 @@ package com.nullnull.controller;
 import com.nullnull.domain.User;
 import com.nullnull.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.RememberMeAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -111,5 +117,49 @@ public class UserController {
         User user = userService.getById(id);
         return user;
     }
+
+
+    /**
+     * 获取当前登录的用户方法1
+     *
+     * @return
+     */
+    @GetMapping("/loginUser1")
+    @ResponseBody
+    public UserDetails getCurrentUser() {
+        //由于请求可能被伪造，所以对重点方法进行检查，如果为记住我的功能，可以让用户重新登录。
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (RememberMeAuthenticationToken.class.isAssignableFrom(authentication.getClass())) {
+            throw new RememberMeAuthenticationException("认证错误");
+        }
+
+        UserDetails userDetail = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return userDetail;
+    }
+
+
+    /**
+     * 获取当前登录的用户方法2
+     *
+     * @return
+     */
+    @GetMapping("/loginUser2")
+    @ResponseBody
+    public UserDetails getCurrentUser2(Authentication authentication) {
+        UserDetails userDetail = (UserDetails) authentication.getPrincipal();
+        return userDetail;
+    }
+
+    /**
+     * 获取当前登录的用户方法3
+     *
+     * @return
+     */
+    @GetMapping("/loginUser3")
+    @ResponseBody
+    public UserDetails getCurrentUser3(@AuthenticationPrincipal UserDetails userDetails) {
+        return userDetails;
+    }
+
 
 }
