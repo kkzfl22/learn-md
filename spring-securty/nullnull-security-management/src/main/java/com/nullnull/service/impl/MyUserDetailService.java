@@ -4,6 +4,7 @@ import com.nullnull.domain.User;
 import com.nullnull.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -65,7 +66,16 @@ public class MyUserDetailService implements UserDetailsService {
         //使用密码加密,PasswordEncoderFactories中定义了使用的密码方式
         //推荐使用bcrypt，此方式，使用强哈希算法，并且每次结果都不一样，相比于MD5,运算时间更长，到百毫秒级
         // 权限集合
-        Collection<? extends GrantedAuthority> authorities = new ArrayList<>();
+        Collection<GrantedAuthority> authorities = new ArrayList<>();
+
+        //对用户设置权限信息
+        if ("admin".equalsIgnoreCase(userRsp.getUsername())) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        } else {
+            authorities.add(new SimpleGrantedAuthority("ROLE_PRODUCT"));
+        }
+
+
         UserDetails userDetailRsp =
                 new org.springframework.security.core.userdetails.User(
                         //  用户名

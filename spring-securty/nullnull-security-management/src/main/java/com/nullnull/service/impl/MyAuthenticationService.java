@@ -94,6 +94,7 @@ public class MyAuthenticationService implements AuthenticationSuccessHandler,
     public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response,
                                 Authentication authentication) throws IOException, ServletException {
         System.out.println("收到退出之后的处理");
+        //response.setContentType("text/html;charset=UTF-8");
         redirect.sendRedirect(request, response, "/toLoginPage");
     }
 }

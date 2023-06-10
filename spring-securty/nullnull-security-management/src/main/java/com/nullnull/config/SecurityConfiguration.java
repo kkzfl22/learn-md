@@ -1,5 +1,6 @@
 package com.nullnull.config;
 
+import com.nullnull.handler.MyAccessDeniedHandler;
 import com.nullnull.service.impl.MyAuthenticationService;
 import com.nullnull.service.impl.MyUserDetailService;
 import com.nullnull.service.impl.ValidateCodeFilter;
@@ -7,14 +8,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.web.DefaultRedirectStrategy;
-import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.sql.DataSource;
 
@@ -23,10 +27,13 @@ import javax.sql.DataSource;
  *
  * <p>可以认为 HttpSecurity 是 WebSecurity 的一部分， WebSecurity 是包含 HttpSecurity 的更大 的一个概念
  *
+ * <p>@EnableGlobalMethodSecurity 是开启方法注解的标识</p>
+ *
  * @author liujun
  * @since 2023/6/7
  */
 @Configuration
+@EnableGlobalMethodSecurity(prePostEnabled = true)
 public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
 
     /**
@@ -48,6 +55,12 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
      */
     @Autowired
     private ValidateCodeFilter validateCodeFilter;
+
+    /**
+     * 自定义权限不足的信息
+     */
+    @Autowired
+    private MyAccessDeniedHandler accessDeniedHandler;
 
 
     /**
@@ -143,6 +156,7 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
         //将验证码的处理加入过滤器链
         http.addFilterBefore(validateCodeFilter, UsernamePasswordAuthenticationFilter.class);
 
+
         //记住我功能使用数据库
         http.formLogin()
                 // 自定义登录页面
@@ -161,6 +175,8 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
                 .and().logout()
                 //指定退出的地址
                 .logoutUrl("/logout")
+                //用于指定Logout的配制，否则在CSRF防护时，无法做退出
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET"))
                 .logoutSuccessHandler(authenticationService)
 
                 .and()
@@ -176,17 +192,55 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
                 //权限设置
                 .authorizeRequests()
                 // 放行登录页面
-                .antMatchers("/toLoginPage")
-                .permitAll()
-                .anyRequest()
-                .authenticated();
+                .antMatchers("/toLoginPage", "/logout", "/toLoginPage")
+                .permitAll();
+        //当配制权限后，此需要注释
+        //.anyRequest()
+        //.authenticated();
 
 
-        // 在默认的过滤器链的配制中，CSRF功能是打开，测试时，先关闭
-        http.csrf().disable();
         // 在SpringSecurity在默认情况下是拒绝iframe的加载请求，需要先打开
         // sameOrigin();可以加载同源域名下的文件
         http.headers().frameOptions().sameOrigin();
+
+        //配制会话超时后的地址
+        http.sessionManagement()
+                //session无效后跳转地址，默认的登录页
+                .invalidSessionUrl("/toLoginPage")
+                //设置session的最大会话数量为1，也就是同一时间只能一个用户在线，会产生互踢的效果
+                .maximumSessions(2)
+                //阻止用户二次登录,当到达maximumSessions设置的最大会话个数时，阻止登录
+                .maxSessionsPreventsLogin(true)
+                //设置Session过期后的跳转地地址
+                .expiredUrl("/toLoginPage");
+
+
+        // 在默认的过滤器链的配制中，CSRF功能是打开，测试时，先关闭
+        //http.csrf().disable();
+        //设置CSRF防护,设置哪些不需要防护,默认CSRF是打开的
+        http.csrf().ignoringAntMatchers("/user/saveOrUpdate", "/product/saveOrUpdate");
+
+
+        //设置允许跨域
+        http.cors().configurationSource(corsConfigurationSource());
+
+        //配制基于URL的安全表达式
+        //用户管理模块，需要使用ADMIN才能访问
+        //  http.authorizeRequests().antMatchers("/user/**").hasRole("ADMIN");
+        //http.authorizeRequests().antMatchers("/user/**")
+        //        //使用自定义的方法，进行验证
+        //        .access("@myAuthorizationService.check(authentication,request)");
+        http.authorizeRequests().antMatchers("/user/delete/{id}")
+                //自定义Bean授权，并携带路径参数
+                .access("@myAuthorizationService.numCheck(authentication,request,#id)");
+
+        //商品模块,需要指定的角色，并且IP为本机
+        http.authorizeRequests().antMatchers("/product/**")
+                .access("hasAnyRole('ADMIN,PRODUCT') and hasIpAddress('127.0.0.1')");
+        //自定义权限不足的信息
+        http.exceptionHandling().accessDeniedHandler(accessDeniedHandler);
+
+
     }
 
     @Autowired
@@ -201,5 +255,29 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
         //tokenRepository.setCreateTableOnStartup(true);
 
         return tokenRepository;
+    }
+
+
+    /**
+     * 跨域的配置信息源
+     *
+     * @return 跨域的配制
+     */
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        //设置允许跨域的站点
+        corsConfiguration.addAllowedOrigin("*");
+        //设置允许跨域的http方法
+        corsConfiguration.addAllowedMethod("*");
+        //设置允许跨域的请求头
+        corsConfiguration.addAllowedHeader("*");
+        //允许带凭证
+        corsConfiguration.setAllowCredentials(true);
+
+        //配制对所有的URL生产
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", corsConfiguration);
+
+        return source;
     }
 }

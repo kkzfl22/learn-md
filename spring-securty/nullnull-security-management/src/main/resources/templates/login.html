@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<!--<html lang="en" xmlns:th="http://www.thymeleaf.org">-->
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -39,7 +40,8 @@
                         </div>
                         <div class="form-group">
                             <div class="field">
-                                <input type="text" class="input input-big" name="imageCode" placeholder="填写右侧的验证码"
+                                <input type="text" class="input input-big" name="imageCode"
+                                       placeholder="填写右侧的验证码"
                                        data-validate="required:请填写右侧的验证码"/>
                                 <img src="/code/image" alt="" width="100" height="32" class="passcode"
                                      style="height:43px;cursor:pointer;" onclick="this.src=this.src+'?'">
@@ -50,6 +52,7 @@
                             <div>
                                 <!--记住我 name为remember-me value值可选true  yes 1 on 都行-->
                                 <input type="checkbox" name="remember-me" value="true"/>记住我
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                             </div>
                         </div>
                     </div>
@@ -85,6 +88,7 @@
             }
         });
     }
+
 
 </script>
 
