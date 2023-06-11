@@ -1,6 +1,8 @@
 package com.nullnull.config;
 
+import com.nullnull.domain.Permission;
 import com.nullnull.handler.MyAccessDeniedHandler;
+import com.nullnull.service.PermissionService;
 import com.nullnull.service.impl.MyAuthenticationService;
 import com.nullnull.service.impl.MyUserDetailService;
 import com.nullnull.service.impl.ValidateCodeFilter;
@@ -21,6 +23,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.sql.DataSource;
+import java.util.List;
 
 /**
  * security的配制
@@ -61,6 +64,13 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
      */
     @Autowired
     private MyAccessDeniedHandler accessDeniedHandler;
+
+
+    /**
+     * 权限数据
+     */
+    @Autowired
+    private PermissionService permissionService;
 
 
     /**
@@ -230,16 +240,26 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
         //http.authorizeRequests().antMatchers("/user/**")
         //        //使用自定义的方法，进行验证
         //        .access("@myAuthorizationService.check(authentication,request)");
-        http.authorizeRequests().antMatchers("/user/delete/{id}")
-                //自定义Bean授权，并携带路径参数
-                .access("@myAuthorizationService.numCheck(authentication,request,#id)");
-
-        //商品模块,需要指定的角色，并且IP为本机
-        http.authorizeRequests().antMatchers("/product/**")
-                .access("hasAnyRole('ADMIN,PRODUCT') and hasIpAddress('127.0.0.1')");
+        //http.authorizeRequests().antMatchers("/user/delete/{id}")
+        //        //自定义Bean授权，并携带路径参数
+        //        .access("@myAuthorizationService.numCheck(authentication,request,#id)");
+        //
+        ////商品模块,需要指定的角色，并且IP为本机
+        //http.authorizeRequests().antMatchers("/product/**")
+        //        .access("hasAnyRole('ADMIN,PRODUCT') and hasIpAddress('127.0.0.1')");
         //自定义权限不足的信息
         http.exceptionHandling().accessDeniedHandler(accessDeniedHandler);
 
+        //查询数据库，加载所有的权限信息，
+        List<Permission> list = permissionService.list();
+        for (Permission item : list) {
+            http.authorizeRequests()
+                    //针对URL进行权限设置
+                    .antMatchers(item.getPermissionUrl())
+                    //权限
+                    .hasAuthority(item.getPermissionTag());
+
+        }
 
     }
 
