@@ -1,0 +1,17 @@
+@startuml
+'https://plantuml.com/activity-diagram-beta
+
+start
+:UsernamePasswordAuthenticationFilter(开始);
+:UsernamePasswordAuthenticationToken(未认证);
+:AuthenticationManager;
+:AuthenticationProvider;
+:MyUserDetailService;
+:UserDetails;
+:UsernamePasswordAuthenticationToken(已认证);
+:SecurityContext;
+:AuthenticationSuccessHandler;
+:UsernamePasswordAuthenticationFilter(结束);
+
+
+@enduml
