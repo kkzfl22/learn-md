@@ -1,6 +1,8 @@
 package com.nullnull.service.impl;
 
+import com.nullnull.domain.Permission;
 import com.nullnull.domain.User;
+import com.nullnull.service.PermissionService;
 import com.nullnull.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * 基于数据库完成认证
@@ -27,6 +30,9 @@ public class MyUserDetailService implements UserDetailsService {
      */
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private PermissionService permissionService;
 
     /**
      * 根据用户名查询用户信息
@@ -68,11 +74,18 @@ public class MyUserDetailService implements UserDetailsService {
         // 权限集合
         Collection<GrantedAuthority> authorities = new ArrayList<>();
 
-        //对用户设置权限信息
-        if ("admin".equalsIgnoreCase(userRsp.getUsername())) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-        } else {
-            authorities.add(new SimpleGrantedAuthority("ROLE_PRODUCT"));
+        ////对用户设置权限信息
+        //if ("admin".equalsIgnoreCase(userRsp.getUsername())) {
+        //    authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        //} else {
+        //    authorities.add(new SimpleGrantedAuthority("ROLE_PRODUCT"));
+        //}
+
+        //查询用户对应的授权权限集合
+        List<Permission> permissionList = permissionService.findByUserId(userRsp.getId());
+        for (Permission permission : permissionList) {
+            //授权
+            authorities.add(new SimpleGrantedAuthority(permission.getPermissionTag()));
         }
 
 

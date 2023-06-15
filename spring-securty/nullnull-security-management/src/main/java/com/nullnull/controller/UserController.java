@@ -36,7 +36,7 @@ public class UserController {
      * @return
      */
     @RequestMapping("/findAll")
-    @PreAuthorize("hasRole('ADMIN')")
+    //@PreAuthorize("hasRole('ADMIN')")
     public String findAll(Model model) {
         List<User> userList = userService.list();
         model.addAttribute("userList", userList);
@@ -56,7 +56,7 @@ public class UserController {
      */
     @RequestMapping("/findAllTOJson")
     @ResponseBody
-    @PostFilter("filterObject.id%2==0")
+    //@PostFilter("filterObject.id%2==0")
     public List<User> findAllTOJson() {
         List<User> userList = userService.list();
         return userList;
@@ -70,7 +70,7 @@ public class UserController {
      * @return
      */
     @RequestMapping("/update/{id}")
-    @PreAuthorize("#id<5")
+    //@PreAuthorize("#id<5")
     public String update(@PathVariable Integer id, Model model) {
         User user = userService.getById(id);
         model.addAttribute("user", user);
@@ -121,7 +121,7 @@ public class UserController {
      * @return
      */
     @GetMapping("/delByIds")
-    @PreFilter(filterTarget = "ids", value = "filterObject%2==0")
+    //@PreFilter(filterTarget = "ids", value = "filterObject%2==0")
     public String delByIds(@RequestParam(value = "id") List<Integer> ids) {
         for (Integer id : ids) {
             System.out.println(id);
@@ -141,7 +141,7 @@ public class UserController {
      */
     @GetMapping("/{id}")
     @ResponseBody
-    @PostAuthorize("returnObject.username==authentication.principal.username")
+    //@PostAuthorize("returnObject.username==authentication.principal.username")
     public User getById(@PathVariable Integer id) {
         User user = userService.getById(id);
         return user;
