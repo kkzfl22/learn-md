@@ -3858,3 +3858,576 @@ public abstract class AbstractAuthenticationProcessingFilter extends GenericFilt
 
 
 
+## 3. CSRF流程的分析
+
+### 3.1 CSRF的主要流程
+
+![image-20230616163114646](D:\work\learn\learn-md\spring-security\img\image-20230616163114646.png)
+
+
+
+### 3.2 CsrfFilter源码开始
+
+调试源码时，记得将csrf的防护打开。默认CSRF是开启的。
+
+验证码时间记得调大点。
+
+
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class CsrfFilter extends OncePerRequestFilter {
+	/**
+	 * The default {@link RequestMatcher} that indicates if CSRF protection is required or
+	 * not. The default is to ignore GET, HEAD, TRACE, OPTIONS and process all other
+	 * requests.
+	 */
+	public static final RequestMatcher DEFAULT_CSRF_MATCHER = new DefaultRequiresCsrfMatcher();
+
+	/**
+	 * The attribute name to use when marking a given request as one that should not be filtered.
+	 *
+	 * To use, set the attribute on your {@link HttpServletRequest}:
+	 * <pre>
+	 * 	CsrfFilter.skipRequest(request);
+	 * </pre>
+	 */
+	private static final String SHOULD_NOT_FILTER = "SHOULD_NOT_FILTER" + CsrfFilter.class.getName();
+
+	private final Log logger = LogFactory.getLog(getClass());
+	private final CsrfTokenRepository tokenRepository;
+	private RequestMatcher requireCsrfProtectionMatcher = DEFAULT_CSRF_MATCHER;
+	private AccessDeniedHandler accessDeniedHandler = new AccessDeniedHandlerImpl();
+
+	public CsrfFilter(CsrfTokenRepository csrfTokenRepository) {
+		Assert.notNull(csrfTokenRepository, "csrfTokenRepository cannot be null");
+		this.tokenRepository = csrfTokenRepository;
+	}
+
+	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+		return TRUE.equals(request.getAttribute(SHOULD_NOT_FILTER));
+	}
+
+	/*
+	 * (non-Javadoc)
+	 *
+	 * @see
+	 * org.springframework.web.filter.OncePerRequestFilter#doFilterInternal(javax.servlet
+	 * .http.HttpServletRequest, javax.servlet.http.HttpServletResponse,
+	 * javax.servlet.FilterChain)
+	 */
+	@Override
+	protected void doFilterInternal(HttpServletRequest request,
+			HttpServletResponse response, FilterChain filterChain)
+					throws ServletException, IOException {
+		request.setAttribute(HttpServletResponse.class.getName(), response);
+		//首先加载Token，查看《加载Token-3.3》
+        // 在第二次加载时，Token已经存在，则直接从Session中获取。也不会再次生成Token操作。
+		CsrfToken csrfToken = this.tokenRepository.loadToken(request);
+		final boolean missingToken = csrfToken == null;
+		if (missingToken) {
+             //首次没有token将生成一个token的信息。跟踪3.5-生成Token
+			csrfToken = this.tokenRepository.generateToken(request);
+             //将生成的一个token进行保存操作。跟踪3.8-保存Token
+			this.tokenRepository.saveToken(csrfToken, request, response);
+		}
+        //将CSRF的Token放入至request域中。
+		request.setAttribute(CsrfToken.class.getName(), csrfToken);
+		request.setAttribute(csrfToken.getParameterName(), csrfToken);
+		
+        //判断当前请求是否需要做一个CSRF的防护。跟踪3.9-CSRF检查
+        //在第一次的时候，此为Get请求，则跳过当前检查，执行doFilter放行。
+        //然后就会到login.htmld页面，在页面中会加载csrf的页面参数。
+        //在加载${_csrf.token}此参数时，实际上就是从Token中获取信息，
+        //之前在源码中已经查看过保存的Token是一个SaveOnAccessCsrfToken对象，
+        //去getToken方法打上断点看下,查看3.10-页面获取Token
+        
+        //当第二发起登录请求时，当前为Post的登录请求。则会被处理。
+		if (!this.requireCsrfProtectionMatcher.matches(request)) {
+			filterChain.doFilter(request, response);
+			return;
+		}
+
+		String actualToken = request.getHeader(csrfToken.getHeaderName());
+		if (actualToken == null) {
+			actualToken = request.getParameter(csrfToken.getParameterName());
+		}
+        //从请求的参数中获取到的Token与session中的Token对比。失败则执行自定义失败处理。
+		if (!csrfToken.getToken().equals(actualToken)) {
+			if (this.logger.isDebugEnabled()) {
+				this.logger.debug("Invalid CSRF token found for "
+						+ UrlUtils.buildFullRequestUrl(request));
+			}
+			if (missingToken) {
+				this.accessDeniedHandler.handle(request, response,
+						new MissingCsrfTokenException(actualToken));
+			}
+			else {
+				this.accessDeniedHandler.handle(request, response,
+						new InvalidCsrfTokenException(csrfToken, actualToken));
+			}
+			return;
+		}
+
+		filterChain.doFilter(request, response);
+	}
+
+	public static void skipRequest(HttpServletRequest request) {
+		request.setAttribute(SHOULD_NOT_FILTER, TRUE);
+	}
+
+	/**
+	 * Specifies a {@link RequestMatcher} that is used to determine if CSRF protection
+	 * should be applied. If the {@link RequestMatcher} returns true for a given request,
+	 * then CSRF protection is applied.
+	 *
+	 * <p>
+	 * The default is to apply CSRF protection for any HTTP method other than GET, HEAD,
+	 * TRACE, OPTIONS.
+	 * </p>
+	 *
+	 * @param requireCsrfProtectionMatcher the {@link RequestMatcher} used to determine if
+	 * CSRF protection should be applied.
+	 */
+	public void setRequireCsrfProtectionMatcher(
+			RequestMatcher requireCsrfProtectionMatcher) {
+		Assert.notNull(requireCsrfProtectionMatcher,
+				"requireCsrfProtectionMatcher cannot be null");
+		this.requireCsrfProtectionMatcher = requireCsrfProtectionMatcher;
+	}
+
+	/**
+	 * Specifies a {@link AccessDeniedHandler} that should be used when CSRF protection
+	 * fails.
+	 *
+	 * <p>
+	 * The default is to use AccessDeniedHandlerImpl with no arguments.
+	 * </p>
+	 *
+	 * @param accessDeniedHandler the {@link AccessDeniedHandler} to use
+	 */
+	public void setAccessDeniedHandler(AccessDeniedHandler accessDeniedHandler) {
+		Assert.notNull(accessDeniedHandler, "accessDeniedHandler cannot be null");
+		this.accessDeniedHandler = accessDeniedHandler;
+	}
+
+	private static final class DefaultRequiresCsrfMatcher implements RequestMatcher {
+		private final HashSet<String> allowedMethods = new HashSet<>(
+				Arrays.asList("GET", "HEAD", "TRACE", "OPTIONS"));
+
+		/*
+		 * (non-Javadoc)
+		 *
+		 * @see
+		 * org.springframework.security.web.util.matcher.RequestMatcher#matches(javax.
+		 * servlet.http.HttpServletRequest)
+		 */
+		@Override
+		public boolean matches(HttpServletRequest request) {
+			return !this.allowedMethods.contains(request.getMethod());
+		}
+	}
+}
+
+```
+
+### 3.3 加载Token-1-LazyCsrfTokenRepository的loadToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	@Override
+	public CsrfToken loadToken(HttpServletRequest request) {
+		return this.delegate.loadToken(request);
+	}
+......
+}
+```
+
+### 3.4 加载Token-2-HttpSessionCsrfTokenRepository的loadToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository {
+......
+	public CsrfToken loadToken(HttpServletRequest request) {
+    	//首先获取一个Session,这是第一次访问，此为null
+		HttpSession session = request.getSession(false);
+		if (session == null) {
+			return null;
+		}
+		return (CsrfToken) session.getAttribute(this.sessionAttributeName);
+	}
+......
+}
+```
+
+回到CsrfFilter，继续。
+
+### 3.5  生成Token-1-LazyCsrfTokenRepository的generateToken
+
+```java
+package org.springframework.security.web.csrf;
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	@Override
+	public CsrfToken generateToken(HttpServletRequest request) {
+		return wrap(request, this.delegate.generateToken(request));
+	}
+......
+}
+```
+
+### 3.6 生成Token-2-HttpSessionCsrfTokenRepository的generateToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository {
+	private static final String DEFAULT_CSRF_PARAMETER_NAME = "_csrf";
+
+	private static final String DEFAULT_CSRF_HEADER_NAME = "X-CSRF-TOKEN";
+
+	private static final String DEFAULT_CSRF_TOKEN_ATTR_NAME = HttpSessionCsrfTokenRepository.class
+			.getName().concat(".CSRF_TOKEN");
+
+	private String parameterName = DEFAULT_CSRF_PARAMETER_NAME;
+
+	private String headerName = DEFAULT_CSRF_HEADER_NAME;
+
+	private String sessionAttributeName = DEFAULT_CSRF_TOKEN_ATTR_NAME;
+
+	public CsrfToken generateToken(HttpServletRequest request) {
+        //通过源码可以发现，此this.headerName为X-CSRF-TOKEN，此parameterName为_csrf，
+        //继续查看createNewToken方法。可以发现是通过UUID生成了随机的Token
+		return new DefaultCsrfToken(this.headerName, this.parameterName,
+				createNewToken());
+	}
+    
+	private String createNewToken() {
+		return UUID.randomUUID().toString();
+	}
+......
+}
+```
+
+回到LazyCsrfTokenRepository的源码中。
+
+### 3.7 生成Token-2-LazyCsrfTokenRepository的wrap
+
+```java
+package org.springframework.security.web.csrf;
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	@Override
+	public CsrfToken generateToken(HttpServletRequest request) {
+		return wrap(request, this.delegate.generateToken(request));
+	}
+    
+	private CsrfToken wrap(HttpServletRequest request, CsrfToken token) {
+		HttpServletResponse response = getResponse(request);
+		return new SaveOnAccessCsrfToken(this.delegate, request, response, token);
+	}
+......
+}
+```
+
+回到CsrfFilter的源码中。
+
+### 3.8 保存Token-1-LazyCsrfTokenRepository的saveToken
+
+```java
+package org.springframework.security.web.csrf;
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	public void saveToken(CsrfToken token, HttpServletRequest request,
+			HttpServletResponse response) {
+    	//由于此处的Token已经不是空，则直接跳过执行。
+		if (token == null) {
+			this.delegate.saveToken(token, request, response);
+		}
+	}
+......    
+}
+```
+
+### 3.9-CSRF检查-AndRequestMatcher的matches
+
+```java
+package org.springframework.security.web.util.matcher;
+
+
+public final class AndRequestMatcher implements RequestMatcher {
+    
+	private final List<RequestMatcher> requestMatchers;
+......
+	public boolean matches(HttpServletRequest request) {
+		for (RequestMatcher matcher : requestMatchers) {
+			if (logger.isDebugEnabled()) {
+				logger.debug("Trying to match using " + matcher);
+			}
+            //通过查询在allowedMethods = {HashSet@10931}  size = 4
+            // 0 = "TRACE"
+            // 1 = "HEAD"
+            // 2 = "GET"
+            // 3 = "OPTIONS"
+            //这4个值直接跳过，由于当前是一个GET请求，便不满足，返回false.
+			if (!matcher.matches(request)) {
+				logger.debug("Did not match");
+				return false;
+			}
+		}
+		logger.debug("All requestMatchers returned true");
+		return true;
+	}
+......
+}
+```
+
+回到CsrfFilter
+
+### 3.10-页面获取Token-LazyCsrfTokenRepository的getToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	private static final class SaveOnAccessCsrfToken implements CsrfToken {
+		public String getToken() {
+			saveTokenIfNecessary();
+			return this.delegate.getToken();
+		}
+        
+		private void saveTokenIfNecessary() {
+			if (this.tokenRepository == null) {
+				return;
+			}
+
+			synchronized (this) {
+				if (this.tokenRepository != null) {
+                     //执行Token的保存操作。
+					this.tokenRepository.saveToken(this.delegate, this.request,
+							this.response);
+					this.tokenRepository = null;
+					this.request = null;
+					this.response = null;
+				}
+			}
+		}
+	}
+......
+}
+```
+
+### 3.11 页面获取Token-2-HttpSessionCsrfTokenRepository的saveToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository {
+......
+	public void saveToken(CsrfToken token, HttpServletRequest request,
+			HttpServletResponse response) {
+		if (token == null) {
+			HttpSession session = request.getSession(false);
+			if (session != null) {
+				session.removeAttribute(this.sessionAttributeName);
+			}
+		}
+    	//在之前已经创建了Session,则直接将当前的Token保存至Session中，至此页面就存在具体的csrf的值了。
+		else {
+			HttpSession session = request.getSession();
+			session.setAttribute(this.sessionAttributeName, token);
+		}
+	}
+......
+}
+```
+
+当页面加载完成后，则输入用户名和密码，发起登录请求。
+
+
+
+### 3.12 登录的CSRF处理-1-AbstractAuthenticationProcessingFilter的doFilter
+
+```java
+package org.springframework.security.web.authentication;
+
+
+public abstract class AbstractAuthenticationProcessingFilter extends GenericFilterBean
+		implements ApplicationEventPublisherAware, MessageSourceAware {
+......
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		if (!requiresAuthentication(request, response)) {
+			chain.doFilter(request, response);
+
+			return;
+		}
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Request is to process authentication");
+		}
+
+		Authentication authResult;
+
+		try {
+            //执行认证
+			authResult = attemptAuthentication(request, response);
+			if (authResult == null) {
+				// return immediately as subclass has indicated that it hasn't completed
+				// authentication
+				return;
+			}
+            //session的策略处理。
+			sessionStrategy.onAuthentication(authResult, request, response);
+		}
+		catch (InternalAuthenticationServiceException failed) {
+			logger.error(
+					"An internal error occurred while trying to authenticate the user.",
+					failed);
+			unsuccessfulAuthentication(request, response, failed);
+
+			return;
+		}
+		catch (AuthenticationException failed) {
+			// Authentication failed
+			unsuccessfulAuthentication(request, response, failed);
+
+			return;
+		}
+
+		// Authentication success
+		if (continueChainBeforeSuccessfulAuthentication) {
+			chain.doFilter(request, response);
+		}
+
+		successfulAuthentication(request, response, chain, authResult);
+	}
+......
+}
+```
+
+
+
+### 3.13 登录的CSRF处理-2-CompositeSessionAuthenticationStrategy的onAuthentication
+
+```java
+package org.springframework.security.web.authentication.session;
+
+
+public class CompositeSessionAuthenticationStrategy
+		implements SessionAuthenticationStrategy {
+......
+	public void onAuthentication(Authentication authentication,
+			HttpServletRequest request, HttpServletResponse response)
+					throws SessionAuthenticationException {
+    	//result = {ArrayList@12215}  size = 4
+		// 0 = {ConcurrentSessionControlAuthenticationStrategy@12220} 
+		//  1 = {ChangeSessionIdAuthenticationStrategy@12221} 
+		//  2 = {RegisterSessionAuthenticationStrategy@12222} 
+		//  3 = {CsrfAuthenticationStrategy@12223} 跟踪这个。
+		for (SessionAuthenticationStrategy delegate : this.delegateStrategies) {
+			if (this.logger.isDebugEnabled()) {
+				this.logger.debug("Delegating to " + delegate);
+			}
+			delegate.onAuthentication(authentication, request, response);
+		}
+	}
+......
+    
+}
+```
+
+### 3.14  登录的CSRF处理-3-CsrfAuthenticationStrategy的onAuthentication
+
+```java
+package org.springframework.security.web.csrf;
+
+public final class CsrfAuthenticationStrategy implements SessionAuthenticationStrategy {
+......
+	public void onAuthentication(Authentication authentication,
+			HttpServletRequest request, HttpServletResponse response)
+					throws SessionAuthenticationException {
+    	//从session中获取Token，当前肯定存在，不为null
+		boolean containsToken = this.csrfTokenRepository.loadToken(request) != null;
+		if (containsToken) {
+            //将null保存至session中，即清空了csrf的值。继续跟踪
+			this.csrfTokenRepository.saveToken(null, request, response);
+
+			CsrfToken newToken = this.csrfTokenRepository.generateToken(request);
+			this.csrfTokenRepository.saveToken(newToken, request, response);
+
+			request.setAttribute(CsrfToken.class.getName(), newToken);
+			request.setAttribute(newToken.getParameterName(), newToken);
+		}
+	}
+......
+}
+```
+
+### 3.15 登录的CSRF处理-4-LazyCsrfTokenRepository的saveToken
+
+```java
+package org.springframework.security.web.csrf;
+
+public final class LazyCsrfTokenRepository implements CsrfTokenRepository {
+......
+	public void saveToken(CsrfToken token, HttpServletRequest request,
+			HttpServletResponse response) {
+    	//仅在为null的情况下执行保存操作。
+		if (token == null) {
+			this.delegate.saveToken(token, request, response);
+		}
+	}
+......
+}
+```
+
+
+
+### 3.16 登录的CSRF处理-5-HttpSessionCsrfTokenRepository的saveToken
+
+```java
+package org.springframework.security.web.csrf;
+
+
+public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository {
+......
+	public void saveToken(CsrfToken token, HttpServletRequest request,
+			HttpServletResponse response) {
+    	//满足此条件，当前为空，进行会话的移除操作。
+		if (token == null) {
+			HttpSession session = request.getSession(false);
+			if (session != null) {
+				session.removeAttribute(this.sessionAttributeName);
+			}
+		}
+		else {
+			HttpSession session = request.getSession();
+			session.setAttribute(this.sessionAttributeName, token);
+		}
+	}
+......
+}
+```
+
