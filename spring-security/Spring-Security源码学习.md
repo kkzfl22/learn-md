@@ -2756,7 +2756,7 @@ Spring Security默认加载15个过滤器, 但是随着配置可以增加或者�
 
 
 
-![image-20230615151143999](D:\work\learn\learn-md\spring-security\img\image-20230615151143999.png)
+![image-20230615151143999](.\img\image-20230615151143999.png)
 
 
 
@@ -2764,7 +2764,7 @@ Spring Security默认加载15个过滤器, 但是随着配置可以增加或者�
 
 ### 2.1 认证流程
 
-![image-20230615154839522](D:\work\learn\learn-md\spring-security\img\image-20230615154839522.png)
+![image-20230615154839522](.\img\image-20230615154839522.png)
 
 ### 2.2 开始UsernamePasswordAuthenticationFilter
 
@@ -3862,7 +3862,7 @@ public abstract class AbstractAuthenticationProcessingFilter extends GenericFilt
 
 ### 3.1 CSRF的主要流程
 
-![image-20230616163114646](D:\work\learn\learn-md\spring-security\img\image-20230616163114646.png)
+![image-20230616163114646](./img\image-20230616163114646.png)
 
 
 
@@ -4431,3 +4431,1103 @@ public final class HttpSessionCsrfTokenRepository implements CsrfTokenRepository
 }
 ```
 
+
+
+
+
+## 4. 记住我的流程分析
+
+### 4.1 用户登录时的记住密码功能。
+
+在AbstractAuthenticationProcessingFilter的用户登录成功后。便会调用successfulAuthentication
+
+```java
+public abstract class AbstractAuthenticationProcessingFilter extends GenericFilterBean
+		implements ApplicationEventPublisherAware, MessageSourceAware {
+ ......
+
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		if (!requiresAuthentication(request, response)) {
+			chain.doFilter(request, response);
+
+			return;
+		}
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Request is to process authentication");
+		}
+
+		Authentication authResult;
+
+		try {
+			authResult = attemptAuthentication(request, response);
+			if (authResult == null) {
+				// return immediately as subclass has indicated that it hasn't completed
+				// authentication
+				return;
+			}
+			sessionStrategy.onAuthentication(authResult, request, response);
+		}
+		catch (InternalAuthenticationServiceException failed) {
+			logger.error(
+					"An internal error occurred while trying to authenticate the user.",
+					failed);
+			unsuccessfulAuthentication(request, response, failed);
+
+			return;
+		}
+		catch (AuthenticationException failed) {
+			// Authentication failed
+			unsuccessfulAuthentication(request, response, failed);
+
+			return;
+		}
+
+		// Authentication success
+		if (continueChainBeforeSuccessfulAuthentication) {
+			chain.doFilter(request, response);
+		}
+		//认证成功后的方法调用。
+		successfulAuthentication(request, response, chain, authResult);
+	}
+......
+}
+```
+
+
+
+
+
+### 4.3 记住我登录-认证AbstractAuthenticationProcessingFilter的successfulAuthentication方法
+
+```java
+package org.springframework.security.web.authentication;
+
+
+public abstract class AbstractAuthenticationProcessingFilter extends GenericFilterBean
+		implements ApplicationEventPublisherAware, MessageSourceAware {
+......
+	protected void successfulAuthentication(HttpServletRequest request,
+			HttpServletResponse response, FilterChain chain, Authentication authResult)
+			throws IOException, ServletException {
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Authentication success. Updating SecurityContextHolder to contain: "
+					+ authResult);
+		}
+		//将认证的用户信息放入至SecurityContext中
+		SecurityContextHolder.getContext().setAuthentication(authResult);
+		//检查是不是记住我的
+		rememberMeServices.loginSuccess(request, response, authResult);
+
+		// Fire event
+		if (this.eventPublisher != null) {
+			eventPublisher.publishEvent(new InteractiveAuthenticationSuccessEvent(
+					authResult, this.getClass()));
+		}
+		//登录成功的处理
+		successHandler.onAuthenticationSuccess(request, response, authResult);
+	}
+......
+}
+```
+
+
+
+### 4.4 记住我登录-调用记住我的功能在登录的处理
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+public abstract class AbstractRememberMeServices implements RememberMeServices,
+		InitializingBean, LogoutHandler {
+	public static final String DEFAULT_PARAMETER = "remember-me";
+	private String parameter = DEFAULT_PARAMETER;
+	private boolean alwaysRemember;
+......
+	public final void loginSuccess(HttpServletRequest request,
+			HttpServletResponse response, Authentication successfulAuthentication) {
+		//检查当前是否打开记住我的功能
+		if (!rememberMeRequested(request, parameter)) {
+			logger.debug("Remember-me login not requested.");
+			return;
+		}
+		//在打开后记住我的功能后的逻辑处理。
+		onLoginSuccess(request, response, successfulAuthentication);
+	}
+            
+	protected boolean rememberMeRequested(HttpServletRequest request, String parameter) {
+		if (alwaysRemember) {
+			return true;
+		}
+		//从请求参数中获取remember-me这个参数。
+		String paramValue = request.getParameter(parameter);
+		
+        //如果值为true,on,yes,1都表示打开。
+		if (paramValue != null) {
+			if (paramValue.equalsIgnoreCase("true") || paramValue.equalsIgnoreCase("on")
+					|| paramValue.equalsIgnoreCase("yes") || paramValue.equals("1")) {
+				return true;
+			}
+		}
+
+		if (logger.isDebugEnabled()) {
+			logger.debug("Did not send remember-me cookie (principal did not set parameter '"
+					+ parameter + "')");
+		}
+
+		return false;
+	}
+......
+}
+```
+
+### 4.5 记住我登录-PersistentTokenBasedRememberMeServices的onLoginSuccess方法
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+
+public class PersistentTokenBasedRememberMeServices extends AbstractRememberMeServices {
+......
+	protected void onLoginSuccess(HttpServletRequest request,
+			HttpServletResponse response, Authentication successfulAuthentication) {
+		String username = successfulAuthentication.getName();
+
+		logger.debug("Creating new persistent login for user " + username);
+
+		PersistentRememberMeToken persistentToken = new PersistentRememberMeToken(
+				username, generateSeriesData(), generateTokenData(), new Date());
+		try {
+            //进行TOKEN的保存操作，将调用JdbcTokenRepositoryImpl进行数据库存储。将在库里插入记录。
+			tokenRepository.createNewToken(persistentToken);
+            //添加cookie
+			addCookie(persistentToken, request, response);
+		}
+		catch (Exception e) {
+			logger.error("Failed to save persistent token ", e);
+		}
+	}
+	private void addCookie(PersistentRememberMeToken token, HttpServletRequest request,
+			HttpServletResponse response) {
+        //保存cookie,有效期为两周
+		setCookie(new String[] { token.getSeries(), token.getTokenValue() },
+				getTokenValiditySeconds(), request, response);
+	}
+......
+}
+```
+
+
+
+### 4.6 记住我登录-AbstractRememberMeServices的setCookie
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+
+public abstract class AbstractRememberMeServices implements RememberMeServices,
+		InitializingBean, LogoutHandler {
+	public static final String SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY = "remember-me";
+	private String cookieName = SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY;
+            
+	public static final int TWO_WEEKS_S = 1209600;
+	private int tokenValiditySeconds = TWO_WEEKS_S;
+
+	protected int getTokenValiditySeconds() {
+		return tokenValiditySeconds;
+	}
+
+	protected void setCookie(String[] tokens, int maxAge, HttpServletRequest request,
+			HttpServletResponse response) {
+		String cookieValue = encodeCookie(tokens);
+		Cookie cookie = new Cookie(cookieName, cookieValue);
+		cookie.setMaxAge(maxAge);
+		cookie.setPath(getCookiePath(request));
+		if (cookieDomain != null) {
+			cookie.setDomain(cookieDomain);
+		}
+		if (maxAge < 1) {
+			cookie.setVersion(1);
+		}
+
+		if (useSecureCookie == null) {
+			cookie.setSecure(request.isSecure());
+		}
+		else {
+			cookie.setSecure(useSecureCookie);
+		}
+
+		cookie.setHttpOnly(true);
+
+		response.addCookie(cookie);
+	}
+	protected String encodeCookie(String[] cookieTokens) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < cookieTokens.length; i++) {
+			try
+			{
+				sb.append(URLEncoder.encode(cookieTokens[i], StandardCharsets.UTF_8.toString()));
+			}
+			catch (UnsupportedEncodingException e)
+			{
+				logger.error(e.getMessage(), e);
+			}
+
+			if (i < cookieTokens.length - 1) {
+				sb.append(DELIMITER);
+			}
+		}
+
+		String value = sb.toString();
+
+		sb = new StringBuilder(new String(Base64.getEncoder().encode(value.getBytes())));
+
+		while (sb.charAt(sb.length() - 1) == '=') {
+			sb.deleteCharAt(sb.length() - 1);
+		}
+
+		return sb.toString();
+	}
+......
+}
+
+
+```
+
+至此，在登录时，就将记住我的相关信息保存到了数据库表persistent_logins和浏览器的COOKIE中
+
+数据库中存储的记录
+
+
+
+![image-20230617202943273](.\img\image-20230617202943273.png)
+
+再来看看浏览器中存储的信息。
+
+![image-20230617203506481](.\img\image-20230617203506481.png)
+
+可以看出此信息与库中的不一致，这是因为经过了编码处理了，首先进行了，URL编码，再进行Base64编码。再在要还原，进行解码处理，先进行Base解码，再进行URL解码。
+
+原始字符
+
+```html
+UTZIVjJ2N1ZHaDIyRERoTkJVV2tOZyUzRCUzRDpzTnlNQW42VWh2eFFuSnVFUTNrcG9nJTNEJTNE
+```
+
+经过Base64解码后可得
+
+```html
+Q6HV2v7VGh22DDhNBUWkNg%3D%3D:sNyMAn6UhvxQnJuEQ3kpog%3D%3D
+```
+
+再进行URL解码
+
+```html
+Q6HV2v7VGh22DDhNBUWkNg==:sNyMAn6UhvxQnJuEQ3kpog==
+```
+
+这样我们就发现与库中的记录一致了。
+
+登录流程中的记住我功能结束。下面开始查看RememberMeAuthenticationFilter的处理。
+
+
+
+### 4.7 记住我的处理-2-RememberMeAuthenticationFilter
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+
+public class RememberMeAuthenticationFilter extends GenericFilterBean implements
+		ApplicationEventPublisherAware {
+......
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            //检查是否是记住我登录，如果是则完成自动登录，查看《4.8-自动登录》
+			Authentication rememberMeAuth = rememberMeServices.autoLogin(request,
+					response);
+
+			if (rememberMeAuth != null) {
+				// Attempt authenticaton via AuthenticationManager
+				try {
+                    //调用authenticationManager再次认证。
+					rememberMeAuth = authenticationManager.authenticate(rememberMeAuth);
+
+					// Store to SecurityContextHolder
+                    //将认证信息重新放入至SecurityContext中
+					SecurityContextHolder.getContext().setAuthentication(rememberMeAuth);
+
+					onSuccessfulAuthentication(request, response, rememberMeAuth);
+
+					if (logger.isDebugEnabled()) {
+						logger.debug("SecurityContextHolder populated with remember-me token: '"
+								+ SecurityContextHolder.getContext().getAuthentication()
+								+ "'");
+					}
+
+					// Fire event
+					if (this.eventPublisher != null) {
+						eventPublisher
+								.publishEvent(new InteractiveAuthenticationSuccessEvent(
+										SecurityContextHolder.getContext()
+												.getAuthentication(), this.getClass()));
+					}
+
+					if (successHandler != null) {
+						successHandler.onAuthenticationSuccess(request, response,
+								rememberMeAuth);
+
+						return;
+					}
+
+				}
+				catch (AuthenticationException authenticationException) {
+					if (logger.isDebugEnabled()) {
+						logger.debug(
+								"SecurityContextHolder not populated with remember-me token, as "
+										+ "AuthenticationManager rejected Authentication returned by RememberMeServices: '"
+										+ rememberMeAuth
+										+ "'; invalidating remember-me token",
+								authenticationException);
+					}
+
+					rememberMeServices.loginFail(request, response);
+
+					onUnsuccessfulAuthentication(request, response,
+							authenticationException);
+				}
+			}
+
+			chain.doFilter(request, response);
+		}
+		else {
+			if (logger.isDebugEnabled()) {
+				logger.debug("SecurityContextHolder not populated with remember-me token, as it already contained: '"
+						+ SecurityContextHolder.getContext().getAuthentication() + "'");
+			}
+
+			chain.doFilter(request, response);
+		}
+	}
+......
+}
+```
+
+### 4.8 记住我的处理-2-AbstractRememberMeServices的autoLogin
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+
+public abstract class AbstractRememberMeServices implements RememberMeServices,
+		InitializingBean, LogoutHandler {
+	public static final String SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY = "remember-me";
+	private String cookieName = SPRING_SECURITY_REMEMBER_ME_COOKIE_KEY;
+......
+	public final Authentication autoLogin(HttpServletRequest request,
+			HttpServletResponse response) {
+    	//1,获取rememberMeCookie的信息。
+		String rememberMeCookie = extractRememberMeCookie(request);
+
+		if (rememberMeCookie == null) {
+			return null;
+		}
+
+		logger.debug("Remember-me cookie detected");
+
+		if (rememberMeCookie.length() == 0) {
+			logger.debug("Cookie was empty");
+			cancelCookie(request, response);
+			return null;
+		}
+
+		UserDetails user = null;
+
+		try {
+            //进行Cookie的解码处理。
+			String[] cookieTokens = decodeCookie(rememberMeCookie);
+            //根据cookie完成自动登录。查看《4.9-记住我处理-processAutoLoginCookie》
+			user = processAutoLoginCookie(cookieTokens, request, response);
+            //用户状态检查
+			userDetailsChecker.check(user);
+
+			logger.debug("Remember-me cookie accepted");
+			//创建认证成功的RememberMeAuthenticationToken并将认证状态设置为true
+			return createSuccessfulAuthentication(request, user);
+		}
+		catch (CookieTheftException cte) {
+			cancelCookie(request, response);
+			throw cte;
+		}
+		catch (UsernameNotFoundException noUser) {
+			logger.debug("Remember-me login was valid but corresponding user not found.",
+					noUser);
+		}
+		catch (InvalidCookieException invalidCookie) {
+			logger.debug("Invalid remember-me cookie: " + invalidCookie.getMessage());
+		}
+		catch (AccountStatusException statusInvalid) {
+			logger.debug("Invalid UserDetails: " + statusInvalid.getMessage());
+		}
+		catch (RememberMeAuthenticationException e) {
+			logger.debug(e.getMessage());
+		}
+
+		cancelCookie(request, response);
+		return null;
+	} 
+   
+	protected String extractRememberMeCookie(HttpServletRequest request) {
+		Cookie[] cookies = request.getCookies();
+
+		if ((cookies == null) || (cookies.length == 0)) {
+			return null;
+		}
+
+		for (Cookie cookie : cookies) {
+			if (cookieName.equals(cookie.getName())) {
+				return cookie.getValue();
+			}
+		}
+
+		return null;
+	}
+	protected String[] decodeCookie(String cookieValue) throws InvalidCookieException {
+		for (int j = 0; j < cookieValue.length() % 4; j++) {
+			cookieValue = cookieValue + "=";
+		}
+
+		try {
+			Base64.getDecoder().decode(cookieValue.getBytes());
+		}
+		catch (IllegalArgumentException e) {
+			throw new InvalidCookieException(
+					"Cookie token was not Base64 encoded; value was '" + cookieValue
+							+ "'");
+		}
+
+		String cookieAsPlainText = new String(Base64.getDecoder().decode(cookieValue.getBytes()));
+
+		String[] tokens = StringUtils.delimitedListToStringArray(cookieAsPlainText,
+				DELIMITER);
+
+		for (int i = 0; i < tokens.length; i++)
+		{
+			try
+			{
+				tokens[i] = URLDecoder.decode(tokens[i], StandardCharsets.UTF_8.toString());
+			}
+			catch (UnsupportedEncodingException e)
+			{
+				logger.error(e.getMessage(), e);
+			}
+		}
+
+		return tokens;
+	}
+            
+	protected Authentication createSuccessfulAuthentication(HttpServletRequest request,
+			UserDetails user) {
+		RememberMeAuthenticationToken auth = new RememberMeAuthenticationToken(key, user,
+				authoritiesMapper.mapAuthorities(user.getAuthorities()));
+		auth.setDetails(authenticationDetailsSource.buildDetails(request));
+		return auth;
+	}
+
+    
+......
+}
+```
+
+### 4.9-记住我处理-PersistentTokenBasedRememberMeServices-processAutoLoginCookie
+
+```java
+package org.springframework.security.web.authentication.rememberme;
+
+
+public class PersistentTokenBasedRememberMeServices extends AbstractRememberMeServices {
+......
+	protected UserDetails processAutoLoginCookie(String[] cookieTokens,
+			HttpServletRequest request, HttpServletResponse response) {
+
+		if (cookieTokens.length != 2) {
+			throw new InvalidCookieException("Cookie token did not contain " + 2
+					+ " tokens, but contained '" + Arrays.asList(cookieTokens) + "'");
+		}
+
+		final String presentedSeries = cookieTokens[0];
+		final String presentedToken = cookieTokens[1];
+		//从数据库中查询Token的信息
+		PersistentRememberMeToken token = tokenRepository
+				.getTokenForSeries(presentedSeries);
+		//进行判空处理
+		if (token == null) {
+			// No series match, so we can't authenticate using this cookie
+			throw new RememberMeAuthenticationException(
+					"No persistent token found for series id: " + presentedSeries);
+		}
+		//进行对比值是否一致
+		// We have a match for this user/series combination
+		if (!presentedToken.equals(token.getTokenValue())) {
+			// Token doesn't match series value. Delete all logins for this user and throw
+			// an exception to warn them.
+			tokenRepository.removeUserTokens(token.getUsername());
+
+			throw new CookieTheftException(
+					messages.getMessage(
+							"PersistentTokenBasedRememberMeServices.cookieStolen",
+							"Invalid remember-me token (Series/token) mismatch. Implies previous cookie theft attack."));
+		}
+		
+    	//有效期检查
+		if (token.getDate().getTime() + getTokenValiditySeconds() * 1000L < System
+				.currentTimeMillis()) {
+			throw new RememberMeAuthenticationException("Remember-me login has expired");
+		}
+
+		// Token also matches, so login is valid. Update the token value, keeping the
+		// *same* series number.
+		if (logger.isDebugEnabled()) {
+			logger.debug("Refreshing persistent login token for user '"
+					+ token.getUsername() + "', series '" + token.getSeries() + "'");
+		}
+		
+    	//创建一个新的Token。
+		PersistentRememberMeToken newToken = new PersistentRememberMeToken(
+				token.getUsername(), token.getSeries(), generateTokenData(), new Date());
+
+		try {
+            //保存到数据库中
+			tokenRepository.updateToken(newToken.getSeries(), newToken.getTokenValue(),
+					newToken.getDate());
+            //将新的token返回到cookie中。
+			addCookie(newToken, request, response);
+		}
+		catch (Exception e) {
+			logger.error("Failed to update token: ", e);
+			throw new RememberMeAuthenticationException(
+					"Autologin failed due to data access problem");
+		}
+		//再次根据用户名调用UserDetailsService的自定义实现
+		return getUserDetailsService().loadUserByUsername(token.getUsername());
+	} 
+
+......
+}
+```
+
+
+
+## 5. 授权流程分析
+
+FilterSecurityInterceptor是用来处理整个用户的授权流程的，也是距离用户API最后一个非常重要的过滤器链。
+
+
+
+存在三种授权模式：
+
+1. **AffiffiffirmativeBased** 基于肯定的逻辑：一票通过权
+2. **ConsensusBased** 基于共识的逻辑：赞成票多于反对票则表示通过，反对票多于赞成票则抛出AccessDeniedException
+3. **UnanimousBased**基于一致的逻辑：一票否决权
+
+
+
+### 5.1 FilterSecurityInterceptor过滤器-认证通过
+
+此过滤器，专门针对权限的校验，需要用户先登录，然后再进行鉴权处理。
+
+那同样的调试代码，还是先登录，然后再点击一个请求到后端进行权限检查。
+
+
+
+```java
+package org.springframework.security.web.access.intercept;
+
+
+public class FilterSecurityInterceptor extends AbstractSecurityInterceptor implements
+		Filter {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	private static final String FILTER_APPLIED = "__spring_security_filterSecurityInterceptor_filterApplied";
+
+	// ~ Instance fields
+	// ================================================================================================
+
+	private FilterInvocationSecurityMetadataSource securityMetadataSource;
+	private boolean observeOncePerRequest = true;
+    
+	public SecurityMetadataSource obtainSecurityMetadataSource() {
+		return this.securityMetadataSource;
+	}
+    
+	public void doFilter(ServletRequest request, ServletResponse response,
+			FilterChain chain) throws IOException, ServletException {
+		FilterInvocation fi = new FilterInvocation(request, response, chain);
+		invoke(fi);
+	}
+
+	
+	public void invoke(FilterInvocation fi) throws IOException, ServletException {
+		if ((fi.getRequest() != null)
+				&& (fi.getRequest().getAttribute(FILTER_APPLIED) != null)
+				&& observeOncePerRequest) {
+			// filter already applied to this request and user wants us to observe
+			// once-per-request handling, so don't re-do security checking
+			fi.getChain().doFilter(fi.getRequest(), fi.getResponse());
+		}
+		else {
+			// first time this request being called, so perform security checking
+			if (fi.getRequest() != null && observeOncePerRequest) {
+				fi.getRequest().setAttribute(FILTER_APPLIED, Boolean.TRUE);
+			}
+			
+            //前置调用- 查看《5.2-前置调用》
+			InterceptorStatusToken token = super.beforeInvocation(fi);
+
+			try {
+				fi.getChain().doFilter(fi.getRequest(), fi.getResponse());
+			}
+			finally {
+				super.finallyInvocation(token);
+			}
+
+			super.afterInvocation(token, null);
+		}
+	}
+
+}
+
+```
+
+
+
+### 5.2-前置调用-beforeInvocation
+
+```java
+package org.springframework.security.access.intercept;
+
+public abstract class AbstractSecurityInterceptor implements InitializingBean,
+		ApplicationEventPublisherAware, MessageSourceAware {
+......
+	protected InterceptorStatusToken beforeInvocation(Object object) {
+		Assert.notNull(object, "Object was null");
+		final boolean debug = logger.isDebugEnabled();
+
+		if (!getSecureObjectClass().isAssignableFrom(object.getClass())) {
+			throw new IllegalArgumentException(
+					"Security invocation attempted for object "
+							+ object.getClass().getName()
+							+ " but AbstractSecurityInterceptor only configured to support secure objects of type: "
+							+ getSecureObjectClass());
+		}
+		
+    	//查询所有的权限信息，即在系统启动时，
+    	//this.obtainSecurityMetadataSource()返回的是在SecurityConfiguration中编写的加载所有权限
+      	// permissionService.list()，然后保存到请求权限中
+    	// 继续查看-《5.3-getAttributes方法》拿到权限信息。
+		Collection<ConfigAttribute> attributes = this.obtainSecurityMetadataSource()
+				.getAttributes(object);
+
+		if (attributes == null || attributes.isEmpty()) {
+			if (rejectPublicInvocations) {
+				throw new IllegalArgumentException(
+						"Secure object invocation "
+								+ object
+								+ " was denied as public invocations are not allowed via this interceptor. "
+								+ "This indicates a configuration error because the "
+								+ "rejectPublicInvocations property is set to 'true'");
+			}
+
+			if (debug) {
+				logger.debug("Public object - authentication not attempted");
+			}
+
+			publishEvent(new PublicInvocationEvent(object));
+
+			return null; // no further work post-invocation
+		}
+
+		if (debug) {
+			logger.debug("Secure object: " + object + "; Attributes: " + attributes);
+		}
+
+		if (SecurityContextHolder.getContext().getAuthentication() == null) {
+			credentialsNotFound(messages.getMessage(
+					"AbstractSecurityInterceptor.authenticationNotFound",
+					"An Authentication object was not found in the SecurityContext"),
+					object, attributes);
+		}
+		//获取当前用户的认证信息，查看《5.4-获取用户认证信息-authenticateIfRequired》
+		Authentication authenticated = authenticateIfRequired();
+
+		// Attempt authorization
+		try {
+            //调用决策管理器,查看《5.5-决策管理器-decide》默认使用AffirmativeBased，一票通过
+			this.accessDecisionManager.decide(authenticated, object, attributes);
+		}
+		catch (AccessDeniedException accessDeniedException) {
+			publishEvent(new AuthorizationFailureEvent(object, attributes, authenticated,
+					accessDeniedException));
+
+			throw accessDeniedException;
+		}
+
+		if (debug) {
+			logger.debug("Authorization successful");
+		}
+
+		if (publishAuthorizationSuccess) {
+			publishEvent(new AuthorizedEvent(object, attributes, authenticated));
+		}
+
+		// Attempt to run as a different user
+		Authentication runAs = this.runAsManager.buildRunAs(authenticated, object,
+				attributes);
+
+		if (runAs == null) {
+			if (debug) {
+				logger.debug("RunAsManager did not change Authentication object");
+			}
+
+			// no further work post-invocation
+			return new InterceptorStatusToken(SecurityContextHolder.getContext(), false,
+					attributes, object);
+		}
+		else {
+			if (debug) {
+				logger.debug("Switching to RunAs Authentication: " + runAs);
+			}
+
+			SecurityContext origCtx = SecurityContextHolder.getContext();
+			SecurityContextHolder.setContext(SecurityContextHolder.createEmptyContext());
+			SecurityContextHolder.getContext().setAuthentication(runAs);
+
+			// need to revert to token.Authenticated post-invocation
+			return new InterceptorStatusToken(origCtx, true, attributes, object);
+		}
+	}
+
+......
+}
+```
+
+### 5.3-getAttributes方法
+
+```java
+package org.springframework.security.web.access.intercept;
+
+
+public class DefaultFilterInvocationSecurityMetadataSource implements
+		FilterInvocationSecurityMetadataSource {
+......
+	public Collection<ConfigAttribute> getAttributes(Object object) {
+		final HttpServletRequest request = ((FilterInvocation) object).getRequest();
+    	//根据当前请求的路径，获取当前路径所需的权限信息。
+		for (Map.Entry<RequestMatcher, Collection<ConfigAttribute>> entry : requestMap
+				.entrySet()) {
+			if (entry.getKey().matches(request)) {
+				return entry.getValue();
+			}
+		}
+		return null;
+	}    
+
+......
+}
+```
+
+### 5.4-获取用户认证信息-authenticateIfRequired
+
+```java
+public abstract class AbstractSecurityInterceptor implements InitializingBean,
+		ApplicationEventPublisherAware, MessageSourceAware {
+......
+	private Authentication authenticateIfRequired() {
+    	//拿到用户认证的信息
+		Authentication authentication = SecurityContextHolder.getContext()
+				.getAuthentication();
+		//当前用户已经认证，则直接返回。
+		if (authentication.isAuthenticated() && !alwaysReauthenticate) {
+			if (logger.isDebugEnabled()) {
+				logger.debug("Previously Authenticated: " + authentication);
+			}
+
+			return authentication;
+		}
+
+		authentication = authenticationManager.authenticate(authentication);
+
+		// We don't authenticated.setAuthentication(true), because each provider should do
+		// that
+		if (logger.isDebugEnabled()) {
+			logger.debug("Successfully Authenticated: " + authentication);
+		}
+
+		SecurityContextHolder.getContext().setAuthentication(authentication);
+
+		return authentication;
+	}    
+
+......
+}
+```
+
+![image-20230618155953013](.\img\image-20230618155953013.png)
+
+
+
+
+
+### 5.5-决策管理器-decide
+
+```java
+package org.springframework.security.access.vote;
+
+public class AffirmativeBased extends AbstractAccessDecisionManager {
+
+	public AffirmativeBased(List<AccessDecisionVoter<?>> decisionVoters) {
+		super(decisionVoters);
+	}
+
+	// ~ Methods
+	// ========================================================================================================
+
+	/**
+	 * This concrete implementation simply polls all configured
+	 * {@link AccessDecisionVoter}s and grants access if any
+	 * <code>AccessDecisionVoter</code> voted affirmatively. Denies access only if there
+	 * was a deny vote AND no affirmative votes.
+	 * <p>
+	 * If every <code>AccessDecisionVoter</code> abstained from voting, the decision will
+	 * be based on the {@link #isAllowIfAllAbstainDecisions()} property (defaults to
+	 * false).
+	 * </p>
+	 *
+	 * @param authentication the caller invoking the method
+	 * @param object the secured object
+	 * @param configAttributes the configuration attributes associated with the method
+	 * being invoked
+	 *
+	 * @throws AccessDeniedException if access is denied
+	 */
+	public void decide(Authentication authentication, Object object,
+			Collection<ConfigAttribute> configAttributes) throws AccessDeniedException {
+		int deny = 0;
+		//目前，在Spring-security就只留下了一个WebExpressionVoter。
+		for (AccessDecisionVoter voter : getDecisionVoters()) {
+            //针对权限的表达式进行解析处理。
+            //返回三种情况。0：弃权，-1：不通过，1：通过
+			int result = voter.vote(authentication, object, configAttributes);
+
+			if (logger.isDebugEnabled()) {
+				logger.debug("Voter: " + voter + ", returned: " + result);
+			}
+
+			switch (result) {
+            //通过，直接通过。
+			case AccessDecisionVoter.ACCESS_GRANTED:
+				return;
+			//当决策不通过时，则计数++
+			case AccessDecisionVoter.ACCESS_DENIED:
+				deny++;
+
+				break;
+
+			default:
+				break;
+			}
+		}
+		
+        //如果发现决策不通过的计数不为0，则响应异常
+		if (deny > 0) {
+			throw new AccessDeniedException(messages.getMessage(
+					"AbstractAccessDecisionManager.accessDenied", "Access is denied"));
+		}
+
+		// To get this far, every AccessDecisionVoter abstained
+		checkAllowIfAllAbstainDecisions();
+	}
+}
+
+```
+
+
+
+
+
+### 5.6- FilterSecurityInterceptor过滤器-认证不通过
+
+```java
+package org.springframework.security.web.access.intercept;
+
+
+public class FilterSecurityInterceptor extends AbstractSecurityInterceptor implements
+		Filter {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	private static final String FILTER_APPLIED = "__spring_security_filterSecurityInterceptor_filterApplied";
+
+	// ~ Instance fields
+	// ================================================================================================
+
+	private FilterInvocationSecurityMetadataSource securityMetadataSource;
+	private boolean observeOncePerRequest = true;
+    
+	public SecurityMetadataSource obtainSecurityMetadataSource() {
+		return this.securityMetadataSource;
+	}
+    
+	public void doFilter(ServletRequest request, ServletResponse response,
+			FilterChain chain) throws IOException, ServletException {
+		FilterInvocation fi = new FilterInvocation(request, response, chain);
+		invoke(fi);
+	}
+
+	
+	public void invoke(FilterInvocation fi) throws IOException, ServletException {
+		if ((fi.getRequest() != null)
+				&& (fi.getRequest().getAttribute(FILTER_APPLIED) != null)
+				&& observeOncePerRequest) {
+			// filter already applied to this request and user wants us to observe
+			// once-per-request handling, so don't re-do security checking
+			fi.getChain().doFilter(fi.getRequest(), fi.getResponse());
+		}
+		else {
+			// first time this request being called, so perform security checking
+			if (fi.getRequest() != null && observeOncePerRequest) {
+				fi.getRequest().setAttribute(FILTER_APPLIED, Boolean.TRUE);
+			}
+			
+            //前置调用- 查看《5.2-前置调用》,其他逻辑一致，会抛出一个AccessDeniedException的异常
+            //紧接着，就会到达AbstractSecurityInterceptor的异常，会继续向外抛出
+            //再就来到了ExceptionTranslationFilter处理--《5.7-ExceptionTranslationFilter的异常处理》
+			InterceptorStatusToken token = super.beforeInvocation(fi);
+
+			try {
+				fi.getChain().doFilter(fi.getRequest(), fi.getResponse());
+			}
+			finally {
+				super.finallyInvocation(token);
+			}
+
+			super.afterInvocation(token, null);
+		}
+	}
+
+}
+
+```
+
+
+
+### 5.7 ExceptionTranslationFilter的异常处理
+
+```java
+package org.springframework.security.web.access;
+
+public class ExceptionTranslationFilter extends GenericFilterBean {
+......
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		try {
+			chain.doFilter(request, response);
+
+			logger.debug("Chain processed normally");
+		}
+		catch (IOException ex) {
+			throw ex;
+		}
+		catch (Exception ex) {
+			// Try to extract a SpringSecurityException from the stacktrace
+			Throwable[] causeChain = throwableAnalyzer.determineCauseChain(ex);
+            //获取异常信息
+			RuntimeException ase = (AuthenticationException) throwableAnalyzer
+					.getFirstThrowableOfType(AuthenticationException.class, causeChain);
+			if (ase == null) {
+				ase = (AccessDeniedException) throwableAnalyzer.getFirstThrowableOfType(
+						AccessDeniedException.class, causeChain);
+			}
+			
+            //当前是一个未授权的异常，则进入这里处理
+			if (ase != null) {
+				if (response.isCommitted()) {
+					throw new ServletException("Unable to handle the Spring Security Exception because the response is already committed.", ex);
+				}
+                //异常处理。
+				handleSpringSecurityException(request, response, chain, ase);
+			}
+			else {
+				// Rethrow ServletExceptions and RuntimeExceptions as-is
+				if (ex instanceof ServletException) {
+					throw (ServletException) ex;
+				}
+				else if (ex instanceof RuntimeException) {
+					throw (RuntimeException) ex;
+				}
+
+				// Wrap other Exceptions. This shouldn't actually happen
+				// as we've already covered all the possibilities for doFilter
+				throw new RuntimeException(ex);
+			}
+		}
+	}
+	private void handleSpringSecurityException(HttpServletRequest request,
+			HttpServletResponse response, FilterChain chain, RuntimeException exception)
+			throws IOException, ServletException {
+		if (exception instanceof AuthenticationException) {
+			logger.debug(
+					"Authentication exception occurred; redirecting to authentication entry point",
+					exception);
+
+			sendStartAuthentication(request, response, chain,
+					(AuthenticationException) exception);
+		}
+        //当前一个未授权的异常，则进入这里处理
+		else if (exception instanceof AccessDeniedException) {
+			Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            //当前已经登录非匿名用户。
+			if (authenticationTrustResolver.isAnonymous(authentication) || authenticationTrustResolver.isRememberMe(authentication)) {
+				logger.debug(
+						"Access is denied (user is " + (authenticationTrustResolver.isAnonymous(authentication) ? "anonymous" : "not fully authenticated") + "); redirecting to authentication entry point",
+						exception);
+
+				sendStartAuthentication(
+						request,
+						response,
+						chain,
+						new InsufficientAuthenticationException(
+							messages.getMessage(
+								"ExceptionTranslationFilter.insufficientAuthentication",
+								"Full authentication is required to access this resource")));
+			}
+            //进入这里处理。
+			else {
+				logger.debug(
+						"Access is denied (user is not anonymous); delegating to AccessDeniedHandler",
+						exception);
+				//此时的accessDeniedHandler是调用的自定义的权限不足的处理器，
+				accessDeniedHandler.handle(request, response,
+						(AccessDeniedException) exception);
+			}
+		}
+	}
+......
+}
+```
+
+至此权限不足的异常流程处理完毕。
