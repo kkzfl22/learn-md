@@ -175,10 +175,15 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                 demand = Long.MAX_VALUE;
 
                 //开始向下游发送元素
-
+                doSend();
             }
-
-
+            //其他情况，表示当前是设置了正常请求数量
+            else {
+                //记录下请求个数的元素
+                demand += n;
+                //开始向下游发送元素
+                doSend();
+            }
         }
 
         private void doSend() {
@@ -209,8 +214,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                     subscriber.onNext(next);
 
                     //如果已经到达结束位置，
-                    if(hashNext)
-                    {
+                    if (hashNext) {
                         // We need to consider this `Subscription` as cancelled as per rule 1.6
                         // 首先考滤票据取消了订阅
                         doCancel();
@@ -232,17 +236,36 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                                 // 如果还有订阅者的请求。This  makes sure that rule 1.1 is upheld (sending more than was demanded)
                                 && --demand > 0);
 
-            } catch (Throwable e) {
+            } catch (Throwable t) {
 
+                // We can only get here if `onNext` or `onComplete` threw,
+                // and they are not allowed to according to 2.13,
+                // so we can only cancel and log here.
+
+                // 如果到这里，只能是onNext或onComplete抛异常，只能取消。
+
+                // Make sure that we are cancelled,
+                // since we cannot do   anything else since the `Subscriber`is faulty.
+
+                // 确保已取消，因为是Subscriber的问题
+                doCancel();
+
+                // 记录错误信息
+                (new IllegalStateException(subscriber
+                        + " violated the Reactive Streams rule 2.13 by throwing an exception from onNext or "
+                        + "onComplete. ", t))
+                        .printStackTrace(System.err);
             }
-
-            int leftBatchSize = batchSize;
-
-
         }
 
-        private void doCancel() {
 
+        /**
+         * 规范3.5指明，Subscription.cancel方法必须及时的返回，保持调用者的响应性， 还必须是幂等的，必须是线程安全的。
+         * <p>
+         * 因此该方法不能执行密集的计算。
+         */
+        private void doCancel() {
+            cancelled = true;
         }
 
 
