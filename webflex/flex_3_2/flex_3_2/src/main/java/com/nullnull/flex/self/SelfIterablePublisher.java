@@ -1,9 +1,11 @@
 package com.nullnull.flex.self;
 
+import com.nullnull.flex.demo.AsyncIterablePublisher;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
@@ -65,7 +67,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
 
     @Override
     public void subscribe(Subscriber<? super T> s) {
-
+        new SubscriberImpl(s).init();
     }
 
 
@@ -100,9 +102,9 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
      * 请求的信号
      */
     static final class Request implements Signal {
-        final int n;
+        final long n;
 
-        public Request(int n) {
+        public Request(long n) {
             this.n = n;
         }
     }
@@ -117,8 +119,9 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
          */
         private final Subscriber<? super T> subscriber;
 
-
-        // 该订阅票据是否失效的标志
+        /**
+         * 该订阅票据是否失效的标志
+         */
         private boolean cancelled = false;
 
         /**
@@ -156,13 +159,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
         }
 
 
-        /**
-         * 注册订阅者发送过来的信号
-         *
-         * @param n the strictly positive number of elements to requests to the upstream {@link Publisher}
-         */
-        @Override
-        public void request(final long n) {
+        private void doRequest(int n) {
             // 规范规定，如果请求的元素个数小于1，则抛异常
             // 并在异常信息中指明错误的原因：n必须是正整数。
             if (n < 1) {
@@ -185,6 +182,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                 doSend();
             }
         }
+
 
         private void doSend() {
             try {
@@ -236,6 +234,16 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                                 // 如果还有订阅者的请求。This  makes sure that rule 1.1 is upheld (sending more than was demanded)
                                 && --demand > 0);
 
+
+                // 如果还有订阅者的请求。This  makes sure that rule 1.1 is upheld (sending more than was demanded)
+
+                // If the `Subscription` is still alive and well,
+                // and we have demand to satisfy, we signal ourselves to send more data
+
+                // 如果订阅票据没有取消，还有请求，通知自己发送更多的数据
+                if (!cancelled && demand > 0)
+                    signal(Send.Instance);
+
             } catch (Throwable t) {
 
                 // We can only get here if `onNext` or `onComplete` threw,
@@ -256,6 +264,59 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                         + "onComplete. ", t))
                         .printStackTrace(System.err);
             }
+        }
+
+
+        /**
+         * 异常给认
+         *
+         * @param signal
+         */
+        private void signal(final Signal signal) {
+            //将信号放入入栈队列
+            if (inboundSignals.offer(signal)) {
+                //信号放入线程成功，则调度线程进行处理
+                tryScheduleToExecute();
+            }
+        }
+
+        /**
+         * 该方法确保订阅票据同一个时间在同一个线程运行
+         * <p>
+         * 规范1.3规定，调用`Subscriber`的`onSubscribe`，`onNext`，`onError`和 `onComplete`方法必须串行，不允许并发。
+         */
+        private final void tryScheduleToExecute() {
+
+            // 使用原子变量进行CAS操作，成功，是说明当前线程可以处理，失败表示已经在处理了
+            if (on.compareAndSet(false, true)) {
+                try {
+                    //向线程池中提交一个任务
+                    executor.execute(this);
+                    //如果不能提交线程池运行，则优雅的退出
+                } catch (Throwable e) {
+                    if (!cancelled) {
+                        //错误不可恢复，执行取消订阅
+                        doCancel();
+                        try {
+                            // 停止,发送error信号
+                            terminateDueTo(new
+                                    IllegalStateException("Publisher terminated due to unavailable Executor.",
+                                    e));
+                        } finally {
+                            // 后续的入站信号不需要处理了，清空信号
+                            inboundSignals.clear();
+                            // 取消当前订阅票据，但是让该票据处于可调度状态，以防清空入站信号之后又有入站信号加入。  异步订阅者：
+                            on.set(false);
+
+                        }
+
+                    }
+
+                }
+            } else {
+                System.out.println("已经被点用了");
+            }
+
         }
 
 
@@ -303,13 +364,156 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
 
         @Override
         public void run() {
+            // 与上次线程执行建立happens-before关系，防止并发执行
+            // 如果on.get()为false，则不执行，线程退出
+            // 如果on.get()为false，则表示没有线程在执行，当前线程可以执行
+            if (on.get()) {
+                //1,从队列中取出一个信号
+                Signal poll = inboundSignals.poll();
+                // 规范1.8：如果`Subscription`被取消了，则必须最终停止向`Subscriber`发送通知。
+                // 规范3.6：如果取消了`Subscription`，则随后调用`Subscription.request( long n)`必须是无效的（NOPs）。
+                // 如果订阅票据没有取消
+                if (!cancelled) {
+                    try {
+                        //根据信号进行方法的处理操作
+                        // 请求
+                        if (poll instanceof Request) {
+                            doRequest((int) ((Request) poll).n);
+                        }
+                        //发送信息
+                        if (poll == Send.Instance) {
+                            doSend();
+                        }
+                        //取消信号
+                        if (poll == Cancel.Instance) {
+                            doCancel();
+                        }
+                        //订阅信号
+                        if (poll == Subscribe.Instance) {
+                            doSubscribe();
+                        }
+                    } finally {
+                        // 保证与下一个线程调度的happens-before关系
+                        on.set(false);
+                        //如果还有信号需要处理
+                        if (!inboundSignals.isEmpty()) {
+                            // 调度当前线程进行处理
+                            tryScheduleToExecute();
+                        }
+                    }
 
+                }
+            }
+
+
+        }
+
+        /**
+         * 不是在`Publisher.subscribe`方法中同步地调用`subscriber.onSubscribe` 方法，而是异步地执行subscriber.onSubscribe方法
+         * <p>
+         * 这样可以避免在调用线程执行用户的代码。因为在订阅者的onSubscribe方法中要执行 Iterable.iterator方法。
+         * <p>
+         * 异步处理也无形中遵循了规范的1.9。
+         */
+        private void doSubscribe() {
+            try {
+                //获取数据源的迭代器
+                iterator = iterable.iterator();
+
+                if (iterator == null) {
+                    // 如果iterator是null，就重置为空集合的迭代器。我们假设 iterator永远不是null值。
+                    iterator = Collections.<T>emptyList().iterator();
+                }
+            } catch (Throwable e) {
+                // Publisher发生了异常，此时需要通知订阅者onError信号。
+                // 但是规范1.9指定了在通知订阅者其他信号之前，必须先通知订阅者  onSubscribe信号。
+                // 因此，此处通知订阅者onSubscribe信号，发送空的订阅票据
+                subscriber.onSubscribe(new Subscription() {
+                    @Override
+                    public void request(long n) {
+                        // 空的
+                    }
+
+                    @Override
+                    public void cancel() {
+                        // 空的
+                    }
+                });
+                // 根据规范1.9，通知订阅者onError信号
+                terminateDueTo(e);
+            }
+
+            if (!cancelled) {
+                try {
+                    // 为订阅者设置订阅票据。
+                    subscriber.onSubscribe(this);
+                } catch (Throwable e) {
+                    // Publisher方法抛异常，此时需要通知订阅者onError信号。
+                    // 但是根据规范2.13，通知订阅者onError信号之前必须先取消该订阅 者的订阅票据。
+                    // Publisher记录下异常信息。
+                    terminateDueTo(new IllegalStateException(subscriber
+                            + "violated the Reactive Streams rule 2.13 by throwing an exception from onSubscribe. ",
+                            e));
+                }
+
+                // 立即处理已经完成的迭代器
+                boolean hashNext = false;
+                try {
+                    // 判断是否还有未发送的数据，如果没有，则向订阅者发送onComplete 信号
+                    hashNext = iterator.hasNext();
+                } catch (Throwable e) {
+                    // 规范的1.4规定
+                    // 如果hasNext发生异常，必须向订阅者发送onError信号，发送信号之  前先取消订阅
+                    // 规范1.2规定，Publisher通过向订阅者通知onError或 onComplete信号，
+                    // 发送少于订阅者请求的onNext信号。
+                    terminateDueTo(e);
+                }
+
+
+                // 如果没有数据发送了，表示已经完成，直接发送onComplete信号终止订阅 票据。
+                // 规范1.3规定，通知订阅者onXxx信号，必须串行，不能并发。
+                if (!hashNext) {
+                    try {
+                        // 规范1.6指明，在通知订阅者onError或onComplete信号之   前，必须先取消订阅者的订阅票据。
+                        // 在发送onComplete信号之前，考虑一下，有可能是  Subscription取消了订阅。
+                        doCancel();
+                        subscriber.onComplete();
+                    } catch (final Throwable t) {
+                        // 规范2.13指出，onComplete信号不允许抛异常，因此此处只能 记录下来日志
+                        (new IllegalStateException(subscriber
+                                + " violatedthe Reactive Streams rule 2.13 by throwing an exception from onComplete.",
+                                t)).printStackTrace(System.err);
+                    }
+                }
+            }
+
+        }
+
+        /**
+         * 注册订阅者发送过来的信号
+         *
+         * @param n the strictly positive number of elements to requests to the upstream {@link Publisher}
+         */
+        @Override
+        public void request(final long n) {
+            signal(new Request(n));
         }
 
 
         @Override
         public void cancel() {
+            signal(Cancel.Instance);
+        }
 
+        /**
+         * init方法的设置，用于确保SubscriptionImpl实例在暴露给线程池之前已经构造完成
+         * <p>
+         * 因此，在构造器一完成，就调用该方法，仅调用一次。
+         * <p>
+         * 先发个信号试一下
+         */
+        void init() {
+            signal(Subscribe.Instance);
         }
     }
 
