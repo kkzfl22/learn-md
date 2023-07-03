@@ -28,17 +28,17 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
     /**
      * 表示数据流发送完成，完成信号
      */
-    private enum onComplete implements Signal {
+    private enum OnComplete implements Signal {
         Instance;
     }
 
     /**
      * 错误信号
      */
-    private static class onError implements Signal {
+    private static class OnError implements Signal {
         public final Throwable error;
 
-        public onError(Throwable error) {
+        public OnError(Throwable error) {
             this.error = error;
         }
     }
@@ -48,10 +48,10 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
      *
      * @param <T>
      */
-    private static class onNext<T> implements Signal {
+    private static class OnNext<T> implements Signal {
         private T next;
 
-        public onNext(T next) {
+        public OnNext(T next) {
             this.next = next;
         }
     }
@@ -59,10 +59,10 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
     /**
      * 表示订阅者的订阅成功信号
      */
-    private static class onSubscribe implements Signal {
+    private static class OnSubscribe implements Signal {
         private Subscription subscription;
 
-        public onSubscribe(Subscription subscription) {
+        public OnSubscribe(Subscription subscription) {
             this.subscription = subscription;
         }
     }
@@ -110,14 +110,17 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
      * This method is invoked when the OnComplete signal arrives
      * override this method to implement your own custom onComplete logic.
      */
-    protected abstract void whenOnComplete();
+    protected void whenOnComplete() {
+    }
 
 
     /**
      * This method is invoked if the OnError signal arrives
      * override this method to implement your own custom onError logic.
      */
-    protected abstract void whenOnError(Throwable e);
+    protected void whenOnError(Throwable e) {
+
+    }
 
 
     /**
@@ -143,19 +146,19 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
                 // 根据规范条款2.8，如果当前订阅者已完成，就不需要处理了。
                 if (!done) {
                     //根据信号类型对应处理
-                    if (poll instanceof onNext) {
-                        handleOnNext(((onNext<T>) poll).next);
+                    if (poll instanceof OnNext) {
+                        handleOnNext(((OnNext<T>) poll).next);
                     }
                     //订阅信号
-                    else if (poll instanceof onSubscribe) {
-                        handleOnSubscribe(((onSubscribe) poll).subscription);
+                    else if (poll instanceof OnSubscribe) {
+                        handleOnSubscribe(((OnSubscribe) poll).subscription);
                     }
                     //错误信号
-                    else if (poll instanceof onError) {
-                        handleOnError(((onError) poll).error);
+                    else if (poll instanceof OnError) {
+                        handleOnError(((OnError) poll).error);
                     }
                     //完成信号
-                    else if (poll instanceof onComplete) {
+                    else if (poll instanceof OnComplete) {
                         handleOnComplete();
                     }
                 }
@@ -222,9 +225,27 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
     }
 
     /**
+     * Here it is important that we do not violate 2.2 and 2.3 by calling  methods on  the `Subscription`or `Publisher`
+     * <p>
      * 完成信号处理
      */
     private void handleOnComplete() {
+
+        if (subscription == null) {
+            //needed, since we are expecting Publishers to conform to the spec
+            // Publisher is not allowed to signal onError before
+            //onSubscribe according to rule 1.09
+            (new IllegalStateException(
+                    "Publisher violated the Reactive  Streams rule 1.09 signalling onError prior "
+                            + "to onSubscribe. ")).printStackTrace(System.err);
+        }
+
+        // Obey rule 2.4
+        done = true;
+
+        //发送完成信号
+        whenOnComplete();
+
     }
 
     /**
@@ -233,14 +254,64 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
      * @param error
      */
     private void handleOnError(Throwable error) {
+
+        if (subscription == null) {
+            //needed, since we are expecting Publishers to conform to the spec
+            // Publisher is not allowed to signal onComplete before
+            //onSubscribe according to rule 1.09
+            (new IllegalStateException(
+                    "Publisher violated the Reactive Streams rule 1.09 signalling onComplete prior to onSubscribe. "))
+                    .printStackTrace(System.err);
+        }
+
+        // Obey rule 2.4
+        done = true;
+        //发送错误信号
+        whenOnError(error);
     }
 
     /**
      * 订阅信号处理
      *
-     * @param subscription
+     * @param subscriptionTmp
      */
-    private void handleOnSubscribe(Subscription subscription) {
+    private void handleOnSubscribe(Subscription subscriptionTmp) {
+        if (subscriptionTmp == null) {
+            // Getting a null `Subscription` here is not valid so lets just  ignore it.
+            return;
+        }
+
+        //如果上一个订阅还存在，则需进要对当前信号做取消处理
+        if (subscription != null) {
+            try {
+                subscriptionTmp.cancel();
+            } catch (final Throwable t) {
+                //Subscription.cancel is not allowed to throw an exception, according to rule 3.15
+                (new IllegalStateException(subscriptionTmp +
+                        " violated the Reactive Streams rule 3.15 by throwing an exception from cancel.",
+                        t)).printStackTrace(System.err);
+            }
+            return;
+        }
+
+
+        //其他情况，表示正常，发送首个请求数据的信号
+        subscription = subscriptionTmp;
+
+        try {
+            // If we want elements, according to rule 2.1 we need to
+            //call `request`
+            // And, according to rule 3.2 we are allowed to call this
+            //synchronously from within the `onSubscribe`method
+            subscription.request(1); // Our Subscriber is unbuffered and modest,
+            //it requests one element at a time
+        } catch (final Throwable t) {
+            // Subscription.request is not allowed to throw according
+            //to rule 3.16
+            (new IllegalStateException(subscription
+                    + " violated the Reactive Streams rule 3.16 by throwing an exception from request.",
+                    t)).printStackTrace(System.err);
+        }
     }
 
     /**
@@ -262,9 +333,38 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
                             + "`Subscription.request`. (no Subscription)")).printStackTrace(System.err);
         }
 
-        //
-        if(whenNext(element))
-        {
+        try {
+            //如果数据还有下一条记录，则再次请求1条记录
+            if (whenNext(element)) {
+                try {
+                    // Our Subscriber is
+                    //unbuffered and modest, it requests one element at a time
+                    subscription.request(1);
+                } catch (Throwable e) {
+                    // Subscription.request is not allowed to throw
+                    //according to rule 3.16
+                    (new IllegalStateException(subscription
+                            + "violated the Reactive Streams rule 3.16 by throwing an exception from request."
+                            + " ", e)).printStackTrace(System.err);
+                }
+            }
+            //如果没有元素了，标识结束
+            else {
+                done();
+            }
+        } catch (Throwable e) {
+            //当发生异常，标识当前完成
+            done();
+            //发送异常信息
+            try {
+                onError(e);
+            } catch (Throwable ex) {
+                //Subscriber.onError is not allowed to throw an
+                //exception, according to rule 2.13
+                (new IllegalStateException(this
+                        + " violated the Reactive Streams rule 2.13 by throwing an exception from onError.",
+                        ex)).printStackTrace(System.err);
+            }
 
         }
 
@@ -273,21 +373,45 @@ public abstract class SelfSubscriber<T> implements Subscriber<T>, Runnable {
 
     @Override
     public void onSubscribe(Subscription s) {
+        // As per rule 2.13, we need to throw a `java.lang.NullPointerException`if the `Subscription`is `null`
+        if (s == null) {
+            throw null;
+        }
+        signal(new OnSubscribe(s));
+    }
 
+    private void signal(Signal signal) {
+        // 信号入站，线程池调度处理
+        // 不需要检查是否为null，因为已经实例化了。
+        if (inboundSignals.offer(signal)) {
+            //放入执行调度，立即执行
+            tryScheduleToExecute();
+        }
     }
 
     @Override
     public void onNext(T t) {
+        // As per rule 2.13, we need to throw a
+        //`java.lang.NullPointerException`if the `element`is `null`
+        if (t == null) {
+            throw null;
+        }
 
+        signal(new OnNext<>(t));
     }
 
     @Override
     public void onError(Throwable t) {
-
+        // As per rule 2.13, we need to throw a
+        //`java.lang.NullPointerException`if the `Throwable`is `null`
+        if (t == null) {
+            throw null;
+        }
+        signal(new OnError(t));
     }
 
     @Override
     public void onComplete() {
-
+        signal(OnComplete.Instance);
     }
 }

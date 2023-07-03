@@ -1,4 +1,4 @@
-package com.nullnull.flex.demo;
+package com.nullnull.flex.self;
 
 
 import org.junit.Test;
@@ -24,8 +24,8 @@ public class ReactiveTest {
         }
         final ExecutorService executorService =
                 Executors.newFixedThreadPool(5);
-        AsyncIterablePublisher<Integer> publisher
-                = new AsyncIterablePublisher<>(elements, executorService);
+        SelfIterablePublisher<Integer> publisher
+                = new SelfIterablePublisher<>(elements, executorService);
         publisher.subscribe(new Subscriber<Integer>() {
             @Override
             public void onSubscribe(Subscription s) {
@@ -48,7 +48,12 @@ public class ReactiveTest {
                 System.out.println("结束");
             }
         });
-        final AsyncSubscriber<Integer> subscriber = new AsyncSubscriber<>
+
+
+
+
+
+        final SelfSubscriber<Integer> subscriber = new SelfSubscriber<>
                 (Executors.newFixedThreadPool(2)) {
             @Override
             protected boolean whenNext(Integer element) {
@@ -58,7 +63,7 @@ public class ReactiveTest {
         };
         publisher.subscribe(subscriber);
 
-        Thread.sleep(1000000);
+        Thread.sleep(1000);
 
     }
 }

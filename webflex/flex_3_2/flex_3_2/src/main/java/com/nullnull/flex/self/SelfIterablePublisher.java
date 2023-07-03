@@ -212,7 +212,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                     subscriber.onNext(next);
 
                     //如果已经到达结束位置，
-                    if (hashNext) {
+                    if (!hashNext) {
                         // We need to consider this `Subscription` as cancelled as per rule 1.6
                         // 首先考滤票据取消了订阅
                         doCancel();
@@ -313,8 +313,6 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
                     }
 
                 }
-            } else {
-                System.out.println("已经被点用了");
             }
 
         }
