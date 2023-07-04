@@ -30,7 +30,7 @@ public class ReactiveTest {
             @Override
             public void onSubscribe(Subscription s) {
                 System.out.println("调用了订阅方法");
-                s.request(20);
+                s.request(5);
             }
 
             @Override
@@ -48,15 +48,15 @@ public class ReactiveTest {
                 System.out.println("结束");
             }
         });
-        final AsyncSubscriber<Integer> subscriber = new AsyncSubscriber<>
-                (Executors.newFixedThreadPool(2)) {
-            @Override
-            protected boolean whenNext(Integer element) {
-                System.out.println("接收到的流元素：" + element);
-                return true;
-            }
-        };
-        publisher.subscribe(subscriber);
+        //final AsyncSubscriber<Integer> subscriber = new AsyncSubscriber<>
+        //        (Executors.newFixedThreadPool(2)) {
+        //    @Override
+        //    protected boolean whenNext(Integer element) {
+        //        System.out.println("接收到的流元素：" + element);
+        //        return true;
+        //    }
+        //};
+        //publisher.subscribe(subscriber);
 
         Thread.sleep(1000000);
 

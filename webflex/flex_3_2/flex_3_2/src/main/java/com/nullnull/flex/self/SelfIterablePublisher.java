@@ -186,7 +186,7 @@ public class SelfIterablePublisher<T> implements Publisher<T> {
 
         private void doSend() {
             try {
-                long leftBatchSize = demand;
+                long leftBatchSize = batchSize;
                 //为充分利用线程池，最多发送BatchSize个元素。然后放弃当前线程，重新调度，通知订阅者onNext信号
                 do {
                     T next;
