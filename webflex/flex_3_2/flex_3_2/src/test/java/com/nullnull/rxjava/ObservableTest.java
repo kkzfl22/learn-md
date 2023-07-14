@@ -7,7 +7,9 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -208,5 +210,35 @@ public class ObservableTest {
         }).forEach(item -> System.out.println(item));
     }
 
+    @Test
+    public void count() {
+        List<Integer> dataList = new ArrayList<>(1000);
+
+        for (int i = 0; i < 1000; i++) {
+            dataList.add(i);
+        }
+
+        Observable.from(dataList)
+                //过滤出偶数
+                .filter(item -> item % 2 == 0)
+                //计数
+                .count()
+                //输出
+                .subscribe(
+                        item -> System.out.println("下一个元素:" + item),
+                        ex -> System.err.println("异常:" + ex),
+                        () -> System.out.println("完成:")
+                );
+    }
+
+
+    @Test
+    public void zip() {
+        Observable.zip(Observable.just(1,2,3,4,5,6),
+                Observable.just("a","b","C","D"),
+                (a ,b) ->  a + b)
+                .forEach(System.out::println);
+
+    }
 
 }
