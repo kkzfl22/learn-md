@@ -234,7 +234,7 @@ public class ObservableTest {
 
     @Test
     public void zip() {
-        Observable.zip(Observable.just(1,2,3,4,5,6),
+        Observable.zip(Observable.just(1,2,3,4),
                 Observable.just("a","b","C","D"),
                 (a ,b) ->  a + b)
                 .forEach(System.out::println);
