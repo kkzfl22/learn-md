@@ -991,7 +991,141 @@ public class HelloConsumeConsumer {
 
    ![image-20230815112833731](img\image-20230815112833731.png)
 
-   
+
+
+
+### 3.3 RabbitMQ工作模式
+
+官网关于工作模式的解释地址：https://www.rabbitmq.com/getstarted.html
+
+
+
+#### 3.3.1 Work Queue（工作队列）
+
+生产者发消息，启动多个消费者来消费消息，每个消费者仅消费部分消息，可达到负载均衡的效果。
+
+![image-20230815112833731](img\python-two.png)
+
+**创建生产者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class Product {
+
+
+    public static void main(String[] args) throws Exception {
+        ConnectionFactory factory = new ConnectionFactory();
+
+        factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+        //创建连接和队列
+        Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel();
+
+
+        //声明队列,持久化，不自动删除
+        channel.queueDeclare("qu.wk", true, false, false, null);
+
+        //声明交换机,消息持久化，不自动删除
+        channel.exchangeDeclare("ex.wk", BuiltinExchangeType.DIRECT, true, false, null);
+
+        //队列和交换机绑定
+        channel.queueBind("qu.wk", "ex.wk", "rk.wq");
+
+        for (int i = 0; i < 20; i++) {
+            //发送消息
+            channel.basicPublish("ex.wk",
+                    "rk.wq", null, ("data msg " + i).getBytes(StandardCharsets.UTF_8));
+        }
+
+
+        channel.close();
+        connection.close();
+    }
+
+}
+
+```
+
+
+
+**创建消费者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.Delivery;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class Consumer {
+
+    public static void main(String[] args) throws Exception {
+        ConnectionFactory factory = new ConnectionFactory();
+
+        factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+        Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel();
+
+        //声明队列,持久化，不自动删除
+        channel.queueDeclare("qu.wk", true, false, false, null);
+
+        channel.basicConsume("qu.wk", new DeliverCallback() {
+            @Override
+            public void handle(String consumerTag, Delivery message) throws IOException {
+                System.out.println("收到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
+            }
+        }, new CancelCallback() {
+            @Override
+            public void handle(String consumerTag) throws IOException {
+                System.out.println("cancel的消息:" + consumerTag);
+            }
+        });
+    }
+}
+```
+
+
+
+首先运行消息费，为了测试工作队列模式，消费都需要启动多个，看是否能够进行负载均衡操作。
+
+在IDEA中启动多个消费者，注意需要沟选启动运行参数：
+
+![image-20230815232238577](img\image-20230815232238577.png)
+
+此样例中启动是4个。
+
+![image-20230815232405898](img\image-20230815232405898.png)
+
+
+
+启动生产者，再观察消费者的输出信息：
+
+
+
+再次观察消费者的输出便可发现：
+
+![image-20230815232518227](img\image-20230815232518227.png)
+
+![image-20230815232544082](img\image-20230815232544082.png)
+
+![image-20230815232602794](img\image-20230815232602794.png)
+
+![image-20230815232621424](img\image-20230815232621424.png)
+
+可以发现每个工作队列都收到了5条消息。
+
+此便可看出工作队列的一个重要特性，负载均衡。
 
 ## 结束
 
