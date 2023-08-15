@@ -63,7 +63,7 @@ rpm -ivh rabbitmq-server-3.8.5-1.el7.noarch.rpm
 4. **启动RabbitMQ的管理插件**
 
    ```sh
-   rabbitmq-plugins enable rabbit_management
+   rabbitmq-plugins enable rabbitmq_management
    ```
 
    可以看到如下提示信息:
@@ -747,6 +747,8 @@ name
 
 ## 3. RabbitMQ工作流程
 
+### 3.1 基本的工作流程
+
 **生产者发送消息的流程**
 
 >1. 生产者连接RabbitMQ，建立TCP连接（connect），开启信道（channel）
@@ -772,9 +774,224 @@ name
 
 
 
+### 3.2 RabbitMQ的Hello World
+
+RabbitMQ的生产者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+/**
+ * 生产者
+ *
+ */
+public class HelloProduct {
+    public static void main(String[] args) {
+        //获取连接工厂
+        ConnectionFactory factory = new ConnectionFactory();
+
+        //设置主机名
+        factory.setHost("node1");
+        //设置虚拟主机名 / 在URL中的转义字符为%2f
+        factory.setVirtualHost("/");
+        //用户名
+        factory.setUsername("root");
+        //密码
+        factory.setPassword("123456");
+        //设置端口
+        factory.setPort(5672);
+
+        try (
+                //建立TCP连接
+                Connection connection = factory.newConnection();
+                //获取通道
+                Channel channel = connection.createChannel()
+        ) {
+            //声明一个队列
+            //第一个参数为队列名称
+            //是否是持久化的
+            //是否是排他的
+            //是否是自动删除
+            //是消除队列的属性，使用默认值
+            channel.queueDeclare("queue.biz", false, false, true, null);
+            //声明一个交换机
+            //交换器的名称
+            //交换器的类型
+            //交换器是否是持久化
+            //交换器是否是自动删除
+            //交换器属性map集合
+            channel.exchangeDeclare("ex.biz", BuiltinExchangeType.DIRECT, false, false, null);
+
+            //将队列和交换机进行绑定,并指定路由键
+            channel.queueBind("queue.biz", "ex.biz", "hello.world");
+
+            //发送消息
+            //交换器的名称
+            //该消息的路由键
+            //该消息的属性MessageProperties对象
+            //消息的内容字节数组。
+            channel.basicPublish("ex.biz", "hello.world", null, "hello world 1".getBytes());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+```
+
+使用拉的模式获取数据
+
+```java
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.GetResponse;
+
+/**
+ * 拉模式的消费者
+ */
+public class HelloGetConsumer {
+
+    public static void main(String[] args) throws Exception {
+        ConnectionFactory factory = new ConnectionFactory();
+        //指定协议:amqp
+        //指定用户名 root
+        //指定密码 123456
+        //指定host node1
+        //指定端口号 5672
+        //指定虚拟主机 %2f 即是/
+        factory.setUri("amqp://root:123456@node1:5672/%2f");
+        
+        try (Connection connection = factory.newConnection();
+             Channel channel = connection.createChannel();) {
+
+            //使用拉模式获取数据
+            //指定从哪个消费队列中消费消息
+            //表示自动ack确认。
+            GetResponse getResponse = channel.basicGet("queue.biz", true);
+            byte[] body = getResponse.getBody();
+            System.out.println("最终的消息:"+new String(body));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
 
 
 
+使用推模式进行获取数据
+
+```java
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.Delivery;
+
+/**
+ * 消费者使用推模式获取消息
+ */
+public class HelloConsumeConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    // 指定协议:amqp
+    // 指定用户名 root
+    // 指定密码 123456
+    // 指定host node1
+    // 指定端口号 5672
+    // 指定虚拟主机 %2f 即是/
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 由于消息在完成后会删除队列，所以，需要保证消息队列存在
+    // 声明一个队列
+    // 第一个参数为队列名称
+    // 是否是持久化的
+    // 是否是排他的
+    // 是否是自动删除
+    // 是消除队列的属性，使用默认值
+    channel.queueDeclare("queue.biz", false, false, true, null);
+
+    // 监听消息，一旦有消息推送过来，就调用第一个lambda表达式。
+    DeliverCallback callback =
+        new DeliverCallback() {
+          @Override
+          public void handle(String consumerTag, Delivery message) throws IOException {
+            System.out.println("获取的数据:" + new String(message.getBody()));
+          }
+        };
+    CancelCallback cancelCallback =
+        new CancelCallback() {
+          @Override
+          public void handle(String consumerTag) throws IOException {
+            System.out.println("CancelCallback:" + new String(consumerTag.getBytes()));
+          }
+        };
+    channel.basicConsume("queue.biz", callback, cancelCallback);
+
+    channel.basicConsume("queue.biz", (consumerTag, message) -> {}, (consumerTag -> {}));
+  }
+}
+```
+
+由于采用了推模式，客户端与服务端的连接是不能被关闭的，当客户端向MQ中发送消息后，会以最快的速度推送给此客户端。
+
+
+
+**使用拉模式获取数据测试**
+
+1. 首先启动生产者，向MQ中发送一条消息。
+
+   即启动HelloProduct的main函数。便将消息发送了出去.
+
+   
+
+   ![image-20230815111514113](img\image-20230815111514113.png)
+
+   可以发现，交换机已经创建了。
+
+![image-20230815111548267](img\image-20230815111548267.png)
+
+队列也已经被创建了。点击队列进去，通过Get messages便可查看发送的数据
+
+![image-20230815111728426](img\image-20230815111728426.png)
+
+2. **使用拉模式获取数据**
+
+启动HelloGetConsumer，便可获取MQ中的记录。
+
+此时便可看到数据。
+
+![image-20230815111940196](img\image-20230815111940196.png)
+
+
+
+**使用推模式获取数据测试**
+
+1. 使用推模式获取数据，首先要启动消费者，让消费都首先开始监听队列。
+
+即启动HelloConsumeConsumer的Main函数，便可发现，此时已经处于监听状态。
+
+![image-20230815112311954](img\image-20230815112311954.png)
+
+2. 启动生产者发送测试数据。
+
+   调用HelloProduct来发送测试数据。
+
+3. 再观察HelloConsumeConsumer的控制台，发现已经将数据成功接收。
+
+   ![image-20230815112833731](img\image-20230815112833731.png)
+
+   
 
 ## 结束
 
