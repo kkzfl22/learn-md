@@ -156,9 +156,89 @@ http://<安装RabbitMQ的机器的IP>:15672
 
 
 
-## 2. RabbitMQ常用命令
 
-### 2.1 启动停止rabbitMQ命令
+
+
+
+## 2. RabbitMQ介绍
+
+>RabbitMQ，俗称“兔子MQ”（可见其轻巧、敏捷），是目前非常热门的一款消息中间件，不管是互联网行业还是传统行业都广泛使用
+
+特点：
+
+1. 高可靠性、易扩展、高可用、功能丰富等
+2. 支持大多数（甚至冷门）的编程语言客户端。
+3. RabbitMQ遵循AMQP协议，自身采用Erlang（一种由爱立信开发的通用面向并发编程的语言）编写。
+4. RabbitMQ也支持MQTT等其他协议。
+5. RabbitMQ具有强大的插件扩展能力，官方和社区提供了丰富的插件可供选择。插件地址：https://www.rabbitmq.com/community-plugins.html
+
+
+
+### 2.1 Exchange类型
+
+RabbitMQ常用的交换器类型有: fanout、direct、topic、headers四种
+
+**fanout交换器**
+
+会把所有发送给该交换器的消息路由到所有该交换器绑定的队列中。
+
+![](img\ex_fanout.webp)
+
+**direct交换器**
+
+direct类型的交换器路由规则很简单，它会把消息路由到那些BindingKey和RoutingKey匹配的队列中
+
+![](img\ex_direct.webp)
+
+**topic交换器**
+
+topic类型的交换器在direct类型匹配规则上进行了扩展。也是将原来消息路由到BindingKey和RoutingKey相匹配的队列中，这里匹配的规则稍微不同,它约定:
+
+BindingKey和RoutingKey一样都是由“.”分隔的字符串；
+
+BingingKey中可以存在两种特殊字符“\*”和“#”，用于模糊匹配，其中“\*”用于匹配一个单词，“#”用于匹配多个单词（可以是0个）
+
+![](img\ex_topic.webp)
+
+**Headers**
+
+headers类型的交换器不依赖于路由键的匹配规则来路由信息，而是根据发送信息内容中的headers属性进行匹配。在绑定队列和交换器时指定 一组键值对，当发送的海波 到达交换器时，RabbitMQ会获取到该消息的headers，对比其中的键值对是否完全匹配队列和交换器绑定时指定的键值对，如果匹配，消息就会路由到该队列。headers类型的性能很差，不实用。
+
+
+
+### 2.1 存储机制
+
+消息类型有两种: 持久化消息和非持久化消息。
+
+这两种消息都会被写入磁盘。
+
+持久化消息在到达队列时写入磁盘，同时会在内存中保存一份备份，当内存吃紧时，消息从内存中清除。提高一定的性能。
+
+非持久化消息一般只存于内存中，当内存压力大时数据刷盘处理，以节省内存空间。
+
+存储层包含两个部分：队列索引和消息索引。
+
+![image-20230817175813085](img\image-20230817175813085.png)
+
+队列索引：rabbit_queue_index
+
+索引维护队列的落盘消息的信息，如存储地点、是否已被消费都接收，是否已被消费者ack等。
+
+每个队列都有相应的索引。
+
+索引使用顺序段文件来存储，后缀名为.idx，文件名从0开始累加。每个段文件中包含固定的segment_entry_count条记录，默认值为16384
+
+消息索引：rabbit_msg_store
+
+消息以键值对的形式存储到文件中，一个虚拟主机上的所有队列使用同块存储。每个节点只有一个。存储分为持久化存储 （msg_store_persistent）和短暂存储(msg_store_transient) 。持久化存储的内容在broker重启后不会丢失，短暂存储的内容在borker重启后丢失。
+
+
+
+
+
+## 3. RabbitMQ常用命令
+
+### 3.1 启动停止rabbitMQ命令
 
 ```sh
 # 前台启动Erlang VM 和 RabbitMQ 当窗口关闭或者ctrl+c时，使退出了。
@@ -254,7 +334,7 @@ root      1679  1621  0 14:19 pts/1    00:00:00 grep --color=auto rabbitmq
 
 
 
-### 2.2 一般操作命令
+### 3.2 一般操作命令
 
 ```sh
 # 查看所有队列
@@ -588,7 +668,7 @@ Resetting node rabbit@mes01 ...
 
 
 
-### 2.3 用户权限管理命令
+### 3.3 用户权限管理命令
 
 ```sh
 # 查看所有用户
@@ -745,9 +825,9 @@ name
 
 
 
-## 3. RabbitMQ工作流程
+## 4. RabbitMQ工作流程
 
-### 3.1 基本的工作流程
+### 4.1 基本的工作流程
 
 **生产者发送消息的流程**
 
@@ -774,7 +854,7 @@ name
 
 
 
-### 3.2 RabbitMQ的Hello World
+### 4.2 RabbitMQ的Hello World
 
 RabbitMQ的生产者
 
@@ -994,13 +1074,13 @@ public class HelloConsumeConsumer {
 
 
 
-### 3.3 RabbitMQ工作模式
+### 4.3 RabbitMQ工作模式
 
 官网关于工作模式的解释地址：https://www.rabbitmq.com/getstarted.html
 
 
 
-#### 3.3.1 Work Queue（工作队列）
+#### 4.3.1 Work Queue（工作队列）
 
 生产者发消息，启动多个消费者来消费消息，每个消费者仅消费部分消息，可达到负载均衡的效果。
 
@@ -1126,6 +1206,26 @@ public class Consumer {
 可以发现每个工作队列都收到了5条消息。
 
 此便可看出工作队列的一个重要特性，负载均衡。
+
+
+
+
+
+#### 4.3.2  Publish/Subscribe（发布订阅模式）
+
+官方文档： https://www.rabbitmq.com/tutorials/tutorial-three-python.html
+
+>使用fanout类型类型的交换器，routingKey忽略。每个消费者定义生成一个队列关绑定到同一个Exchange，每个消费者都可以消费完整的消息。
+>
+>消息广播给所有订阅该消息的消费者。
+>
+>在RabbitMQ中，生产者不是将消息直接发送给消息消息队列，实际上生产者根本不知道一个消息被发送到哪个队列。
+>
+>生产者将消息发送给交换器。交换器非常简单，从生成者接收消息，将消息推送给消息队列。交换器必须清楚的知道要怎么处理接收到的消息。应该是追加到一个指定的队列，还是追加到多个队列，还是丢弃。规则就是交换器的类型。
+
+![11](D:\work\nullnull\learn\learn-md\rabbitmq\img\exchanges.png)
+
+
 
 ## 结束
 
