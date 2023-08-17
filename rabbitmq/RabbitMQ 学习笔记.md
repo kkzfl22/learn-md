@@ -1223,7 +1223,106 @@ public class Consumer {
 >
 >生产者将消息发送给交换器。交换器非常简单，从生成者接收消息，将消息推送给消息队列。交换器必须清楚的知道要怎么处理接收到的消息。应该是追加到一个指定的队列，还是追加到多个队列，还是丢弃。规则就是交换器的类型。
 
-![11](D:\work\nullnull\learn\learn-md\rabbitmq\img\exchanges.png)
+![11](img\exchanges.png)
+
+发布订阅使用fanout的交换器，创建交换器，名称为test
+
+```java
+channel.exchangeDeclare("test","fanout");
+```
+
+`fanout`交换器很简单，从名称就可以看出来（用风扇吹出去），将所有的收到的消息发给它的知道的所有队列。
+
+
+
+查看所有交换器信息
+
+```
+列表式
+rabbitmqctl list_exchanges
+# 格式化查看
+rabbitmqctl list_exchanges --formatter pretty_table 
+```
+
+
+
+
+
+```shell
+[root@os ~]# rabbitmqctl list_exchanges
+Listing exchanges for vhost / ...
+name    type
+amq.fanout      fanout
+amq.rabbitmq.trace      topic
+amq.headers     headers
+amq.topic       topic
+ex.biz  direct
+amq.direct      direct
+        direct
+amq.match       headers
+ex.wk   direct
+[root@os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ ex.biz             │ direct  │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+├────────────────────┼─────────┤
+│ ex.wk              │ direct  │
+└────────────────────┴─────────┘
+[root@os ~]# 
+```
+
+查看绑定的列表
+
+
+
+```
+# 查看交换机队列绑定信息
+rabbitmqctl list_bindings
+# 格式化查看
+rabbitmqctl list_bindings --formatter pretty_table
+```
+
+样例
+
+```sh
+[root@os ~]# rabbitmqctl list_bindings
+Listing bindings for vhost /...
+source_name     source_kind     destination_name        destination_kind        routing_key     arguments
+        exchange        qu.wk   queue   qu.wk   []
+ex.wk   exchange        qu.wk   queue   rk.wq   []
+[root@os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ qu.wk            │ queue            │ qu.wk       │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.wk       │ exchange    │ qu.wk            │ queue            │ rk.wq       │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+
+```
+
+存在一个默认的交换器。
+
+
+
+
 
 
 
