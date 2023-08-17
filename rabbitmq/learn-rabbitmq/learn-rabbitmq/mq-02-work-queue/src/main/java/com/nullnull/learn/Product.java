@@ -29,6 +29,9 @@ public class Product {
         //声明队列,持久化，不自动删除
         channel.queueDeclare("qu.wk", true, false, false, null);
 
+
+        channel.exchangeDeclare("test","fanout");
+
         //声明交换机,消息持久化，不自动删除
         channel.exchangeDeclare("ex.wk", BuiltinExchangeType.DIRECT, true, false, null);
 

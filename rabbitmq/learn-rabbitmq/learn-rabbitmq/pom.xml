@@ -12,6 +12,7 @@
     <modules>
         <module>helloword</module>
         <module>mq-02-work-queue</module>
+        <module>mq-03-pub-sub</module>
     </modules>
 
     <properties>
