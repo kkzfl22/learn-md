@@ -17,42 +17,36 @@ import java.nio.charset.StandardCharsets;
  */
 public class TwoConsumer {
 
-    public static void main(String[] args) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
 
-        factory.setUri("amqp://root:123456@node1:5672/%2f");
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
 
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
 
-        Connection connection = factory.newConnection();
-        Channel channel = connection.createChannel();
+    // 生成的临时队列
+    String queueName = channel.queueDeclare().getQueue();
+    System.out.println("临时队列的名称：" + queueName);
 
-        //生成的临时队列
-        String queueName = channel.queueDeclare().getQueue();
-        System.out.println("昨时队列的名称：" + queueName);
+    // 定义交换机
+    channel.exchangeDeclare("ex.testfan", BuiltinExchangeType.FANOUT, true, false, null);
 
-        //定义交换机
-        channel.exchangeDeclare("ex.testfan",
-                BuiltinExchangeType.FANOUT,
-                true,
-                false,
-                null);
+    // 消息队列与交换机的绑定
+    channel.queueBind(queueName, "ex.testfan", "");
 
-        //消息队列与交换机的绑定
-        channel.queueBind(queueName, "ex.testfan", "");
-
-
-        channel.basicConsume(queueName, new DeliverCallback() {
-            @Override
-            public void handle(String consumerTag, Delivery message) throws IOException {
-                System.out.println("two 获取到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
-            }
-        }, new CancelCallback() {
-            @Override
-            public void handle(String consumerTag) throws IOException {
-
-            }
+    channel.basicConsume(
+        queueName,
+        new DeliverCallback() {
+          @Override
+          public void handle(String consumerTag, Delivery message) throws IOException {
+            System.out.println(
+                "two 获取到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
+          }
+        },
+        new CancelCallback() {
+          @Override
+          public void handle(String consumerTag) throws IOException {}
         });
-
-    }
-
+  }
 }

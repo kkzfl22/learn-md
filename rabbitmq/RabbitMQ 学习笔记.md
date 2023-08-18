@@ -361,6 +361,19 @@ rabbitmq-plugins disable <plugin-name>
 
 # 移除所有数据 要在rabbitmqctl stop_app之后使用
 rabbitmqctl reset
+
+
+# 查看所有交换器信息-列表式
+rabbitmqctl list_exchanges
+# 格式化查看
+rabbitmqctl list_exchanges --formatter pretty_table 
+
+
+# 查看绑定的列表 - 查看交换机队列绑定信息
+rabbitmqctl list_bindings
+# 格式化查看
+rabbitmqctl list_bindings --formatter pretty_table
+
 ```
 
 样例:
@@ -823,6 +836,69 @@ name
 [root@mes01 ~]# 
 ```
 
+**查看交换器**
+
+```shell
+[root@os ~]# rabbitmqctl list_exchanges
+Listing exchanges for vhost / ...
+name    type
+amq.fanout      fanout
+amq.rabbitmq.trace      topic
+amq.headers     headers
+amq.topic       topic
+ex.biz  direct
+amq.direct      direct
+        direct
+amq.match       headers
+ex.wk   direct
+[root@os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ ex.biz             │ direct  │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+├────────────────────┼─────────┤
+│ ex.wk              │ direct  │
+└────────────────────┴─────────┘
+[root@os ~]# 
+```
+
+
+
+**查看绑定的列表**
+
+```sh
+[root@os ~]# rabbitmqctl list_bindings
+Listing bindings for vhost /...
+source_name     source_kind     destination_name        destination_kind        routing_key     arguments
+        exchange        qu.wk   queue   qu.wk   []
+ex.wk   exchange        qu.wk   queue   rk.wq   []
+[root@os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ qu.wk            │ queue            │ qu.wk       │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.wk       │ exchange    │ qu.wk            │ queue            │ rk.wq       │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+
+```
+
 
 
 ## 4. RabbitMQ工作流程
@@ -1225,6 +1301,8 @@ public class Consumer {
 
 ![11](img\exchanges.png)
 
+
+
 发布订阅使用fanout的交换器，创建交换器，名称为test
 
 ```java
@@ -1235,33 +1313,226 @@ channel.exchangeDeclare("test","fanout");
 
 
 
-查看所有交换器信息
+存在一个默认的交换器。
+
+此样例使用的是临时队列，即消费都实现将自动创建此队列，当消费都退出后，此队列也将自动删除。
+
+队列名称如
+
+```sh
+amq.gen-gjKBgQ9PSmoj2YQGMOdPfA
+```
+
+
+
+**样例代码**
+
+消费者1的代码:
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.Delivery;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class OneConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 声明的临时队列，名称由rabbitMQ自动生成
+    String queueName = channel.queueDeclare().getQueue();
+    System.out.println("临时队列的名称：" + queueName);
+
+    // 定义交换机
+    channel.exchangeDeclare("ex.testfan", BuiltinExchangeType.FANOUT, true, false, null);
+
+    // 消息队列与交换机的绑定
+    channel.queueBind(queueName, "ex.testfan", "");
+
+    channel.basicConsume(
+        queueName,
+        new DeliverCallback() {
+          @Override
+          public void handle(String consumerTag, Delivery message) throws IOException {
+            System.out.println(
+                "one 获取到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
+          }
+        },
+        new CancelCallback() {
+          @Override
+          public void handle(String consumerTag) throws IOException {}
+        });
+  }
+}
 
 ```
-列表式
-rabbitmqctl list_exchanges
-# 格式化查看
-rabbitmqctl list_exchanges --formatter pretty_table 
+
+**消费者2**
+
+```sh
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.Delivery;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class TwoConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 生成的临时队列
+    String queueName = channel.queueDeclare().getQueue();
+    System.out.println("临时队列的名称：" + queueName);
+
+    // 定义交换机
+    channel.exchangeDeclare("ex.testfan", BuiltinExchangeType.FANOUT, true, false, null);
+
+    // 消息队列与交换机的绑定
+    channel.queueBind(queueName, "ex.testfan", "");
+
+    channel.basicConsume(
+        queueName,
+        new DeliverCallback() {
+          @Override
+          public void handle(String consumerTag, Delivery message) throws IOException {
+            System.out.println(
+                "two 获取到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
+          }
+        },
+        new CancelCallback() {
+          @Override
+          public void handle(String consumerTag) throws IOException {}
+        });
+  }
+}
+
+```
+
+**消费者3**
+
+```sh
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.Delivery;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class ThirdConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 生成的临时队列
+    String queueName = channel.queueDeclare().getQueue();
+    System.out.println("临时队列的名称：" + queueName);
+
+    // 定义交换机
+    channel.exchangeDeclare("ex.testfan", BuiltinExchangeType.FANOUT, true, false, null);
+
+    // 消息队列与交换机的绑定
+    channel.queueBind(queueName, "ex.testfan", "");
+
+    channel.basicConsume(
+        queueName,
+        new DeliverCallback() {
+          @Override
+          public void handle(String consumerTag, Delivery message) throws IOException {
+            System.out.println(
+                "third 获取到的消息：" + new String(message.getBody(), StandardCharsets.UTF_8));
+          }
+        },
+        new CancelCallback() {
+          @Override
+          public void handle(String consumerTag) throws IOException {}
+        });
+  }
+}
+```
+
+**生产者**
+
+```java
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class Product {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    try {
+      // 声明fanout类型交换机
+      channel.exchangeDeclare("ex.testfan", "fanout", true, false, false, null);
+
+      for (int i = 0; i < 20; i++) {
+        channel.basicPublish(
+            "ex.testfan",
+            // 路由key
+            "",
+            // 属性
+            null,
+            // 信息
+            ("hello world fan " + i).getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    } finally {
+      channel.close();
+      connection.close();
+    }
+  }
+}
 ```
 
 
 
+观察下队列的绑定的情况：
 
+在未启动消费都队列之前:
 
-```shell
-[root@os ~]# rabbitmqctl list_exchanges
-Listing exchanges for vhost / ...
-name    type
-amq.fanout      fanout
-amq.rabbitmq.trace      topic
-amq.headers     headers
-amq.topic       topic
-ex.biz  direct
-amq.direct      direct
-        direct
-amq.match       headers
-ex.wk   direct
-[root@os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+```sh
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
 Listing exchanges for vhost / ...
 ┌────────────────────┬─────────┐
 │ name               │ type    │
@@ -1274,53 +1545,973 @@ Listing exchanges for vhost / ...
 ├────────────────────┼─────────┤
 │ amq.topic          │ topic   │
 ├────────────────────┼─────────┤
-│ ex.biz             │ direct  │
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+[root@nullnull-os ~]# 
+```
+
+在未启动消费者之前，只有看到几个默认的生产者。绑定的队列为空。
+
+启动三个消费者：
+
+```sh
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ ex.testfan         │ fanout  │
 ├────────────────────┼─────────┤
 │ amq.direct         │ direct  │
 ├────────────────────┼─────────┤
 │                    │ direct  │
 ├────────────────────┼─────────┤
 │ amq.match          │ headers │
-├────────────────────┼─────────┤
-│ ex.wk              │ direct  │
 └────────────────────┴─────────┘
-[root@os ~]# 
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬────────────────────────────────┬──────────────────┬────────────────────────────────┬───────────┐
+│ source_name │ source_kind │ destination_name               │ destination_kind │ routing_key                    │ arguments │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│             │ exchange    │ amq.gen-VbV63vwAn0IBzC7n6I--vQ │ queue            │ amq.gen-VbV63vwAn0IBzC7n6I--vQ │           │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│             │ exchange    │ amq.gen-UG67rAw03FGbBupHX6o18g │ queue            │ amq.gen-UG67rAw03FGbBupHX6o18g │           │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│             │ exchange    │ amq.gen-HnQLeaOB1YOEJXXfXP5_Mg │ queue            │ amq.gen-HnQLeaOB1YOEJXXfXP5_Mg │           │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│ ex.testfan  │ exchange    │ amq.gen-HnQLeaOB1YOEJXXfXP5_Mg │ queue            │                                │           │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│ ex.testfan  │ exchange    │ amq.gen-UG67rAw03FGbBupHX6o18g │ queue            │                                │           │
+├─────────────┼─────────────┼────────────────────────────────┼──────────────────┼────────────────────────────────┼───────────┤
+│ ex.testfan  │ exchange    │ amq.gen-VbV63vwAn0IBzC7n6I--vQ │ queue            │                                │           │
+└─────────────┴─────────────┴────────────────────────────────┴──────────────────┴────────────────────────────────┴───────────┘
+[root@nullnull-os ~]# 
 ```
 
-查看绑定的列表
+当启动生产者后，可以发现已经产生了3个默认的交换机及队列的绑定关系。以及手动绑定的3个队列的关系。
 
+启动生产者，查看消费情况：
 
-
-```
-# 查看交换机队列绑定信息
-rabbitmqctl list_bindings
-# 格式化查看
-rabbitmqctl list_bindings --formatter pretty_table
-```
-
-样例
+消费者1
 
 ```sh
-[root@os ~]# rabbitmqctl list_bindings
+临时队列的名称：amq.gen-VbV63vwAn0IBzC7n6I--vQ
+one 获取到的消息：hello world fan 0
+one 获取到的消息：hello world fan 1
+one 获取到的消息：hello world fan 2
+one 获取到的消息：hello world fan 3
+one 获取到的消息：hello world fan 4
+one 获取到的消息：hello world fan 5
+one 获取到的消息：hello world fan 6
+one 获取到的消息：hello world fan 7
+one 获取到的消息：hello world fan 8
+one 获取到的消息：hello world fan 9
+one 获取到的消息：hello world fan 10
+one 获取到的消息：hello world fan 11
+one 获取到的消息：hello world fan 12
+one 获取到的消息：hello world fan 13
+one 获取到的消息：hello world fan 14
+one 获取到的消息：hello world fan 15
+one 获取到的消息：hello world fan 16
+one 获取到的消息：hello world fan 17
+one 获取到的消息：hello world fan 18
+one 获取到的消息：hello world fan 19
+```
+
+消费者2：
+
+```sh
+临时队列的名称：amq.gen-KadV2OsCRLb84p2k_ijuww
+two 获取到的消息：hello world fan 0
+two 获取到的消息：hello world fan 1
+two 获取到的消息：hello world fan 2
+two 获取到的消息：hello world fan 3
+two 获取到的消息：hello world fan 4
+two 获取到的消息：hello world fan 5
+two 获取到的消息：hello world fan 6
+two 获取到的消息：hello world fan 7
+two 获取到的消息：hello world fan 8
+two 获取到的消息：hello world fan 9
+two 获取到的消息：hello world fan 10
+two 获取到的消息：hello world fan 11
+two 获取到的消息：hello world fan 12
+two 获取到的消息：hello world fan 13
+two 获取到的消息：hello world fan 14
+two 获取到的消息：hello world fan 15
+two 获取到的消息：hello world fan 16
+two 获取到的消息：hello world fan 17
+two 获取到的消息：hello world fan 18
+two 获取到的消息：hello world fan 19
+```
+
+消息者3：
+
+```sh
+临时队列的名称：amq.gen-TcqXVnoS2mjOpfCw1o1CZw
+third 获取到的消息：hello world fan 0
+third 获取到的消息：hello world fan 1
+third 获取到的消息：hello world fan 2
+third 获取到的消息：hello world fan 3
+third 获取到的消息：hello world fan 4
+third 获取到的消息：hello world fan 5
+third 获取到的消息：hello world fan 6
+third 获取到的消息：hello world fan 7
+third 获取到的消息：hello world fan 8
+third 获取到的消息：hello world fan 9
+third 获取到的消息：hello world fan 10
+third 获取到的消息：hello world fan 11
+third 获取到的消息：hello world fan 12
+third 获取到的消息：hello world fan 13
+third 获取到的消息：hello world fan 14
+third 获取到的消息：hello world fan 15
+third 获取到的消息：hello world fan 16
+third 获取到的消息：hello world fan 17
+third 获取到的消息：hello world fan 18
+third 获取到的消息：hello world fan 19
+```
+
+
+
+再停止几个消费者查看队列信息 
+
+```
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ ex.testfan         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
 Listing bindings for vhost /...
-source_name     source_kind     destination_name        destination_kind        routing_key     arguments
-        exchange        qu.wk   queue   qu.wk   []
-ex.wk   exchange        qu.wk   queue   rk.wq   []
-[root@os ~]# rabbitmqctl list_bindings --formatter pretty_table
+[root@nullnull-os ~]# 
+```
+
+可以看到，当客户端退出之后，临时队列也就消失了。
+
+#### 4.3.3 **默认交换器**
+
+默认交换器的生产者
+
+```java
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+public class Product {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    channel.queueDeclare(
+        "queue.default.ex",
+        // 是否活动MQ重启
+        false,
+        // 是否只能自己这个连接来使用
+        false,
+        // 是否自动删除
+        false,
+        // 参数
+        null);
+
+    try {
+      //在发送消息的时候没有指定交换器的名称，此时使用的是默认的交换器，默认交换器没有名称。
+      //路由键就是目的消息队列的名称
+      channel.basicPublish(
+          // 空字符使用默认交换机
+          "",
+          // 指定队列
+          "queue.default.ex",
+          // 参数
+          null,
+          // 发送的消息
+          "hello nullnull".getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      e.printStackTrace();
+    } finally {
+      channel.close();
+      connection.close();
+    }
+  }
+}
+
+```
+
+生产者不需要指定交换机。创建 一个队列即可。
+
+
+
+消费者
+
+```java
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.GetResponse;
+
+import java.io.IOException;
+
+public class Consumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    try {
+      GetResponse getResponse = channel.basicGet("queue.default.ex", true);
+
+      System.out.println("信息输出:" + new String(getResponse.getBody()));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    } finally {
+      channel.close();
+      connection.close();
+    }
+  }
+}
+```
+
+
+
+在启动生产者消息后，便可以看到消息被发送到了队列。 
+
+![image-20230818142123289](img\image-20230818142123289.png)
+
+在启动消费者后。便可看到消息扑火队成功的消费。控制台输出也可以看到：
+
+```sh
+信息输出:hello nullnull
+```
+
+
+
+消息的推拉：
+
+实现RabbitMQ的消费者有两种模式：推模式(push)和拉模式(pull)
+
+推模式，需要与服务建立长连接，不能关闭连接。推模式使用basicConsume
+
+拉模式，按需拉取一次，拉取完成后是可以关闭连接。而拉械，则使用basicGet。
+
+
+
+#### 4.3.4 路由模式
+
+![](img\direct-exchange.png)
+
+使用`direct`类型的Exchange,发N条消息并使用不同的routingKey,消费者定义队列并将队列`routingKey`、Exchange绑定。此时使用`direct`模式Exchange必须要`routingKey`完成匹配的情况下消息才会转发到对应的队列中被消费。
+
+样例使用日志分发为样例。即按日志不同的级别，分发到不同的队列。每个队列只处理自己的对应的级别日志。
+
+创建生产者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class Product {
+
+  private static final String[] LOG_LEVEL = {"ERROR", "WARN", "INFO"};
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 声明交换机，交换器和消息队列的绑定不需要在这里处理。
+    channel.exchangeDeclare(
+        "ex.routing",
+        BuiltinExchangeType.DIRECT,
+        // 持久的标识
+        false,
+        // 自动删除的标识
+        false,
+        // 属性
+        null);
+
+    for (int i = 0; i < 30; i++) {
+      String level = LOG_LEVEL[ThreadLocalRandom.current().nextInt(0, LOG_LEVEL.length)];
+      String dataMsg = "[" + level + "] 消息发送 :" + i;
+      // 发送消息
+      channel.basicPublish("ex.routing", level, null, dataMsg.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+}
+```
+
+
+
+创建ERROR的消费者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.nio.charset.StandardCharsets;
+
+public class ErrorConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 声明队列并绑定
+    channel.exchangeDeclare(
+        "ex.routing",
+        BuiltinExchangeType.DIRECT,
+        // 持久的标识
+        false,
+        // 自动删除的标识
+        false,
+        // 属性
+        null);
+
+    // 此也可以声明为临时队列，但是如果消息很重要，不要声明临时队列。
+    channel.queueDeclare(
+        "log.error",
+        // 永久
+        false,
+        // 排他
+        false,
+        // 自动删除
+        true,
+        // 属性
+        null);
+
+    //消费者享有绑定到交换器的权力。
+    channel.queueBind("log.error", "ex.routing", "ERROR");
+
+    // 通过chanel消费消息
+    channel.basicConsume(
+        "log.error",
+        (consumerTag, message) -> {
+          System.out.println("ERROR收到的消息:" + new String(message.getBody(), StandardCharsets.UTF_8));
+        },
+        consumerTag -> {});
+  }
+}
+```
+
+创建INFO级的消费者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class InfoConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 声明队列并绑定
+    channel.exchangeDeclare(
+        "ex.routing",
+        BuiltinExchangeType.DIRECT,
+        // 持久的标识
+        false,
+        // 自动删除的标识
+        true,
+        // 属性
+        null);
+
+    // 此也可以声明为临时队列，但是如果消息很重要，不要声明临时队列。
+    channel.queueDeclare(
+        "log.info",
+        // 永久
+        false,
+        // 排他
+        false,
+        // 自动删除
+        false,
+        // 属性
+        null);
+
+    //消费者享有绑定到交换器的权力。
+    channel.queueBind("log.info", "ex.routing", "INFO");
+
+    // 通过chanel消费消息
+    channel.basicConsume(
+        "log.info",
+        (consumerTag, message) -> {
+          System.out.println("INFO收到的消息:" + new String(message.getBody(), StandardCharsets.UTF_8));
+        },
+        consumerTag -> {});
+  }
+}
+```
+
+创建WARN级别的消息者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class WarnConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 声明队列并绑定
+    channel.exchangeDeclare(
+        "ex.routing",
+        BuiltinExchangeType.DIRECT,
+        // 持久的标识
+        false,
+        // 自动删除的标识
+        false,
+        // 属性
+        null);
+
+    // 此也可以声明为临时队列，但是如果消息很重要，不要声明临时队列。
+    channel.queueDeclare(
+        "log.warn",
+        // 永久
+        false,
+        // 排他
+        false,
+        // 自动删除
+        true,
+        // 属性
+        null);
+
+    //消费者享有绑定到交换器的权力。
+    channel.queueBind("log.warn", "ex.routing", "WARN");
+
+    // 通过chanel消费消息
+    channel.basicConsume(
+        "log.warn",
+        (consumerTag, message) -> {
+          System.out.println("warn收到的消息:" + new String(message.getBody(), StandardCharsets.UTF_8));
+        },
+        consumerTag -> {});
+  }
+}
+```
+
+首先启动三个消费者：
+
+查看队列及交换机情况
+
+```
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ ex.routing         │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
 Listing bindings for vhost /...
 ┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
 │ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
 ├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
-│             │ exchange    │ qu.wk            │ queue            │ qu.wk       │           │
+│             │ exchange    │ log.info         │ queue            │ log.info    │           │
 ├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
-│ ex.wk       │ exchange    │ qu.wk            │ queue            │ rk.wq       │           │
+│             │ exchange    │ log.warn         │ queue            │ log.warn    │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ log.error        │ queue            │ log.error   │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.routing  │ exchange    │ log.error        │ queue            │ ERROR       │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.routing  │ exchange    │ log.info         │ queue            │ INFO        │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.routing  │ exchange    │ log.warn         │ queue            │ WARN        │           │
 └─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os ~]# 
+```
+
+可以发现，交换器ex.routing 绑定了三个队列`log.error`、`log.info `、`log.warn`并指定了路由键。
+
+启动消费者，查看消息通否被正常消费。
+
+ERROR的消费者控制台输出	
+
+```java
+ERROR收到的消息:[ERROR] 消息发送 :1
+ERROR收到的消息:[ERROR] 消息发送 :2
+ERROR收到的消息:[ERROR] 消息发送 :6
+ERROR收到的消息:[ERROR] 消息发送 :8
+ERROR收到的消息:[ERROR] 消息发送 :9
+ERROR收到的消息:[ERROR] 消息发送 :11
+ERROR收到的消息:[ERROR] 消息发送 :15
+ERROR收到的消息:[ERROR] 消息发送 :16
+ERROR收到的消息:[ERROR] 消息发送 :19
+ERROR收到的消息:[ERROR] 消息发送 :20
+ERROR收到的消息:[ERROR] 消息发送 :21
+ERROR收到的消息:[ERROR] 消息发送 :23
+ERROR收到的消息:[ERROR] 消息发送 :24
+ERROR收到的消息:[ERROR] 消息发送 :27
+ERROR收到的消息:[ERROR] 消息发送 :28
+```
+
+INFO的消费者控制台输出：
+
+```java
+INFO收到的消息:[INFO] 消息发送 :0
+INFO收到的消息:[INFO] 消息发送 :3
+INFO收到的消息:[INFO] 消息发送 :4
+INFO收到的消息:[INFO] 消息发送 :13
+INFO收到的消息:[INFO] 消息发送 :14
+INFO收到的消息:[INFO] 消息发送 :22
+INFO收到的消息:[INFO] 消息发送 :25
+```
+
+WARN的消费都控制台输出:
+
+```java
+warn收到的消息:[WARN] 消息发送 :5
+warn收到的消息:[WARN] 消息发送 :7
+warn收到的消息:[WARN] 消息发送 :10
+warn收到的消息:[WARN] 消息发送 :12
+warn收到的消息:[WARN] 消息发送 :17
+warn收到的消息:[WARN] 消息发送 :18
+warn收到的消息:[WARN] 消息发送 :26
+warn收到的消息:[WARN] 消息发送 :29
+```
+
+
+
+至此，验证已经完成。
+
+
+
+#### 4.3.5 主题模式
+
+
+
+使用topic类型的交换器，队列绑定到交换器、bingingKey时使用通配符，交换器将消息路由转发到具体队列时，会根据消息routingKey模糊匹配，比较灵活。
+
+在Direct类型的交换器做到了根据日志级别的不同，将消息发送给了不同队列的。
+
+这里再加入一个需求，不仅想根据日志级别进行划分，还想根据日志的来源分日志，如何来做呢？
+
+使用topic类型的交换器, routingKey就不能随便写了，它必须是点分单词，单词可以随便写，一般按消息的特征，该点分单词字符串最长255字节。
+
+bindingKey也必须是这种形式。top类型的交换器背后原理跟direct类型类似只要队列的bingingkey的值与消息的routingKey的匹配，队列就可以收到该消息。有两个不同
+
+1. \* (star)匹配一个单词。
+2. \# 匹配0到多个单词。
+
+![](img\python-five.png)
+
+上报的数据的RoutingKey，格式如下
+
+地区.业务.日志级别  如shanghai.busi.INFO 、 hangzhou.line.ERROR
+
+**生产者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class Product {
+
+  private static final String[] ADDRESS_ARRAYS = {"shanghai", "suzhou", "hangzhou"};
+
+  private static final String[] BUSI_NAMES = {"product", "user", "schedule"};
+
+  private static final String[] LOG_LEVEL = {"ERROR", "WARN", "INFO"};
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换机
+    channel.exchangeDeclare(
+        "ex.busi.topic",
+        BuiltinExchangeType.TOPIC,
+        // 持久化标识
+        false,
+        // 是否自动删除
+        false,
+        // 属性信息
+        null);
+
+    for (int i = 0; i < 50; i++) {
+
+      String level = LOG_LEVEL[ThreadLocalRandom.current().nextInt(0, LOG_LEVEL.length)];
+      String busiName = BUSI_NAMES[ThreadLocalRandom.current().nextInt(0, BUSI_NAMES.length)];
+      String address =
+          ADDRESS_ARRAYS[ThreadLocalRandom.current().nextInt(0, ADDRESS_ARRAYS.length)];
+      String routingKey = address + "." + busiName + "." + level;
+
+      String pushMsg = "地址[" + address + "],业务[" + busiName + "],级别[" + level + "],消息:" + i;
+
+      channel.basicPublish(
+          "ex.busi.topic", routingKey, null, pushMsg.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+}
 
 ```
 
-存在一个默认的交换器。
 
 
+**上海的消费者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * 上海地区的消费都，获取所有的上海信息
+ */
+public class ShangHaiConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换机
+    channel.exchangeDeclare(
+        "ex.busi.topic",
+        BuiltinExchangeType.TOPIC,
+        // 持久化标识
+        false,
+        // 是否自动删除
+        false,
+        // 属性信息
+        null);
+
+    // 定义队列
+    channel.queueDeclare(
+        "shanghai.all.log",
+        // 持久化存储
+        true,
+        // 排他
+        false,
+        // 自动删除
+        true,
+        // 属性
+        null);
+
+    // 将队列与交换机进行绑定
+    channel.queueBind("shanghai.all.log", "ex.busi.topic", "shanghai.#", null);
+
+    channel.basicConsume(
+        "shanghai.all.log",
+        (consumerTag, message) -> {
+          String dataMsg = new String(message.getBody(), StandardCharsets.UTF_8);
+          System.out.println("shanghai consumer 收到数据:" + dataMsg);
+        },
+        consumerTag -> {});
+  }
+}
+```
+
+
+
+**所有错误日志的消费者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class ErrorLogConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换机
+    channel.exchangeDeclare(
+        "ex.busi.topic",
+        BuiltinExchangeType.TOPIC,
+        // 持久化标识
+        false,
+        // 是否自动删除
+        false,
+        // 属性信息
+        null);
+
+    // 定义队列
+    channel.queueDeclare(
+        "log.all.error",
+        // 持久化存储
+        true,
+        // 排他
+        false,
+        // 自动删除
+        true,
+        // 属性
+        null);
+
+    // 将队列与交换机进行绑定
+    channel.queueBind("log.all.error", "ex.busi.topic", "#.ERROR", null);
+
+    channel.basicConsume(
+        "log.all.error",
+        (consumerTag, message) -> {
+          String dataMsg = new String(message.getBody(), StandardCharsets.UTF_8);
+          System.out.println("错误日志 consumer 收到数据:" + dataMsg);
+        },
+        consumerTag -> {});
+  }
+}
+
+```
+
+**苏州用户的消费者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class SuZhouUserConsumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换机
+    channel.exchangeDeclare(
+        "ex.busi.topic",
+        BuiltinExchangeType.TOPIC,
+        // 持久化标识
+        false,
+        // 是否自动删除
+        false,
+        // 属性信息
+        null);
+
+    // 定义队列
+    channel.queueDeclare(
+        "suzhou.user.consumer",
+        // 持久化存储
+        true,
+        // 排他
+        false,
+        // 自动删除
+        true,
+        // 属性
+        null);
+
+    // 将队列与交换机进行绑定
+    channel.queueBind("suzhou.user.consumer", "ex.busi.topic", "suzhou.user.*", null);
+
+    channel.basicConsume(
+        "suzhou.user.consumer",
+        (consumerTag, message) -> {
+          String dataMsg = new String(message.getBody(), StandardCharsets.UTF_8);
+          System.out.println("suzhou consumer 收到数据:" + dataMsg);
+        },
+        consumerTag -> {});
+  }
+}
+```
+
+
+
+首先启动三个消费者，查看队列和交换器的信息
+
+```
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ ex.busi.topic      │ topic   │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ ex.routing         │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌───────────────┬─────────────┬──────────────────────┬──────────────────┬──────────────────────┬───────────┐
+│ source_name   │ source_kind │ destination_name     │ destination_kind │ routing_key          │ arguments │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│               │ exchange    │ suzhou.user.consumer │ queue            │ suzhou.user.consumer │           │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│               │ exchange    │ shanghai.all.log     │ queue            │ shanghai.all.log     │           │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│               │ exchange    │ log.all.error        │ queue            │ log.all.error        │           │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│ ex.busi.topic │ exchange    │ log.all.error        │ queue            │ #.ERROR              │           │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│ ex.busi.topic │ exchange    │ shanghai.all.log     │ queue            │ shanghai.#           │           │
+├───────────────┼─────────────┼──────────────────────┼──────────────────┼──────────────────────┼───────────┤
+│ ex.busi.topic │ exchange    │ suzhou.user.consumer │ queue            │ suzhou.user.*        │           │
+└───────────────┴─────────────┴──────────────────────┴──────────────────┴──────────────────────┴───────────┘
+[root@nullnull-os ~]# 
+```
+
+观察可以发现，此队列与消息的绑定已经成功。接下使用生产者发送消息。观察控制台输出:
+
+错误日志消费者
+
+```java
+错误日志 consumer 收到数据:地址[suzhou],业务[schedule],级别[ERROR],消息:6
+错误日志 consumer 收到数据:地址[suzhou],业务[product],级别[ERROR],消息:8
+错误日志 consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:10
+错误日志 consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:12
+错误日志 consumer 收到数据:地址[suzhou],业务[schedule],级别[ERROR],消息:15
+错误日志 consumer 收到数据:地址[hangzhou],业务[user],级别[ERROR],消息:16
+错误日志 consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:17
+错误日志 consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:18
+错误日志 consumer 收到数据:地址[hangzhou],业务[user],级别[ERROR],消息:21
+错误日志 consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:22
+错误日志 consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:24
+错误日志 consumer 收到数据:地址[hangzhou],业务[product],级别[ERROR],消息:28
+错误日志 consumer 收到数据:地址[suzhou],业务[schedule],级别[ERROR],消息:33
+错误日志 consumer 收到数据:地址[hangzhou],业务[schedule],级别[ERROR],消息:39
+错误日志 consumer 收到数据:地址[suzhou],业务[user],级别[ERROR],消息:40
+错误日志 consumer 收到数据:地址[suzhou],业务[user],级别[ERROR],消息:43
+错误日志 consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:46
+```
+
+上海地区的消费者
+
+```java
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[WARN],消息:0
+shanghai consumer 收到数据:地址[shanghai],业务[user],级别[INFO],消息:1
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[INFO],消息:2
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[WARN],消息:5
+shanghai consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:10
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:12
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:17
+shanghai consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:18
+shanghai consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:22
+shanghai consumer 收到数据:地址[shanghai],业务[product],级别[ERROR],消息:24
+shanghai consumer 收到数据:地址[shanghai],业务[user],级别[INFO],消息:32
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[INFO],消息:35
+shanghai consumer 收到数据:地址[shanghai],业务[product],级别[INFO],消息:38
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[WARN],消息:41
+shanghai consumer 收到数据:地址[shanghai],业务[schedule],级别[ERROR],消息:46
+shanghai consumer 收到数据:地址[shanghai],业务[user],级别[INFO],消息:48
+```
+
+苏州用户的消费者
+
+```java
+suzhou consumer 收到数据:地址[suzhou],业务[user],级别[WARN],消息:37
+suzhou consumer 收到数据:地址[suzhou],业务[user],级别[ERROR],消息:40
+suzhou consumer 收到数据:地址[suzhou],业务[user],级别[ERROR],消息:43
+suzhou consumer 收到数据:地址[suzhou],业务[user],级别[WARN],消息:45
+```
+
+
+
+至此topic模式操作成功。
 
 
 

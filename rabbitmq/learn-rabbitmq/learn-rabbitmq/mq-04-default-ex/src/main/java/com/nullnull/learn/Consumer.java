@@ -3,39 +3,30 @@ package com.nullnull.learn;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.GetResponse;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 /**
- * 生产者
+ * 消费消息
  *
  * @author liujun
- * @since 2023/8/17
+ * @since 2023/8/18
  */
-public class Product {
+public class Consumer {
 
   public static void main(String[] args) throws Exception {
     ConnectionFactory factory = new ConnectionFactory();
+
     factory.setUri("amqp://root:123456@node1:5672/%2f");
 
     Connection connection = factory.newConnection();
     Channel channel = connection.createChannel();
 
     try {
-      // 声明fanout类型交换机
-      channel.exchangeDeclare("ex.testfan", "fanout", true, false, false, null);
+      GetResponse getResponse = channel.basicGet("queue.default.ex", true);
 
-      for (int i = 0; i < 20; i++) {
-        channel.basicPublish(
-            "ex.testfan",
-            // 路由key
-            "",
-            // 属性
-            null,
-            // 信息
-            ("hello world fan " + i).getBytes(StandardCharsets.UTF_8));
-      }
+      System.out.println("信息输出:" + new String(getResponse.getBody()));
     } catch (IOException e) {
       throw new RuntimeException(e);
     } finally {

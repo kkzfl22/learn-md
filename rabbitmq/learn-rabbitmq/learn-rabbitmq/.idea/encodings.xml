@@ -7,6 +7,14 @@
     <file url="file://$PROJECT_DIR$/mq-02-work-queue/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mq-03-pub-sub/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mq-03-pub-sub/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-04-default-ex/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-04-default-ex/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-05-routingmode/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-05-routingmode/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-06-topic/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-06-topic/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-o4-default-ex/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mq-o4-default-ex/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
     <file url="PROJECT" charset="UTF-8" />
