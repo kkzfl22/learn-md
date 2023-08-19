@@ -1,4 +1,4 @@
-# 	RabbitMQ 学习笔记
+RabbitMQ 学习笔记
 
 ## 1. RabbitMQ 安装-linux
 
@@ -2513,7 +2513,447 @@ suzhou consumer 收到数据:地址[suzhou],业务[user],级别[WARN],消息:45
 
 至此topic模式操作成功。
 
+## 5. Spring整合RabbitMQ
 
+Spring-amqp是对AMQP的一些概念的一些抽象，Spring-rabbit是对RabbitMQ操作的封装实现。
+
+主要有几个核心类`RabbitAdmin`、`RabbitTemplate`、`SimpleMessageListenerContainer`等
+
+`RabbitAdmin`类完成对Exchange、Queue、Binding的操作，在容器中管理 了`RabbitAdmin`类的时候，可以对Exchange、Queue、Binding进行自动声明。
+
+`RabbitTemplate`类是发送和接收消息的工具类。
+
+`SimpleMessageListenerContainer`是消费消息的容器。
+
+目前一些比较新的项目会使用基于注解的方式，而比较老的一些项目可能还是基于配制文件的方式。
+
+### 5.1 基于配制文件的整合。
+
+#### 5.1.1 消息的生产者
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+public class Product {
+
+    public static void main(String[] args) throws Exception {
+        AbstractApplicationContext context = new ClassPathXmlApplicationContext("spring-rabbit.xml");
+
+
+        RabbitTemplate template = context.getBean(RabbitTemplate.class);
+
+
+        MessagePropertiesBuilder propertiesBuilder = MessagePropertiesBuilder.newInstance();
+        propertiesBuilder.setContentEncoding("gbk");
+        propertiesBuilder.setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN);
+
+
+        Message msg = MessageBuilder.withBody("hello world".getBytes("gbk"))
+                .andProperties(propertiesBuilder.build()).build();
+
+        template.convertAndSend("ex.direct", "routing.q1", msg);
+
+
+        context.close();
+    }
+}
+
+```
+
+**spring-rabbit.xml**
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/rabbit
+    http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+    <!--配制连接工厂-->
+    <rabbit:connection-factory id="connectFactory"
+                               host="node1" virtual-host="/"
+                               username="root" password="123456"
+                               port="5672"
+    ></rabbit:connection-factory>
+
+
+    <!--用于自动向RabbitMQ声明队列、交换器、绑定 等操作工具类-->
+    <rabbit:admin id="rabbitAdmin" connection-factory="connectFactory"></rabbit:admin>
+
+
+    <!--用于简化操作的模板类-->
+    <rabbit:template connection-factory="connectFactory" id="rabbitTemplate" />
+
+
+    <!--声明队列队列-->
+    <rabbit:queue id="msg1" name="queue.msg" durable="false" exclusive="false" auto-delete="false" ></rabbit:queue>
+
+    <!--声明交换器-->
+    <rabbit:direct-exchange name="ex.direct" durable="false" auto-delete="false" id="directExchange" >
+        <rabbit:bindings>
+            <!--key表示绑定键-->
+            <!--queue表示将交换器绑定到哪个消息队列,使用队列换id，不要使用Bean的name-->
+            <!--exchange表示交接交换器绑定到哪个交换器。-->
+            <rabbit:binding queue="msg1" key="routing.q1" ></rabbit:binding>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+
+
+</beans>
+```
+
+
+
+运行生产者的代码，便可查看数据已经发送成功
+
+```sh
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ ex.busi.topic      │ topic   │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│ ex.direct          │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ ex.routing         │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ queue.msg        │ queue            │ queue.msg   │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ ex.direct   │ exchange    │ queue.msg        │ queue            │ routing.q1  │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os ~]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────┬──────────┐
+│ name      │ messages │
+├───────────┼──────────┤
+│ queue.msg │ 1        │
+└───────────┴──────────┘
+[root@nullnull-os ~]# 
+```
+
+可以观察到数据已经成功的发送了。
+
+
+
+遇到的问题：
+
+```java
+Exception in thread "main" org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'org.springframework.amqp.rabbit.config.BindingFactoryBean#0': Cannot resolve reference to bean 'queue.msg' while setting bean property 'destinationQueue'; nested exception is org.springframework.beans.factory.NoSuchBeanDefinitionException: No bean named 'queue.msg' available
+	at org.springframework.beans.factory.support.BeanDefinitionValueResolver.resolveReference(BeanDefinitionValueResolver.java:342)
+	at org.springframework.beans.factory.support.BeanDefinitionValueResolver.resolveValueIfNecessary(BeanDefinitionValueResolver.java:113)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.applyPropertyValues(AbstractAutowireCapableBeanFactory.java:1699)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.populateBean(AbstractAutowireCapableBeanFactory.java:1444)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:594)
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:517)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:323)
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:226)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:321)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202)
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:876)
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:878)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:550)
+	at org.springframework.context.support.ClassPathXmlApplicationContext.<init>(ClassPathXmlApplicationContext.java:144)
+	at org.springframework.context.support.ClassPathXmlApplicationContext.<init>(ClassPathXmlApplicationContext.java:85)
+	at com.nullnull.learn.Product.main(Product.java:18)
+Caused by: org.springframework.beans.factory.NoSuchBeanDefinitionException: No bean named 'queue.msg' available
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.getBeanDefinition(DefaultListableBeanFactory.java:814)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getMergedLocalBeanDefinition(AbstractBeanFactory.java:1282)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:297)
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:202)
+	at org.springframework.beans.factory.support.BeanDefinitionValueResolver.resolveReference(BeanDefinitionValueResolver.java:330)
+	... 15 more
+
+```
+
+问题原因：
+
+```xml
+    <rabbit:direct-exchange name="ex.direct" durable="false" auto-delete="false" id="directExchange" >
+        <rabbit:bindings>
+            <rabbit:binding queue="queue.msg" key="routing.q1" ></rabbit:binding>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+```
+
+此处要配制的是队列的id，而不是队列的名称。
+
+修改后:
+
+```xml
+ <!--声明交换器-->
+    <rabbit:direct-exchange name="ex.direct" durable="false" auto-delete="false" id="directExchange" >
+        <rabbit:bindings>
+            <!--key表示绑定键-->
+            <!--queue表示将交换器绑定到哪个消息队列,使用队列换id，不要使用Bean的name-->
+            <!--exchange表示交接交换器绑定到哪个交换器。-->
+            <rabbit:binding queue="msg1" key="routing.q1" ></rabbit:binding>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
+```
+
+
+
+#### 5.1.2 拉消息的消费者
+
+```java
+
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+public class ConsumerGet {
+
+    public static void main(String[] args) throws Exception {
+        AbstractApplicationContext context = new ClassPathXmlApplicationContext("spring-rabbit.xml");
+
+        RabbitTemplate template = context.getBean(RabbitTemplate.class);
+
+
+        Message receive = template.receive("queue.msg");
+
+        //报文头中的消息编码
+        String encoding = receive.getMessageProperties().getContentEncoding();
+
+        System.out.println("收到的消息:" + new String(receive.getBody(), encoding));
+
+
+        context.close();
+    }
+}
+
+```
+
+spring-rabbit.xml
+
+```java
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/rabbit
+    http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+    <!--配制连接工厂-->
+    <rabbit:connection-factory id="connectFactory"
+                               host="node1" virtual-host="/"
+                               username="root" password="123456"
+                               port="5672"
+    ></rabbit:connection-factory>
+
+
+    <!--用于自动向RabbitMQ声明队列、交换器、绑定 等操作工具类-->
+    <rabbit:admin id="rabbitAdmin" connection-factory="connectFactory"></rabbit:admin>
+
+
+    <!--用于简化操作的模板类-->
+    <rabbit:template connection-factory="connectFactory" id="rabbitTemplate"/>
+
+
+    <!--声明队列队列-->
+    <rabbit:queue id="msg1" name="queue.msg" durable="false" exclusive="false" auto-delete="false"></rabbit:queue>
+
+
+</beans>
+```
+
+
+
+当启动消费者后，便可获取到发送至队列的消息
+
+```sh
+收到的消息:hello world
+```
+
+检查队列的消息的情况：
+
+```
+[root@nullnull-os ~]# rabbitmqctl list_queues  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────┬──────────┐
+│ name      │ messages │
+├───────────┼──────────┤
+│ queue.msg │ 0        │
+└───────────┴──────────┘
+```
+
+经过检查确认，发现消息已经被消费了。
+
+至此拉模式的消费者完成。
+
+
+
+#### 5.1.3 推模式的消费者
+
+在推模式中使用可以两种实现：
+
+1. 使用ChannelAwareMessageListener.
+
+除消息外，还提供了Channel这个对象，通过channel可以有更大的灵活性。
+
+```java
+import com.rabbitmq.client.Channel;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
+
+public class MesListener implements ChannelAwareMessageListener {
+
+    @Override
+    public void onMessage(Message message, Channel channel) throws Exception {
+        
+    }
+}
+
+```
+
+
+
+2. 使用MessageListener
+
+基本的消息的临时。普通的场景基本够用。
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageListener;
+
+public class MesListener implements MessageListener {
+    @Override
+    public void onMessage(Message message) {
+
+    }
+}
+
+```
+
+
+
+此处以ChannelAwareMessageListener为样例：
+
+```java
+import com.rabbitmq.client.Channel;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
+
+public class MesListener implements ChannelAwareMessageListener {
+
+    @Override
+    public void onMessage(Message message, Channel channel) throws Exception {
+        String encoding = message.getMessageProperties().getContentEncoding();
+        System.out.println("收到的消息是：" + new String(message.getBody(), encoding));
+    }
+}
+```
+
+spring-rabbit.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/rabbit
+    http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+    <!--配制连接工厂-->
+    <rabbit:connection-factory id="connectFactory"
+                               host="node1" virtual-host="/"
+                               username="root" password="123456"
+                               port="5672"
+    ></rabbit:connection-factory>
+
+
+    <!--用于自动向RabbitMQ声明队列、交换器、绑定 等操作工具类-->
+    <rabbit:admin id="rabbitAdmin" connection-factory="connectFactory"></rabbit:admin>
+
+
+    <!--用于简化操作的模板类-->
+    <rabbit:template connection-factory="connectFactory" id="rabbitTemplate"/>
+
+
+    <!--声明队列队列-->
+    <rabbit:queue id="msg1" name="queue.msg" durable="false" exclusive="false" auto-delete="false"></rabbit:queue>
+
+
+    <!--配制鉴别器对象-->
+    <bean id="msgListener" class="com.nullnull.learn.MesListener"/>
+
+    <!--配制监听器-->
+    <rabbit:listener-container connection-factory="connectFactory">
+        <rabbit:listener ref="msgListener" queues="msg1"></rabbit:listener>
+    </rabbit:listener-container>
+
+
+</beans>
+```
+
+容器启动类
+
+```java
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+public class ListenerApplication {
+    public static void main(String[] args) {
+        //启动Spring容器
+        new ClassPathXmlApplicationContext("spring-rabbit.xml");
+    }
+}
+
+```
+
+
+
+首先启动消费者。这样监听者就会处于监听状态。
+
+再启动生产者，向队列中发送消息。
+
+再观察消息者，便能看到消费者队列中已经收到了发送的消息。
+
+```java
+收到的消息是：hello world
+```
+
+
+
+在推模式中消息的即时性比拉模式会好。
+
+
+
+### 5.2 基于注解的整合
 
 
 

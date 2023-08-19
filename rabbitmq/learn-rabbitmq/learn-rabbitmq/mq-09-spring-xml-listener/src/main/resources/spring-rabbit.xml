@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/rabbit
+    http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+    <!--配制连接工厂-->
+    <rabbit:connection-factory id="connectFactory"
+                               host="node1" virtual-host="/"
+                               username="root" password="123456"
+                               port="5672"
+    ></rabbit:connection-factory>
+
+
+    <!--用于自动向RabbitMQ声明队列、交换器、绑定 等操作工具类-->
+    <rabbit:admin id="rabbitAdmin" connection-factory="connectFactory"></rabbit:admin>
+
+
+    <!--用于简化操作的模板类-->
+    <rabbit:template connection-factory="connectFactory" id="rabbitTemplate"/>
+
+
+    <!--声明队列队列-->
+    <rabbit:queue id="msg1" name="queue.msg" durable="false" exclusive="false" auto-delete="false"></rabbit:queue>
+
+
+    <!--配制鉴别器对象-->
+    <bean id="msgListener" class="com.nullnull.learn.MesListener"/>
+
+    <!--配制监听器-->
+    <rabbit:listener-container connection-factory="connectFactory">
+        <rabbit:listener ref="msgListener" queues="msg1"></rabbit:listener>
+    </rabbit:listener-container>
+
+
+</beans>
