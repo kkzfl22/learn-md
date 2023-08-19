@@ -2955,6 +2955,323 @@ public class ListenerApplication {
 
 ### 5.2 基于注解的整合
 
+#### **5.2.1 消息的生产者**
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
+
+import java.nio.charset.StandardCharsets;
+
+public class ProducterApplication {
+
+    public static void main(String[] args) throws Exception {
+        AbstractApplicationContext context = new AnnotationConfigApplicationContext(RabbitConfig.class);
+
+        RabbitTemplate template = context.getBean(RabbitTemplate.class);
+
+        MessageProperties msgBuild = MessagePropertiesBuilder.newInstance()
+                .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+                .setContentEncoding(StandardCharsets.UTF_8.name())
+                .setHeader("test.header", "test.value")
+                .build();
+
+        Message msg = MessageBuilder.withBody("你好 RabbitMQ!".getBytes(StandardCharsets.UTF_8))
+                .andProperties(msgBuild)
+                .build();
+
+        template.send("ex.anno.fanout", "routing.anno", msg);
+
+        context.close();
+    }
+
+}
+
+```
+
+**RabbitConfig**
+
+```java
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Configurable;
+import org.springframework.context.annotation.Bean;
+import java.net.URI;
+
+@Configurable
+public class RabbitConfig {
+
+    /**
+     * 连接工厂
+     *
+     * @return
+     */
+    @Bean
+    public ConnectionFactory getConnectionFactory() {
+        URI uri = URI.create("amqp://root:123456@node1:5672/%2f");
+        ConnectionFactory factory = new CachingConnectionFactory(uri);
+        return factory;
+    }
+
+    /**
+     * RabbitTemplate
+     */
+    @Bean
+    @Autowired
+    public RabbitTemplate rabbitTemplate(ConnectionFactory factory) {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(factory);
+        return rabbitTemplate;
+    }
+
+
+    /**
+     * RabbitAdmin
+     */
+    @Bean
+    @Autowired
+    public RabbitAdmin rabbitAdmin(ConnectionFactory factory) {
+        RabbitAdmin admin = new RabbitAdmin(factory);
+        return admin;
+    }
+
+    /**
+     * Queue
+     */
+    @Bean
+    public Queue queue() {
+        Queue queue = QueueBuilder.nonDurable("queue.anno")
+                //是否排外，即是否只有当前这个连接才能看到。
+                //.exclusive()
+                //是否自动删除
+                //.autoDelete()
+                .build();
+
+        return queue;
+    }
+
+    /**
+     * Exchange
+     */
+    @Bean
+    public Exchange exchange() {
+        Exchange exchange = new FanoutExchange("ex.anno.fanout", false, false, null);
+        return exchange;
+    }
+
+    /**
+     * Binding
+     */
+    @Bean
+    @Autowired
+    public Binding binding(Queue queue, Exchange exchange) {
+        //创建一个不指定参数的绑定
+        Binding binding = BindingBuilder.bind(queue).to(exchange).with("routing.anno").noargs();
+        return binding;
+    }
+}
+```
+
+提示：
+
+>ConnectionFactory有三个实现
+>
+>CachingConnectionFactory 基于channel的缓存模式  最常用是这个。
+>
+>LocalizedQueueConnectionFactory 直接连接某个节点的方式。如果是集群，此种不太适合。
+>
+>SimpleRoutingConnectionFactory 在当前的连接工厂中按查找的KEY获取连接工厂。
+
+
+
+
+
+运行消息的生产者，查看消息发送信息
+
+```java
+[root@nullnull-os ~]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ ex.anno.fanout     │ fanout  │
+├────────────────────┼─────────┤
+│ ex.busi.topic      │ topic   │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│ ex.direct          │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ ex.routing         │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os ~]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌────────────────┬─────────────┬──────────────────┬──────────────────┬──────────────┬───────────┐
+│ source_name    │ source_kind │ destination_name │ destination_kind │ routing_key  │ arguments │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│                │ exchange    │ queue.msg        │ queue            │ queue.msg    │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│                │ exchange    │ queue.anno       │ queue            │ queue.anno   │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│ ex.anno.fanout │ exchange    │ queue.anno       │ queue            │ routing.anno │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│ ex.direct      │ exchange    │ queue.msg        │ queue            │ routing.q1   │           │
+└────────────────┴─────────────┴──────────────────┴──────────────────┴──────────────┴───────────┘
+[root@nullnull-os ~]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ queue.msg  │ 0        │
+├────────────┼──────────┤
+│ queue.anno │ 1        │
+└────────────┴──────────┘
+[root@nullnull-os ~]# 
+```
+
+通过检查发现，消息已经成功的发送到了队列
+
+
+
+
+
+#### **5.2.2 使用拉模式获取消息**
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
+
+public class ConsumerGetApplication {
+
+    public static void main(String[] args) throws Exception {
+        //从指定类加载配制信息
+        AbstractApplicationContext context = new AnnotationConfigApplicationContext(RabbitConfig.class);
+        RabbitTemplate rabbit = context.getBean(RabbitTemplate.class);
+
+        Message receive = rabbit.receive("queue.anno");
+        String encoding = receive.getMessageProperties().getContentEncoding();
+        System.out.println("消息信息：" + new String(receive.getBody(), encoding));
+
+        context.close();
+    }
+
+}
+
+```
+
+
+
+**RabbitConfig的配制**
+
+```java
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Configurable;
+import org.springframework.context.annotation.Bean;
+import java.net.URI;
+
+@Configurable
+public class RabbitConfig {
+
+    /**
+     * 连接工厂
+     *
+     * @return
+     */
+    @Bean
+    public ConnectionFactory getConnectionFactory() {
+        URI uri = URI.create("amqp://root:123456@node1:5672/%2f");
+        ConnectionFactory factory = new CachingConnectionFactory(uri);
+        return factory;
+    }
+
+    /**
+     * RabbitTemplate
+     */
+    @Bean
+    @Autowired
+    public RabbitTemplate rabbitTemplate(ConnectionFactory factory) {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(factory);
+        return rabbitTemplate;
+    }
+
+
+    /**
+     * RabbitAdmin
+     */
+    @Bean
+    @Autowired
+    public RabbitAdmin rabbitAdmin(ConnectionFactory factory) {
+        RabbitAdmin admin = new RabbitAdmin(factory);
+        return admin;
+    }
+
+    /**
+     * Queue
+     */
+    @Bean
+    public Queue queue() {
+        Queue queue = QueueBuilder.nonDurable("queue.anno")
+                //是否排外，即是否只有当前这个连接才能看到。
+                //.exclusive()
+                //是否自动删除
+                //.autoDelete()
+                .build();
+
+        return queue;
+    }
+}
+```
+
+
+
+运行主程序,检查控制台的输出。
+
+```
+消息信息：你好 RabbitMQ!
+```
+
+至此使用拉模式，已经成功的获取队列中的数据。
+
+
+
+#### **5.2.3 使用推模式获取数据 **
+
+
+
 
 
 ## 结束
