@@ -19,6 +19,8 @@
         <module>mq-07-spring-mq-cfg</module>
         <module>mq-08-spring-xml-consumer</module>
         <module>mq-09-spring-xml-listener</module>
+        <module>mq-10-spring-anno-product</module>
+        <module>mq-11-spring-anno-consumer</module>
     </modules>
 
     <properties>
