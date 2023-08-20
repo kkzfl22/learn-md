@@ -2527,6 +2527,20 @@ Spring-amqp是对AMQP的一些概念的一些抽象，Spring-rabbit是对RabbitM
 
 目前一些比较新的项目会使用基于注解的方式，而比较老的一些项目可能还是基于配制文件的方式。
 
+此处使用的Spring依赖为:
+
+```xml
+            <dependency>
+                <groupId>org.springframework.amqp</groupId>
+                <artifactId>spring-rabbit</artifactId>
+                <version>2.2.7.RELEASE</version>
+            </dependency>
+```
+
+
+
+
+
 ### 5.1 基于配制文件的整合。
 
 #### 5.1.1 消息的生产者
@@ -3269,6 +3283,550 @@ public class RabbitConfig {
 
 
 #### **5.2.3 使用推模式获取数据 **
+
+消费者处理的代码
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class MessageListener {
+
+
+    /**
+     * com.rabbitmq.client.Channel to get access to the Channel channel对象
+     * org.springframework.amqp.core.Message  message对象，可以直接操作原生的AMQP消息
+     * org.springframework.messaging.Message to use the messaging abstraction counterpart
+     *
+     * @Payload-annotated 注解方法参数，该参数的值就是消息体。   method arguments including the support of validation
+     * @Header-annotated 注解方法参数，访问指定的消息头字段的值。 method arguments to extract a specific header value, including standard AMQP headers defined by AmqpHeaders
+     * @Headers-annotated 该注解的参数获取该消息的消息头的所有字段，参数集合类型对应的MAP argument that must also be assignable to java.util.Map for getting access to all headers.
+     * MessageHeaders 参数类型，访问所有消息头字段  arguments for getting access to all headers.
+     * MessageHeaderAccessor or AmqpMessageHeaderAccessor  访问所有消息头字段。
+     * <p>
+     * 消息监听
+     */
+    @RabbitListener(queues = "queue.anno")
+    public void whenMessageCome(Message msg) throws Exception {
+        String encoding = msg.getMessageProperties().getContentEncoding();
+        System.out.println("收到的消息:" + new String(msg.getBody(), encoding));
+    }
+
+
+    /**
+    // * 使用payload进行消费
+    // *
+    // * 不可同时存在相同的队列被两个监听
+    // *
+    // * @param data
+    // */
+    //@RabbitListener(queues = "queue.anno")
+    //public void whenMessageConsumer(@Payload String data) {
+    //    System.out.println("收到的消息:" + data);
+    //}
+
+}
+
+```
+
+此处存在两种方式，一种是接收Message作为参数，还有一种是使用@Payload接收内容作为参数
+
+配制处理
+
+```java
+import org.springframework.amqp.core.AcknowledgeMode;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Configurable;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.amqp.core.Queue;
+import java.net.URI;
+
+@EnableRabbit
+//@ComponentScan("com.nullnull.learn")
+@ComponentScan
+@Configurable //xml中也可以使用<rabbit:annotation-driven/> 启用@RabbitListener注解
+public class RabbitConfig {
+
+
+    @Bean
+    public ConnectionFactory connectionFactory() {
+        URI uriInfo = URI.create("amqp://root:123456@node1:5672/%2f");
+        return new CachingConnectionFactory(uriInfo);
+    }
+
+
+    @Bean
+    @Autowired
+    public RabbitAdmin rabbitAdmin(ConnectionFactory factory) {
+        return new RabbitAdmin(factory);
+    }
+
+    @Bean
+    @Autowired
+    public RabbitTemplate rabbitTemplate(ConnectionFactory factory) {
+        return new RabbitTemplate(factory);
+    }
+
+
+    @Bean
+    public Queue queue() {
+        return QueueBuilder.nonDurable("queue.anno").build();
+    }
+
+
+    /**
+     * RabbitListener的容器管理对象
+     * <p>
+     * 使用监听器监听推送过来的消息。在一个应用中可能会有多个监听器。这些监听器是需要一个工厂管理起来的。
+     *
+     * @return
+     */
+    @Bean("rabbitListenerContainerFactory")
+    @Autowired
+    public SimpleRabbitListenerContainerFactory containerFactory(ConnectionFactory connectFactory) {
+        SimpleRabbitListenerContainerFactory containerFactory = new SimpleRabbitListenerContainerFactory();
+
+        //要管理容器就得有连接
+        containerFactory.setConnectionFactory(connectFactory);
+        containerFactory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+        //containerFactory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        //containerFactory.setAcknowledgeMode(AcknowledgeMode.NONE);
+        //设置并发的消费者，即可以同时存在10个消费都消费消息。
+        containerFactory.setConcurrentConsumers(10);
+        //设置并发的最大消费者。
+        containerFactory.setMaxConcurrentConsumers(15);
+        //按照批次处理消息消息。
+        containerFactory.setBatchSize(10);
+        return containerFactory;
+    }
+
+}
+
+```
+
+
+
+启动类
+
+```java
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+public class ConsumerListenerApplication {
+
+    public static void main(String[] args) {
+        new AnnotationConfigApplicationContext(RabbitConfig.class);
+    }
+
+}
+
+```
+
+
+
+再启动生产者
+
+对生产者作一点改造，让其发送多条
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.AbstractApplicationContext;
+
+import java.nio.charset.StandardCharsets;
+
+public class ProducterApplication {
+
+    public static void main(String[] args) throws Exception {
+        AbstractApplicationContext context = new AnnotationConfigApplicationContext(RabbitConfig.class);
+
+        RabbitTemplate template = context.getBean(RabbitTemplate.class);
+
+        MessageProperties msgBuild = MessagePropertiesBuilder.newInstance()
+                .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+                .setContentEncoding(StandardCharsets.UTF_8.name())
+                .setHeader("test.header", "test.value")
+                .build();
+
+        for (int i = 0; i < 20; i++) {
+            Message msg = MessageBuilder.withBody(("你好 RabbitMQ! id :" + i).getBytes(StandardCharsets.UTF_8))
+                    .andProperties(msgBuild)
+                    .build();
+
+            template.send("ex.anno.fanout", "routing.anno", msg);
+        }
+
+        context.close();
+    }
+
+}
+
+```
+
+
+
+客户端接收,查看控制台
+
+```java
+收到的消息:你好 RabbitMQ! id :4
+收到的消息:你好 RabbitMQ! id :9
+收到的消息:你好 RabbitMQ! id :8
+收到的消息:你好 RabbitMQ! id :7
+收到的消息:你好 RabbitMQ! id :6
+收到的消息:你好 RabbitMQ! id :2
+收到的消息:你好 RabbitMQ! id :3
+收到的消息:你好 RabbitMQ! id :5
+收到的消息:你好 RabbitMQ! id :14
+收到的消息:你好 RabbitMQ! id :17
+收到的消息:你好 RabbitMQ! id :1
+收到的消息:你好 RabbitMQ! id :0
+收到的消息:你好 RabbitMQ! id :13
+收到的消息:你好 RabbitMQ! id :15
+收到的消息:你好 RabbitMQ! id :12
+收到的消息:你好 RabbitMQ! id :16
+收到的消息:你好 RabbitMQ! id :18
+收到的消息:你好 RabbitMQ! id :19
+收到的消息:你好 RabbitMQ! id :11
+收到的消息:你好 RabbitMQ! id :10
+```
+
+通过观察发现，此处接收的顺序与并非发送的顺序进行的接收，这是因为批量以及并发的控制在这里起的作用，如果要按顺序，去接批量及并发则就是按顺序接收。
+
+
+
+
+
+## 6. SpringBoot整合RabbitMQ
+
+引入SpringBoot的父类
+
+```xml
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.8.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+```
+
+
+
+
+
+maven的导入
+
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+```
+
+
+
+
+
+### 6.1 生产者
+
+生产者的controller
+
+```java
+import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageBuilder;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.ResponseBody;
+import java.nio.charset.StandardCharsets;
+
+@Controller
+public class SenderController {
+
+    @Autowired
+    private AmqpTemplate template;
+
+    @GetMapping("/send/{msg}")
+    @ResponseBody
+    public String sendMsg(@PathVariable String msg) {
+        MessageProperties properties = MessagePropertiesBuilder.newInstance()
+                .setContentEncoding(StandardCharsets.UTF_8.name())
+                .setHeader("key", "value").build();
+
+        Message msgData = MessageBuilder.withBody(msg.getBytes(StandardCharsets.UTF_8))
+                .andProperties(properties)
+                .build();
+
+        template.send("boot.ex", "boot.rk", msgData);
+
+        return "successMsg";
+    }
+
+}
+```
+
+生产者的配制 
+
+```java
+package com.nullnull.learn;
+
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.ExchangeBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * @author liujun
+ * @since 2023/8/20
+ */
+@Configuration
+public class RabbitConfig {
+
+    @Bean
+    public Queue queue() {
+        return QueueBuilder.nonDurable("boot.queue").build();
+    }
+
+    @Bean
+    public Exchange exchange() {
+        Exchange exchange = ExchangeBuilder.directExchange("boot.ex").build();
+        return exchange;
+    }
+
+    @Bean
+    public Binding binding() {
+        return new Binding("boot.queue", Binding.DestinationType.QUEUE, "boot.ex", "boot.rk", null);
+    }
+}
+```
+
+主启动类
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class RabbitApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(RabbitApplication.class, args);
+    }
+}
+```
+
+启动SpringBoot工程，即运行RabbitApplication中的main函数
+
+在浏览器中输入测试地址:http://127.0.0.1:8080/send/testmsg 
+
+页面将收到响应: successMsg
+
+
+
+检查队列的情况
+
+```sh
+root@nullnull-os mellanox]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ ex.anno.fanout     │ fanout  │
+├────────────────────┼─────────┤
+│ ex.busi.topic      │ topic   │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│ ex.direct          │ direct  │
+├────────────────────┼─────────┤
+│ boot.ex            │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ ex.routing         │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os mellanox]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ queue.msg  │ 0        │
+├────────────┼──────────┤
+│ queue.anno │ 0        │
+├────────────┼──────────┤
+│ boot.queue │ 1        │
+└────────────┴──────────┘
+[root@nullnull-os mellanox]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌────────────────┬─────────────┬──────────────────┬──────────────────┬──────────────┬───────────┐
+│ source_name    │ source_kind │ destination_name │ destination_kind │ routing_key  │ arguments │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│                │ exchange    │ queue.msg        │ queue            │ queue.msg    │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│                │ exchange    │ queue.anno       │ queue            │ queue.anno   │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│                │ exchange    │ boot.queue       │ queue            │ boot.queue   │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│ boot.ex        │ exchange    │ boot.queue       │ queue            │ boot.rk      │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│ ex.anno.fanout │ exchange    │ queue.anno       │ queue            │ routing.anno │           │
+├────────────────┼─────────────┼──────────────────┼──────────────────┼──────────────┼───────────┤
+│ ex.direct      │ exchange    │ queue.msg        │ queue            │ routing.q1   │           │
+└────────────────┴─────────────┴──────────────────┴──────────────────┴──────────────┴───────────┘
+[root@nullnull-os mellanox]# 
+```
+
+观察发现，数据已经成功的发送至了RabbitMQ中了，至此生产者编写完成。
+
+
+
+### 6.2 消费者
+
+消费队列的配制文件 
+
+```yaml
+spring:
+  application:
+    name: springboot_rabbitmq
+
+  rabbitmq:
+    host: node1
+    virtual-host: /
+    username: root
+    password: 123456
+    port: 5672
+```
+
+
+
+
+
+队列配制信息
+
+```java
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitConfig {
+
+    @Bean
+    public Queue queue() {
+        return QueueBuilder.nonDurable("boot.queue").build();
+    }
+
+}
+
+```
+
+
+
+
+
+监听器的代码
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+
+@Component
+public class MessageListener {
+
+
+    //@RabbitListener(queues = "boot.queue")
+    //public void getMsg(Message msg) {
+    //    String headValue = msg.getMessageProperties().getHeader("key");
+    //    String getValue = new String(msg.getBody(), StandardCharsets.UTF_8);
+    //    System.out.println("接收到的消息头:" + headValue);
+    //    System.out.println("接收到的消息:" + getValue);
+    //}
+
+
+    @RabbitListener(queues = "boot.queue")
+    public void getMsgPay(@Payload String msg, @Header("key") String keyValue) {
+        System.out.println("接收到的消息头:" + keyValue);
+        System.out.println("接收到的消息:" + msg);
+    }
+
+}
+
+```
+
+
+
+启动消费都后，观察控制台，便会有如下的输出:
+
+```sh
+2023-08-20 15:17:22.680  INFO 21720 --- [           main] o.s.amqp.rabbit.core.RabbitAdmin         : Auto-declaring a non-durable, auto-delete, or exclusive Queue (boot.queue) durable:false, auto-delete:false, exclusive:false. It will be redeclared if the broker stops and is restarted while the connection factory is alive, but all messages will be lost.
+接收到的消息头value
+接收到的消息:testmsg321
+```
+
+至此，SpringBoot消费都也已经成功的集成。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

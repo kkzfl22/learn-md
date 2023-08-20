@@ -7,6 +7,14 @@
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.8.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+
     <name>learn-rabbitmq</name>
     <url>http://maven.apache.org</url>
     <modules>
@@ -21,6 +29,9 @@
         <module>mq-09-spring-xml-listener</module>
         <module>mq-10-spring-anno-product</module>
         <module>mq-11-spring-anno-consumer</module>
+        <module>mq-12-spring-anno-listener</module>
+        <module>mq-13-springboot-product</module>
+        <module>mq-14-springboot-consumer</module>
     </modules>
 
     <properties>

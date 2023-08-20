@@ -27,11 +27,13 @@ public class ProducterApplication {
                 .setHeader("test.header", "test.value")
                 .build();
 
-        Message msg = MessageBuilder.withBody("你好 RabbitMQ!".getBytes(StandardCharsets.UTF_8))
-                .andProperties(msgBuild)
-                .build();
+        for (int i = 0; i < 20; i++) {
+            Message msg = MessageBuilder.withBody(("你好 RabbitMQ! id :" + i).getBytes(StandardCharsets.UTF_8))
+                    .andProperties(msgBuild)
+                    .build();
 
-        template.send("ex.anno.fanout", "routing.anno", msg);
+            template.send("ex.anno.fanout", "routing.anno", msg);
+        }
 
         context.close();
     }
