@@ -32,6 +32,8 @@
         <module>mq-12-spring-anno-listener</module>
         <module>mq-13-springboot-product</module>
         <module>mq-14-springboot-consumer</module>
+        <module>mq-15-publisher-confirm</module>
+        <module>mq-16-spring-publisher-confirm</module>
     </modules>
 
     <properties>

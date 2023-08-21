@@ -932,6 +932,20 @@ Listing bindings for vhost /...
 
 ### 4.2 RabbitMQ的Hello World
 
+导入依赖:
+
+```xml
+           <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>5.9.0</version>
+            </dependency>
+```
+
+
+
+
+
 RabbitMQ的生产者
 
 ```java
@@ -3912,6 +3926,526 @@ public class MessageListener {
 ![image-20230820234348357](img\image-20230820234348357.png)
 
 RabbitMQ回传给生产者的确认消息中的devliveryTag字段包含了确认消息的序号，另外通过设置channel.basicAck方法中的mulitiple参数，表示到这个序号之前的所有消息是否都已经得到了处理了。生产都投递消息后并不需要一直阻塞着，可以继续投递下一条消息并通过回调方式处理ACK响应。如果RabbitMQ因数自身内部错误导致消息丢失等异常情况发生，就会响应一条nack（Basic.Nack)命令，生产者应用程序同样可以在回调方法中处理该nack命令。
+
+
+
+首先导入maven依赖
+
+```xml
+           <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>5.9.0</version>
+            </dependency>
+```
+
+
+
+#### 7.4.1 单条带确认模式
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeoutException;
+
+public class Product {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 开启发送方确认机制
+    AMQP.Confirm.SelectOk selectOk = channel.confirmSelect();
+
+    channel.exchangeDeclare("confirm.ex", BuiltinExchangeType.DIRECT);
+    channel.queueDeclare("confirm.qe", false, false, false, null);
+    channel.queueBind("confirm.qe", "confirm.ex", "confirm.rk");
+
+    String pushMsg = "confirm 这是推送确认的消息";
+
+    channel.basicPublish(
+        "confirm.ex", "confirm.rk", null, pushMsg.getBytes(StandardCharsets.UTF_8));
+
+    // 执行发送端确认机制
+    try {
+      channel.waitForConfirmsOrDie(5000);
+      System.out.println("发送的消息被确认:" + pushMsg);
+    } catch (IOException e) {
+      e.printStackTrace();
+      System.out.println("消息被拒绝:" + pushMsg);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      System.out.println("非Publisher confirm的通道上使用该方法");
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+      System.out.println("等待消息确认超时");
+    }
+  }
+}
+```
+
+执行生产者的代码后，查看RabbitMQ中的是否到达:
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ confirm.ex         │ direct  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ confirm.qe       │ queue            │ confirm.qe  │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ confirm.ex  │ exchange    │ confirm.qe       │ queue            │ confirm.rk  │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ confirm.qe │ 1        │
+└────────────┴──────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+经过检查发现消息成功成功的送到，并且收到了服务端的确认:
+
+```sh
+发送的消息被确认:confirm 这是推送确认的消息
+```
+
+
+
+#### 7.4.2 批量确认模式
+
+在以上的样例中，发送方在发送消息后，便进行入等待确认，这是一个同步阻塞的机制性能不是太好，接下来将使用批处理对此进行优化。
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeoutException;
+
+public class ProductBatch {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 开启发送方确认机制
+    AMQP.Confirm.SelectOk selectOk = channel.confirmSelect();
+
+    channel.exchangeDeclare("confirm.ex", BuiltinExchangeType.DIRECT);
+    channel.queueDeclare("confirm.qe", false, false, false, null);
+    channel.queueBind("confirm.qe", "confirm.ex", "confirm.rk");
+
+    // 批量处理大小，即每10条进行一次确认
+    int batch = 10;
+    // 确认的计数
+    int confirmNum = 0;
+
+    // 执行发送端确认机制
+    try {
+      for (int i = 0; i < 108; i++) {
+        confirmNum++;
+        String pushMsg = "confirm 这是推送确认的消息" + i;
+        channel.basicPublish(
+            "confirm.ex", "confirm.rk", null, pushMsg.getBytes(StandardCharsets.UTF_8));
+
+        if (confirmNum == batch) {
+          channel.waitForConfirmsOrDie(5000);
+          System.out.println("批量发送的消息被确认:");
+          confirmNum = 0;
+        }
+      }
+
+      if (confirmNum > 0) {
+        channel.waitForConfirmsOrDie(5000);
+        System.out.println("剩余发送的消息被确认:");
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+      System.out.println("消息被拒绝:");
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      System.out.println("非Publisher confirm的通道上使用该方法");
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+      System.out.println("等待消息确认超时");
+    }
+  }
+}
+
+```
+
+
+
+运行生产者，检查控制台输出:
+
+```tex
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+批量发送的消息被确认:
+剩余发送的消息被确认:
+```
+
+可以观察到，数据已经成功的发送。
+
+再检查下队列的情况:
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ confirm.ex         │ direct  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ confirm.qe       │ queue            │ confirm.qe  │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ confirm.ex  │ exchange    │ confirm.qe       │ queue            │ confirm.rk  │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ confirm.qe │ 108      │
+└────────────┴──────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+检查服务端后发现，数据已经成功的发送至队列。
+
+
+
+#### 7.4.3 异步回调模式
+
+除了批量确认外，还可以使用回调模式，回调模式，与批量相比，则是异步模式，不再会有阻塞的问题。
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ConfirmCallback;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeoutException;
+
+public class ProductCallBack {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    try {
+      // 开启发送方确认机制
+      AMQP.Confirm.SelectOk selectOk = channel.confirmSelect();
+
+      channel.exchangeDeclare("confirm.ex", BuiltinExchangeType.DIRECT);
+      channel.queueDeclare("confirm.qe", false, false, false, null);
+      channel.queueBind("confirm.qe", "confirm.ex", "confirm.rk");
+
+      // 记录下发送与确认的消息
+      ConcurrentNavigableMap<Long, String> ackConfirmMap = new ConcurrentSkipListMap<>();
+      ConcurrentNavigableMap<Long, String> nackConfirmMap = new ConcurrentSkipListMap<>();
+
+      // ack确认的信息
+      ConfirmCallback ackCallback =
+          new ConfirmCallback() {
+            @Override
+            public void handle(long deliveryTag, boolean multiple) throws IOException {
+              if (multiple) {
+                // 获取已经被确认的Map集合
+                ConcurrentNavigableMap<Long, String> headMap =
+                    ackConfirmMap.headMap(deliveryTag, true);
+                long threadId = Thread.currentThread().getId();
+                System.out.println(
+                    "【ack确认】线程ID："
+                        + threadId
+                        + "，批量：小于等于:"
+                        + deliveryTag
+                        + "的消息都被确认了，内容："
+                        + headMap.keySet());
+                headMap.clear();
+              } else {
+                long threadId = Thread.currentThread().getId();
+                ackConfirmMap.remove(deliveryTag);
+                System.out.println(
+                    "【ack确认】线程ID：" + threadId + "，单条:" + deliveryTag + "对应的消息被确认,key:" + deliveryTag);
+              }
+            }
+          };
+
+      // 不确认的消息
+      ConfirmCallback nackCallBack =
+          new ConfirmCallback() {
+            @Override
+            public void handle(long deliveryTag, boolean multiple) throws IOException {
+              if (multiple) {
+
+                ConcurrentNavigableMap<Long, String> headMap =
+                    ackConfirmMap.headMap(deliveryTag, true);
+                long threadId = Thread.currentThread().getId();
+                System.out.println(
+                    "【nack确认】线程ID："
+                        + threadId
+                        + "，批量：小于等于"
+                        + deliveryTag
+                        + "的消息都不被确认了,内容:"
+                        + headMap.keySet());
+                nackConfirmMap.putAll(headMap);
+                headMap.clear();
+              } else {
+                long threadId = Thread.currentThread().getId();
+                System.out.println("【nack确认】线程的ID：" + threadId + "，单条:" + deliveryTag + "对应的消息被确认");
+                String value = ackConfirmMap.remove(deliveryTag);
+                nackConfirmMap.put(deliveryTag, value);
+              }
+            }
+          };
+
+      channel.addConfirmListener(ackCallback, nackCallBack);
+
+      // 执行数据发送
+      try {
+        for (int i = 0; i < 28; i++) {
+          // 获取当前发送的序列号
+          long nextPublishSeqNo = channel.getNextPublishSeqNo();
+          String pushMsg = "序列号:" + nextPublishSeqNo + ":已经发送了消息信息:" + (i + 1);
+          channel.basicPublish(
+              "confirm.ex", "confirm.rk", null, pushMsg.getBytes(StandardCharsets.UTF_8));
+          ackConfirmMap.put(nextPublishSeqNo, pushMsg);
+          long threadId = Thread.currentThread().getId();
+          System.out.println("【发送】线程的ID：" + threadId + "，序号：" + nextPublishSeqNo + "发送完毕");
+
+          // 随机休眠
+          Thread.sleep(ThreadLocalRandom.current().nextInt(0, 5));
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+        System.out.println("消息被拒绝:");
+      }
+
+      Thread.sleep(5000);
+
+      System.out.println("确认的消息:" + ackConfirmMap.size());
+      System.out.println("未确认的消息:" + nackConfirmMap.size());
+
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    } finally {
+      channel.close();
+      connection.close();
+    }
+  }
+}
+
+```
+
+运行生产者的代码后，观察控制台：
+
+```sh
+【发送】线程的ID：1，序号：1发送完毕
+【发送】线程的ID：1，序号：2发送完毕
+【发送】线程的ID：1，序号：3发送完毕
+【ack确认】线程ID：20，单条:1对应的消息被确认,key:1
+【发送】线程的ID：1，序号：4发送完毕
+【发送】线程的ID：1，序号：5发送完毕
+【发送】线程的ID：1，序号：6发送完毕
+【ack确认】线程ID：20，单条:2对应的消息被确认,key:2
+【ack确认】线程ID：20，单条:3对应的消息被确认,key:3
+【发送】线程的ID：1，序号：7发送完毕
+【发送】线程的ID：1，序号：8发送完毕
+【发送】线程的ID：1，序号：9发送完毕
+【ack确认】线程ID：20，批量：小于等于:6的消息都被确认了，内容：[4, 5, 6]
+【发送】线程的ID：1，序号：10发送完毕
+【发送】线程的ID：1，序号：11发送完毕
+【ack确认】线程ID：20，批量：小于等于:8的消息都被确认了，内容：[7, 8]
+【ack确认】线程ID：20，单条:9对应的消息被确认,key:9
+【发送】线程的ID：1，序号：12发送完毕
+【发送】线程的ID：1，序号：13发送完毕
+【ack确认】线程ID：20，单条:10对应的消息被确认,key:10
+【ack确认】线程ID：20，单条:11对应的消息被确认,key:11
+【发送】线程的ID：1，序号：14发送完毕
+【ack确认】线程ID：20，单条:12对应的消息被确认,key:12
+【发送】线程的ID：1，序号：15发送完毕
+【发送】线程的ID：1，序号：16发送完毕
+【发送】线程的ID：1，序号：17发送完毕
+【ack确认】线程ID：20，单条:13对应的消息被确认,key:13
+【ack确认】线程ID：20，单条:14对应的消息被确认,key:14
+【发送】线程的ID：1，序号：18发送完毕
+【ack确认】线程ID：20，单条:15对应的消息被确认,key:15
+【发送】线程的ID：1，序号：19发送完毕
+【ack确认】线程ID：20，单条:16对应的消息被确认,key:16
+【ack确认】线程ID：20，单条:17对应的消息被确认,key:17
+【发送】线程的ID：1，序号：20发送完毕
+【发送】线程的ID：1，序号：21发送完毕
+【ack确认】线程ID：20，单条:18对应的消息被确认,key:18
+【发送】线程的ID：1，序号：22发送完毕
+【发送】线程的ID：1，序号：23发送完毕
+【ack确认】线程ID：20，单条:19对应的消息被确认,key:19
+【发送】线程的ID：1，序号：24发送完毕
+【ack确认】线程ID：20，单条:20对应的消息被确认,key:20
+【ack确认】线程ID：20，单条:21对应的消息被确认,key:21
+【发送】线程的ID：1，序号：25发送完毕
+【发送】线程的ID：1，序号：26发送完毕
+【发送】线程的ID：1，序号：27发送完毕
+【发送】线程的ID：1，序号：28发送完毕
+【ack确认】线程ID：20，批量：小于等于:23的消息都被确认了，内容：[22, 23]
+【ack确认】线程ID：20，单条:24对应的消息被确认,key:24
+【ack确认】线程ID：20，批量：小于等于:26的消息都被确认了，内容：[25, 26]
+【ack确认】线程ID：20，单条:27对应的消息被确认,key:27
+【ack确认】线程ID：20，单条:28对应的消息被确认,key:28
+确认的消息:0
+未确认的消息:0
+
+
+```
+
+可以发现，生产者与确认机制，是完全异步的，生产者一个线程，而ack在另外的一个线程。可以并行处理。
+
+最后再来检查下队列的信息：
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ confirm.ex         │ direct  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ confirm.qe       │ queue            │ confirm.qe  │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ confirm.ex  │ exchange    │ confirm.qe       │ queue            │ confirm.rk  │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ confirm.qe │ 28       │
+└────────────┴──────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+至此使用异步监听回调模式已经完成。
+
+
+
+#### 7.4.4 Spring发送端确认机制
+
+**导入依赖**
+
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+```
+
+
+
+
+
+
 
 
 
