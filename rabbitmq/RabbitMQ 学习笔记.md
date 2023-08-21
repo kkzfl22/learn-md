@@ -4445,14 +4445,295 @@ Listing queues for vhost / ...
 
 **配制RabbitMQ**
 
+```yaml
+spring:
+  application:
+    name: publisherConfirm
+  rabbitmq:
+    host: node1
+    virtual-host: /
+    username: root
+    password: 123456
+    port: 5672
+    # 启用发送方确认机制
+    publisher-returns: true
+    #NONE值是禁用发布确认模式，是默认值
+    #CORRELATED值是发布消息成功到交换器后会触发回调方法
+    #SIMPLE值经测试有两种效果，其一效果和CORRELATED值一样会触发回调方法，
+    #其二在发布消息成功后使用rabbitTemplate调用waitForConfirms或waitForConfirmsOrDie
+    #方法等待broker节点返回发送结果，根据返回结果来判定下一步的逻辑，
+    #要注意的点是waitForConfirmsOrDie方法如果返回false则会关闭channel，则接下来无法发送消息到broker;
+    publisher-confirm-type: correlated
 ```
+
+
+
+
+
+**主入口类**
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class PublisherConfirmApplication {
+
+  public static void main(String[] args) {
+    SpringApplication.run(PublisherConfirmApplication.class, args);
+  }
+}
 ```
 
 
 
 
 
+**队列配制**
 
+```java
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitConfig {
+
+  @Bean
+  public Queue queue() {
+    return new Queue("confirm.qe", false, false, false, null);
+  }
+
+  @Bean
+  public Exchange exchange() {
+    return new DirectExchange("confirm.ex", false, false, null);
+  }
+
+  @Bean
+  public Binding binding() {
+    return BindingBuilder.bind(queue()).to(exchange()).with("confirm.rk").noargs();
+  }
+}
+```
+
+
+
+**控制类**
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ThreadLocalRandom;
+
+@RestController
+public class DataController {
+
+  private RabbitTemplate template;
+
+  /** 用于记录下发送的容器 */
+  private Map<Long, String> ackMap = new ConcurrentHashMap<>();
+
+  @Autowired
+  public void setTemplate(RabbitTemplate template) {
+    this.template = template;
+
+    // 设置回调函数
+    RabbitTemplate.ConfirmCallback ackCallback =
+        new RabbitTemplate.ConfirmCallback() {
+          @Override
+          public void confirm(CorrelationData correlationData, boolean ack, String cause) {
+            if (ack) {
+              String msg =
+                  new String(
+                      correlationData.getReturnedMessage().getBody(), StandardCharsets.UTF_8);
+              ackMap.remove(Long.parseLong(correlationData.getId()));
+              System.out.println("【回调】消息确认：" + correlationData.getId() + "--" + msg);
+            } else {
+              System.out.println("异常：" + cause);
+            }
+          }
+        };
+
+    this.template.setConfirmCallback(ackCallback);
+  }
+
+  @RequestMapping("/biz")
+  public String doInvoke() throws Exception {
+
+    long sendSeq = 1;
+
+    for (int i = 0; i < 28; i++) {
+      MessageProperties build =
+          MessagePropertiesBuilder.newInstance()
+              .setHeader("key1", "value1")
+              .setCorrelationId(sendSeq + "")
+              .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+              .build();
+      build.setConsumerTag("msg");
+      CorrelationData dataSend = new CorrelationData();
+      dataSend.setId(sendSeq + "");
+
+      // 用于回调验证的消息
+      byte[] returnBytes = "这是响应的消息:".getBytes(StandardCharsets.UTF_8);
+      dataSend.setReturnedMessage(new Message(returnBytes, null));
+
+      // 发送的消息
+      String msg = "这是等待确认的消息";
+      byte[] sendBytes = msg.getBytes(StandardCharsets.UTF_8);
+      Message message = new Message(sendBytes, build);
+      template.convertAndSend("confirm.ex", "confirm.rk", message, dataSend);
+
+      ackMap.put(sendSeq, msg);
+
+      System.out.println("【发送】发送成功:" + sendSeq);
+      Thread.sleep(ThreadLocalRandom.current().nextInt(0, 10));
+
+      sendSeq = sendSeq + 1;
+    }
+
+    Thread.sleep(3000);
+    System.out.println("未确认ACK的消息:" + ackMap.size());
+
+    return "ok";
+  }
+}
+```
+
+
+
+运行应用程序,查看控制台输出:
+
+```sh
+2023-08-21 22:33:24.969  INFO 8628 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2023-08-21 22:33:24.969  INFO 8628 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2023-08-21 22:33:24.974  INFO 8628 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 5 ms
+2023-08-21 22:33:25.001  INFO 8628 --- [nio-8080-exec-1] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [node1:5672]
+2023-08-21 22:33:25.119  INFO 8628 --- [nio-8080-exec-1] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#3bd6ba24:0/SimpleConnection@5b31efba [delegate=amqp://root@150.158.137.207:5672/, localPort= 63833]
+2023-08-21 22:33:25.123  INFO 8628 --- [nio-8080-exec-1] o.s.amqp.rabbit.core.RabbitAdmin         : Auto-declaring a non-durable or auto-delete Exchange (confirm.ex) durable:false, auto-delete:false. It will be deleted by the broker if it shuts down, and can be redeclared by closing and reopening the connection.
+2023-08-21 22:33:25.123  INFO 8628 --- [nio-8080-exec-1] o.s.amqp.rabbit.core.RabbitAdmin         : Auto-declaring a non-durable, auto-delete, or exclusive Queue (confirm.qe) durable:false, auto-delete:false, exclusive:false. It will be redeclared if the broker stops and is restarted while the connection factory is alive, but all messages will be lost.
+【发送】发送成功:1
+【回调】消息确认：1--这是响应的消息:
+【发送】发送成功:2
+【发送】发送成功:3
+【回调】消息确认：2--这是响应的消息:
+【回调】消息确认：3--这是响应的消息:
+【发送】发送成功:4
+【发送】发送成功:5
+【发送】发送成功:6
+【回调】消息确认：4--这是响应的消息:
+【发送】发送成功:7
+【回调】消息确认：5--这是响应的消息:
+【回调】消息确认：6--这是响应的消息:
+【回调】消息确认：7--这是响应的消息:
+【发送】发送成功:8
+【发送】发送成功:9
+【发送】发送成功:10
+【发送】发送成功:11
+【回调】消息确认：8--这是响应的消息:
+【回调】消息确认：9--这是响应的消息:
+【回调】消息确认：10--这是响应的消息:
+【回调】消息确认：11--这是响应的消息:
+【发送】发送成功:12
+【发送】发送成功:13
+【发送】发送成功:14
+【回调】消息确认：12--这是响应的消息:
+【发送】发送成功:15
+【发送】发送成功:16
+【回调】消息确认：13--这是响应的消息:
+【发送】发送成功:17
+【回调】消息确认：14--这是响应的消息:
+【发送】发送成功:18
+【发送】发送成功:19
+【回调】消息确认：15--这是响应的消息:
+【发送】发送成功:20
+【回调】消息确认：16--这是响应的消息:
+【回调】消息确认：17--这是响应的消息:
+【回调】消息确认：18--这是响应的消息:
+【回调】消息确认：19--这是响应的消息:
+【回调】消息确认：20--这是响应的消息:
+【发送】发送成功:21
+【发送】发送成功:22
+【发送】发送成功:23
+【回调】消息确认：21--这是响应的消息:
+【回调】消息确认：22--这是响应的消息:
+【发送】发送成功:24
+【回调】消息确认：23--这是响应的消息:
+【发送】发送成功:25
+【回调】消息确认：24--这是响应的消息:
+【发送】发送成功:26
+【回调】消息确认：25--这是响应的消息:
+【发送】发送成功:27
+【发送】发送成功:28
+【回调】消息确认：26--这是响应的消息:
+【回调】消息确认：27--这是响应的消息:
+【回调】消息确认：28--这是响应的消息:
+未确认ACK的消息:0
+
+```
+
+可以发现数据都已经成功的执行ACK的确认机制。此与原生的API，还是存在一些不同。此在发送时，已经将响应关联的ID进行了指定。这样当收到了confirm时，即能与之前发送的数据关联上。
+
+
+
+检查队列的信息：
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ confirm.ex         │ direct  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌─────────────┬─────────────┬──────────────────┬──────────────────┬─────────────┬───────────┐
+│ source_name │ source_kind │ destination_name │ destination_kind │ routing_key │ arguments │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│             │ exchange    │ confirm.qe       │ queue            │ confirm.qe  │           │
+├─────────────┼─────────────┼──────────────────┼──────────────────┼─────────────┼───────────┤
+│ confirm.ex  │ exchange    │ confirm.qe       │ queue            │ confirm.rk  │           │
+└─────────────┴─────────────┴──────────────────┴──────────────────┴─────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────────┬──────────┐
+│ name       │ messages │
+├────────────┼──────────┤
+│ confirm.qe │ 28       │
+└────────────┴──────────┘
+[root@nullnull-os rabbitmq]# 
+```
 
 
 

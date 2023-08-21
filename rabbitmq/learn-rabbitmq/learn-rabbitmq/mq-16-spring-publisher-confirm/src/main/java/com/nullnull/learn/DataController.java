@@ -10,6 +10,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author liujun
@@ -19,6 +24,9 @@ import java.nio.charset.StandardCharsets;
 public class DataController {
 
   private RabbitTemplate template;
+
+  /** 用于记录下发送的容器 */
+  private Map<Long, String> ackMap = new ConcurrentHashMap<>();
 
   @Autowired
   public void setTemplate(RabbitTemplate template) {
@@ -33,9 +41,10 @@ public class DataController {
               String msg =
                   new String(
                       correlationData.getReturnedMessage().getBody(), StandardCharsets.UTF_8);
-              System.out.println("回调消息确认：" + correlationData.getId() + "--" + msg);
+              ackMap.remove(Long.parseLong(correlationData.getId()));
+              System.out.println("【回调】消息确认：" + correlationData.getId() + "--" + msg);
             } else {
-              System.out.println(cause);
+              System.out.println("异常：" + cause);
             }
           }
         };
@@ -44,45 +53,43 @@ public class DataController {
   }
 
   @RequestMapping("/biz")
-  public String doInvoke() {
-    MessageProperties build =
-        MessagePropertiesBuilder.newInstance()
-            .setHeader("key1", "value1")
-            .setCorrelationId("1234")
-            .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
-            .build();
-    build.setConsumerTag("msg");
-    CorrelationData dataSend = new CorrelationData();
-    dataSend.setId("1234");
+  public String doInvoke() throws Exception {
 
-    // 用于回调验证的消息
-    byte[] returnBytes = "这是响应的消息:".getBytes(StandardCharsets.UTF_8);
-    dataSend.setReturnedMessage(new Message(returnBytes, null));
+    long sendSeq = 1;
 
-    // 发送的消息
-    byte[] sendBytes = "这是等待确认的消息".getBytes(StandardCharsets.UTF_8);
-    Message message = new Message(sendBytes, build);
-    template.convertAndSend("confirm.ex", "confirm.rk", message, dataSend);
+    for (int i = 0; i < 28; i++) {
+      MessageProperties build =
+          MessagePropertiesBuilder.newInstance()
+              .setHeader("key1", "value1")
+              .setCorrelationId(sendSeq + "")
+              .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+              .build();
+      build.setConsumerTag("msg");
+      CorrelationData dataSend = new CorrelationData();
+      dataSend.setId(sendSeq + "");
 
-    return "ok";
-  }
+      // 用于回调验证的消息
+      byte[] returnBytes = "这是响应的消息:".getBytes(StandardCharsets.UTF_8);
+      dataSend.setReturnedMessage(new Message(returnBytes, null));
 
-  @RequestMapping("/bizFalse")
-  public String doInvokeFalse() {
-    MessageProperties build =
-        MessagePropertiesBuilder.newInstance()
-            .setHeader("key1", "value1")
-            .setCorrelationId("1234")
-            .setContentEncoding(StandardCharsets.UTF_8.name())
-            .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
-            .build();
-    build.setCorrelationId("1234");
-    build.setConsumerTag("msg1");
+      // 发送的消息
+      String msg = "这是等待确认的消息";
+      byte[] sendBytes = msg.getBytes(StandardCharsets.UTF_8);
+      Message message = new Message(sendBytes, build);
+      template.convertAndSend("confirm.ex", "confirm.rk", message, dataSend);
 
-    Message msg = new Message("这是等待确认的消息:".getBytes(StandardCharsets.UTF_8), build);
+      ackMap.put(sendSeq, msg);
 
-    template.convertAndSend("confirm.ex.bizfalse", "biz", msg);
+      System.out.println("【发送】发送成功:" + sendSeq);
+      Thread.sleep(ThreadLocalRandom.current().nextInt(0, 10));
+
+      sendSeq = sendSeq + 1;
+    }
+
+    Thread.sleep(3000);
+    System.out.println("未确认ACK的消息:" + ackMap.size());
 
     return "ok";
   }
+
 }
