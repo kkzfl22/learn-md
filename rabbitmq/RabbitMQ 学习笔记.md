@@ -4737,6 +4737,14 @@ Listing queues for vhost / ...
 
 
 
+### 7.5 持久化存储机制
+
+持久化是提高RabbitMQ可靠性的基础，否则当RabbitMQ遇到异常时（如重启、断电、停机等）数据将会丢失。主要从以下几个方面保障消息的持久性：
+
+>1. Exchange 持久化通过定义时设置durable参数为true来保证Exchange相关的元数据不丢失。
+>2. Queue的持久化。也是通过定义时设置durable参数为true来保证Queue相关的元数据不丢失。
+>3. 消息的持久化，通过将消息的投递模式（BasicProperties中的deliveryMode属性）设置为2，即可实现消息的持久化，保证消息身身不丢失。
+
 
 
 
