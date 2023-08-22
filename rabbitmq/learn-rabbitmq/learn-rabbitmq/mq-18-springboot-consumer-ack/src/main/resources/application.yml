@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: consumer-ack
+  rabbitmq:
+    host: nod1
+    port: 5672
+    virtual-host: /
+    username: root
+    password: 123456
+
+    # 配制消费端ack信息。
+    listener:
+      simple:
+        acknowledge-mode: manual
+        # 重试超过最大次数后是否拒绝
+        default-requeue-rejected: false
+        retry:
+          # 开启消费者重度(false时关闭消费者重试，false不是不重试，而是一直收到消息直到ack确认或者一直到超时）
+          enable: true
+          # 最大重度次数
+          max-attempts: 5
+          # 重试间隔时间(单位毫秒)
+          initial-interval: 5000'
+

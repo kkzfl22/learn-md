@@ -4747,6 +4747,657 @@ Listing queues for vhost / ...
 
 
 
+依赖
+
+```xml
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>amqp-client</artifactId>
+        </dependency>
+```
+
+持久化的实现
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+
+public class Product {
+
+  public static void main(String[] args) throws Exception {
+
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+
+      // 交换器元数据持久化 durable参数为true，表示要持久化
+      channel.exchangeDeclare(
+          "persistent.ex", BuiltinExchangeType.DIRECT, true, false, false, null);
+      // 队列元数据持久化，durable参数为true，表示要持久化
+      channel.queueDeclare("persistent.qu", true, false, false, null);
+
+      // 交换机与队列绑定
+      channel.queueBind("persistent.qu", "persistent.ex", "persistent.rk");
+
+      String msg = "hello world:" ;
+      AMQP.BasicProperties.Builder builder = new AMQP.BasicProperties.Builder();
+      builder.contentType("text/plain");
+      // 发送的消息持久化
+      builder.deliveryMode(2);
+      AMQP.BasicProperties properties = builder.build();
+      channel.basicPublish(
+          "persistent.ex", "persistent.rk", properties, msg.getBytes(StandardCharsets.UTF_8));
+
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+}
+
+```
+
+运行生产者的代码，检查队列情况
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│ persistent.ex      │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌───────────────┬─────────────┬──────────────────┬──────────────────┬───────────────┬───────────┐
+│ source_name   │ source_kind │ destination_name │ destination_kind │ routing_key   │ arguments │
+├───────────────┼─────────────┼──────────────────┼──────────────────┼───────────────┼───────────┤
+│               │ exchange    │ persistent.qu    │ queue            │ persistent.qu │           │
+├───────────────┼─────────────┼──────────────────┼──────────────────┼───────────────┼───────────┤
+│               │ exchange    │ transient.qu     │ queue            │ transient.qu  │           │
+├───────────────┼─────────────┼──────────────────┼──────────────────┼───────────────┼───────────┤
+│ persistent.ex │ exchange    │ persistent.qu    │ queue            │ persistent.rk │           │
+└───────────────┴─────────────┴──────────────────┴──────────────────┴───────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬──────────┐
+│ name          │ messages │
+├───────────────┼──────────┤
+│ persistent.qu │ 1        │
+├───────────────┼──────────┤
+│ transient.qu  │ 1        │
+└───────────────┴──────────┘
+[root@nullnull-os rabbitmq]#
+```
+
+这里存在两个队列，一个是持久化的队列, 一个是非持久化的消息队列。重启下RabbitMQ看下情况。
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl stop
+Stopping and halting node rabbit@nullnull-os ...
+[root@nullnull-os rabbitmq]# ps -ef | grep rabbit
+rabbitmq  3448     1  0 Aug18 ?        00:00:03 /usr/lib64/erlang/erts-11.0.2/bin/epmd -daemon
+root     29042 28327  0 09:45 pts/0    00:00:00 grep --color=auto rabbit
+[root@nullnull-os rabbitmq]# kill 3448
+[root@nullnull-os rabbitmq]# systemctl start rabbitmq-server
+[root@nullnull-os rabbitmq]# rabbitmqctl list_exchanges --formatter pretty_table
+Listing exchanges for vhost / ...
+┌────────────────────┬─────────┐
+│ name               │ type    │
+├────────────────────┼─────────┤
+│ amq.fanout         │ fanout  │
+├────────────────────┼─────────┤
+│ amq.rabbitmq.trace │ topic   │
+├────────────────────┼─────────┤
+│ amq.headers        │ headers │
+├────────────────────┼─────────┤
+│ amq.topic          │ topic   │
+├────────────────────┼─────────┤
+│ amq.direct         │ direct  │
+├────────────────────┼─────────┤
+│ persistent.ex      │ direct  │
+├────────────────────┼─────────┤
+│                    │ direct  │
+├────────────────────┼─────────┤
+│ amq.match          │ headers │
+└────────────────────┴─────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_bindings --formatter pretty_table
+Listing bindings for vhost /...
+┌───────────────┬─────────────┬──────────────────┬──────────────────┬───────────────┬───────────┐
+│ source_name   │ source_kind │ destination_name │ destination_kind │ routing_key   │ arguments │
+├───────────────┼─────────────┼──────────────────┼──────────────────┼───────────────┼───────────┤
+│               │ exchange    │ persistent.qu    │ queue            │ persistent.qu │           │
+├───────────────┼─────────────┼──────────────────┼──────────────────┼───────────────┼───────────┤
+│ persistent.ex │ exchange    │ persistent.qu    │ queue            │ persistent.rk │           │
+└───────────────┴─────────────┴──────────────────┴──────────────────┴───────────────┴───────────┘
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬──────────┐
+│ name          │ messages │
+├───────────────┼──────────┤
+│ persistent.qu │ 1      │
+└───────────────┴──────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+
+
+在重启之后，非持久化的消息队列已经没有了，而定义为持久化的消息交换器、队列和消息都还是存在的。那再来看看此时消息存储在磁盘是上一个什么样子的结构。
+
+```sh
+[root@nullnull-os 628WB79CIFDYO9LJI6DKMI09L]# pwd
+/var/lib/rabbitmq/mnesia/rabbit@nullnull-os/msg_stores/vhosts/628WB79CIFDYO9LJI6DKMI09L
+[root@nullnull-os 628WB79CIFDYO9LJI6DKMI09L]# tree .
+.
+|-- msg_store_persistent (保存着持久化的消息数据)
+|   `-- 0.rdq   
+|-- msg_store_transient (保存着非持久化相关的数据)
+|   `-- 0.rdq
+|-- queues  (保存诂rabbit_queue_index相关数据，即队列索引)
+|   `-- 1QKEY2HOMIM54YMCVC16QQ8U5
+|       |-- 0.idx   (索引文件)
+|       `-- journal.jif
+`-- recovery.dets
+
+4 directories, 5 files
+[root@nullnull-os 628WB79CIFDYO9LJI6DKMI09L]# ll -R .
+.:
+total 20
+drwxr-x--- 2 rabbitmq rabbitmq 4096 Aug 22 10:18 msg_store_persistent
+drwxr-x--- 2 rabbitmq rabbitmq 4096 Aug 22 10:18 msg_store_transient
+drwxr-x--- 3 rabbitmq rabbitmq 4096 Aug 22 10:18 queues
+-rw-r----- 1 rabbitmq rabbitmq 5464 Aug 22 10:18 recovery.dets
+
+./msg_store_persistent:
+total 0
+-rw-r----- 1 rabbitmq rabbitmq 0 Aug 22 10:18 0.rdq
+
+./msg_store_transient:
+total 0
+-rw-r----- 1 rabbitmq rabbitmq 0 Aug 22 10:18 0.rdq
+
+./queues:
+total 4
+drwxr-x--- 2 rabbitmq rabbitmq 4096 Aug 22 10:18 1QKEY2HOMIM54YMCVC16QQ8U5
+
+./queues/1QKEY2HOMIM54YMCVC16QQ8U5:
+total 4
+-rw-r----- 1 rabbitmq rabbitmq 244 Aug 22 10:18 0.idx
+-rw-r----- 1 rabbitmq rabbitmq   0 Aug 22 10:18 journal.jif
+[root@nullnull-os 628WB79CIFDYO9LJI6DKMI09L]# 
+```
+
+ RabbitMQ通过配制queue_index_embed_msgs_below可以根据消息大小决定存储位置，默认queue_index_embed_msgs_below是4096字节(包含消息体、属性及headers)，小于该值的消息都存在rabbit_queue_index中。
+
+vi 0.idx
+
+```sh
+À^@êÙ´jµp<9d>!ºBÀbdO_Ê^@^@^@^@^@^@^@^@^@^@^@^L^@^@^@Ò<83>h^Fd^@^Mbasic_messageh^Dd^@^Hresourcem^@^@^@^A/d^@^Hexchangem^@^@^@^Mpersistent.exl^@^@^@^Am^@^@^@^Mpersistent.rkjh^Fd^@^Gcontenta<d^@^Dnonem^@^@^@^N<90>^@
+text/plain^Bd^@^Yrabbit_framing_amqp_0_9_1l^@^@^@^Am^@^@^@^Lhello world:jm^@^@^@^PêÙ´jµp<9d>!ºBÀbdO_Êd^@^Dtrue
+```
+
+在文件内容中，还有检查到发送的数据内容: hello world
+
+
+
+### 7.6 消费端ACK机制
+
+​	在这之前已经完成了发送端的确认机制。可以保证数据成功的发送到RabbitMQ，以及持久化机制，然尔这依然无法完全保证整个过程的可靠性，因为如果消息被消费过程中业务处理失败了，但是消息却已经被标记为消费了，如果又没有任何重度机制，那结果基本等于丢消息。在消费端如何保证消息不丢呢？
+
+ 	在rabbitMQ的消费端会有ACK机制。即消费端消费消息后需要发送ACK确认报文给Broker端，告知自己是否已经消费完成，否则可能会一直重发消息直到消息过期（AUTO模式）。同时这个也是最终一致性、可恢复性的基础。一般有如下手段：
+
+>1. 采用NONE模式，消费的过程中自行捕捉异常，引发异常后直接记录日志并落到异常处理表，再通过后台定时任务扫描异常恢复表做重度动作。如果业务不自行处理则有丢失数据的风险。
+>2. 采用AUTO（自动ACK）模式，不主动捕获异常，当消费过程中出现异常时，会将消息放回Queue中，然后消息会被重新分配到其他消费节点（如果没有则还是选择当前节点）重新被消费，默认会一直重发消息并直到消费完成返回ACK或者一直到过期。
+>3. 采用MANUAL（手动ACK）模式，消费者自行控制流程并手动调用channel相关的方法返回ACK。
+
+#### 7.6.1 手动ACK机制-Reject
+
+**maven导入**
+
+```xml
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>5.9.0</version>
+            </dependency>
+```
+
+
+
+**生产者**
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.nio.charset.StandardCharsets;
+
+public class Product {
+  public static void main(String[] args) throws Exception {
+
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+
+      // 定义交换器队列
+      channel.exchangeDeclare("ack.ex", BuiltinExchangeType.DIRECT, false, false, false, null);
+      // 定义队列
+      channel.queueDeclare("ack.qu", false, false, false, null);
+      // 队列绑定
+      channel.queueBind("ack.qu", "ack.ex", "ack.rk");
+
+      for (int i = 0; i < 5; i++) {
+        byte[] sendBytes = ("hello-" + i).getBytes(StandardCharsets.UTF_8);
+        channel.basicPublish("ack.ex", "ack.rk", null, sendBytes);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+}
+
+```
+
+
+
+**消费者**
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+import java.io.IOException;
+
+public class Consumer {
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+    channel.queueDeclare("ack.qu", false, false, false, null);
+    DefaultConsumer consumer =
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              // 消费者标签
+              String consumerTag,
+              // 消费者的封装
+              Envelope envelope,
+              // 消息属性
+              AMQP.BasicProperties properties,
+              // 消息体
+              byte[] body)
+              throws IOException {
+
+            System.out.println("确认的消息内容:" + new String(body));
+            // 找收消息
+            // Nack与Reject的区别在于，nack可以对多条消息进行拒收，而reject只能拒收一条。
+            // requeue为true表示不确认的消息会重新放回队列。
+            channel.basicReject(envelope.getDeliveryTag(), true);
+          }
+        };
+
+    channel.basicConsume(
+        "ack.qu",
+        // 非自动确认
+        false,
+        // 消费者的标签
+        "ack.consumer",
+        // 回调函数
+        consumer);
+  }
+}
+
+```
+
+
+
+**发送测试**
+
+首先执行生产者向队列中发送数据。然后执行消费者，检查拒收的处理。
+
+在消费者的控制台，将持续不断的输出消息信息：
+
+```sh
+确认的消息内容:hello-0
+确认的消息内容:hello-1
+确认的消息内容:hello-2
+确认的消息内容:hello-3
+确认的消息内容:hello-4
+确认的消息内容:hello-0
+确认的消息内容:hello-1
+......
+确认的消息内容:hello-0
+```
+
+按照发送的顺序将不断的被打印。
+
+那此时消息是什么状态呢？查看下消息队列中的信息
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 5                       │ 5        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+可以看到当前的消息处于unack的状态。由于消息被不断的重新放回队列，而消费者又只有当前这一个，所以，在不断拒收中被放回。
+
+
+
+那如果将消息拒绝改为不重新放回队列，会如何呢？来验证下。
+
+首先修改消费者的代码:
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+import java.io.IOException;
+
+public class Consumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    channel.queueDeclare("ack.qu", false, false, false, null);
+
+    DefaultConsumer consumer =
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              // 消费者标签
+              String consumerTag,
+              // 消费者的封装
+              Envelope envelope,
+              // 消息属性
+              AMQP.BasicProperties properties,
+              // 消息体
+              byte[] body)
+              throws IOException {
+
+            System.out.println("确认的消息内容:" + new String(body));
+
+
+            // 找收消息
+            // Nack与Reject的区别在于，nack可以对多条消息进行拒收，而reject只能拒收一条。
+            // requeue为false表示不确认的消息不会重新放回队列。
+            //channel.basicReject(envelope.getDeliveryTag(), true);
+            channel.basicReject(envelope.getDeliveryTag(), false);
+          }
+        };
+
+    channel.basicConsume(
+        "ack.qu",
+        // 非自动确认
+        false,
+        // 消费者的标签
+        "ack.consumer",
+        // 回调函数
+        consumer);
+  }
+}
+
+```
+
+再次执行消费者。
+
+```sh
+确认的消息内容:hello-0
+确认的消息内容:hello-1
+确认的消息内容:hello-2
+确认的消息内容:hello-3
+确认的消息内容:hello-4
+```
+
+而这一次消息没有再循环打印。只输出一遍，再检查下消息在队列中的状态：
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 0                       │ 0        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+通过观察发现，消息已经没有在队列中了，那就是消息已经被丢弃了。
+
+
+
+#### 7.6.2 手动ACK机制-ack
+
+消费者修改为ACK确认处理
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+
+import java.io.IOException;
+
+public class Consumer {
+
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    channel.queueDeclare("ack.qu", false, false, false, null);
+
+    DefaultConsumer consumer =
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              // 消费者标签
+              String consumerTag,
+              // 消费者的封装
+              Envelope envelope,
+              // 消息属性
+              AMQP.BasicProperties properties,
+              // 消息体
+              byte[] body)
+              throws IOException {
+
+            System.out.println("确认的消息内容:" + new String(body));
+
+            // 消息确认，并且非批量确认，multiple为false，表示只确认了单条
+            channel.basicAck(envelope.getDeliveryTag(), false);
+          }
+        };
+
+    channel.basicConsume(
+        "ack.qu",
+        // 非自动确认
+        false,
+        // 消费者的标签
+        "ack.consumer",
+        // 回调函数
+        consumer);
+  }
+}
+
+```
+
+此时可以先运行消息者。等待消息推送。然后运行生产者将消息推送，此时便可以看到消费者的控制台输出：
+
+```java
+确认的消息内容:hello-0
+确认的消息内容:hello-1
+确认的消息内容:hello-2
+确认的消息内容:hello-3
+确认的消息内容:hello-4
+```
+
+观察队列中的信息
+
+```java
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 0                       │ 0        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+在队列中，消息已经被成功的消费了。
+
+
+
+#### 7.6.3 手动ACK机制-nack
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+import java.io.IOException;
+
+public class Consumer {
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    channel.queueDeclare("ack.qu", false, false, false, null);
+
+    DefaultConsumer consumer =
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              // 消费者标签
+              String consumerTag,
+              // 消费者的封装
+              Envelope envelope,
+              // 消息属性
+              AMQP.BasicProperties properties,
+              // 消息体
+              byte[] body)
+              throws IOException {
+
+            System.out.println("确认的消息内容:" + new String(body));
+            // 消息批量不确认，即批量丢弃，每5个做一次批量消费
+            // 参数1，消息的标签
+            // multiple为false 表示不确认当前是一个消息。true就是多个消息。
+            // requeue为true表示不确认的消息会重新放回队列。
+            // 每5条做一次批量确认,_deliveryTag从1开始
+            if (envelope.getDeliveryTag() % 5 == 0) {
+                System.out.println("批量确认执行");
+                channel.basicNack(envelope.getDeliveryTag(), true, false);
+            }
+          }
+        };
+
+    channel.basicConsume(
+        "ack.qu",
+        // 非自动确认
+        false,
+        // 消费者的标签
+        "ack.consumer",
+        // 回调函数
+        consumer);
+  }
+}
+
+```
+
+执行消费者程序,然后再执行生产者。查看消费端的控制台：
+
+```tex
+确认的消息内容:hello-0
+确认的消息内容:hello-1
+确认的消息内容:hello-2
+确认的消息内容:hello-3
+确认的消息内容:hello-4
+批量确认执行
+```
+
+由于此处采用的是不重新放回队列，所以，数据接收到之后被丢弃了。
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 0                       │ 0        │ 0         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+```
+
+队列中的数据也已经被处理掉了。
+
+
+
+#### 7.6.4 手动ACK机制-SpringBoot
+
 
 
 

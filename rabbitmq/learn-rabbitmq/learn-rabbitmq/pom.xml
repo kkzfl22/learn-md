@@ -35,6 +35,8 @@
         <module>mq-15-publisher-confirm</module>
         <module>mq-16-spring-publisher-confirm</module>
         <module>mq-17-msg-persistent</module>
+        <module>mq-18-springboot-consumer-ack</module>
+        <module>mq-19-consumer-ack</module>
     </modules>
 
     <properties>
