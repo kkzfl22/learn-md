@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @author liujun
  * @since 2023/8/22
  */
-@Component
+// @Component
 public class MessageListener {
 
   /**
@@ -30,11 +30,11 @@ public class MessageListener {
    * @param deliveryTag
    * @param msg
    */
-  @RabbitListener(queues = "ack.qu", ackMode = "AUTO")
+  // @RabbitListener(queues = "ack.qu", ackMode = "AUTO")
+  // @RabbitListener(queues = "ack.qu", ackMode = "NONE")
+  @RabbitListener(queues = "ack.qu", ackMode = "MANUAL")
   public void handMessageTopic(
       Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag, @Payload String msg) {
-
-    System.out.println("消息内容：" + msg);
 
     ThreadLocalRandom current = ThreadLocalRandom.current();
 
@@ -44,13 +44,16 @@ public class MessageListener {
         // channel.basicNack(deliveryTag, false, true);
         // 手动拒绝消息，第二个参数表示是否重新入列
         channel.basicReject(deliveryTag, true);
+        System.out.println("【拒绝】消息内容：" + msg);
       } else {
         // 手动ACK，deliveryTag表示消息的唯一标志，multiple表示是否批量确认
         channel.basicAck(deliveryTag, false);
-        System.out.println("已经确认的消息" + msg);
+        System.out.println("【确认】消息内容：" + msg);
       }
+      Thread.sleep(current.nextInt(500, 3000));
     } catch (IOException e) {
       e.printStackTrace();
+    } catch (InterruptedException e) {
     }
   }
 }

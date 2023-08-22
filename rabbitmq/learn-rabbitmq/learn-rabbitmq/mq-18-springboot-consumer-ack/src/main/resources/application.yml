@@ -2,7 +2,7 @@ spring:
   application:
     name: consumer-ack
   rabbitmq:
-    host: nod1
+    host: node1
     port: 5672
     virtual-host: /
     username: root
@@ -20,5 +20,5 @@ spring:
           # 最大重度次数
           max-attempts: 5
           # 重试间隔时间(单位毫秒)
-          initial-interval: 5000'
+          initial-interval: 1000
 

@@ -5398,6 +5398,400 @@ Listing queues for vhost / ...
 
 #### 7.6.4 手动ACK机制-SpringBoot
 
+首先是Maven导入
+
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+            <version>2.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>2.2.8.RELEASE</version>
+        </dependency>
+```
+
+配制文件application.yml
+
+```yaml
+spring:
+  application:
+    name: consumer-ack
+  rabbitmq:
+    host: node1
+    port: 5672
+    virtual-host: /
+    username: root
+    password: 123456
+
+    # 配制消费端ack信息。
+    listener:
+      simple:
+        acknowledge-mode: manual
+        # 重试超过最大次数后是否拒绝
+        default-requeue-rejected: false
+        retry:
+          # 开启消费者重度(false时关闭消费者重试，false不是不重试，而是一直收到消息直到ack确认或者一直到超时）
+          enable: true
+          # 最大重度次数
+          max-attempts: 5
+          # 重试间隔时间(单位毫秒)
+          initial-interval: 1000
+
+```
+
+
+主启动类
+
+```java
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+
+import java.nio.charset.StandardCharsets;
+
+
+@SpringBootApplication
+public class Main {
+
+  @Autowired private RabbitTemplate rabbitTemplate;
+
+  public static void main(String[] args) {
+    SpringApplication.run(Main.class, args);
+  }
+
+  /**
+   * 在启动后就开始向MQ中发送消息
+   *
+   * @return
+   */
+  @Bean
+  public ApplicationRunner runner() {
+    return args -> {
+      Thread.sleep(5000);
+      for (int i = 0; i < 10; i++) {
+        MessageProperties props = new MessageProperties();
+        props.setDeliveryTag(i);
+        Message message = new Message(("消息:" + i).getBytes(StandardCharsets.UTF_8), props);
+        rabbitTemplate.convertAndSend("ack.ex", "ack.rk", message);
+      }
+    };
+  }
+}
+```
+
+当主类启动后，会延迟5秒，向MQ中发送10条记录。
+
+
+
+队列配制
+
+```java
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitConfig {
+
+  @Bean
+  public Queue queue() {
+    return new Queue("ack.qu", false, false, false, null);
+  }
+
+  @Bean
+  public Exchange exchange()
+  {
+    return new DirectExchange("ack.ex",false,false,null);
+  }
+
+  @Bean
+  public Binding binding()
+  {
+    return BindingBuilder.bind(queue()).to(exchange()).with("ack.rk").noargs();
+  }
+}
+
+```
+
+
+
+**使用推送模式来查确认消息**
+
+监听器，MQ队列推送消息至listener
+
+```java
+import com.rabbitmq.client.Channel;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
+
+@Component
+public class MessageListener {
+
+  /**
+   * NONE模式，则只要收到消息后就立即确认（消息出列，标识已消费），有丢数据风险
+   *
+   * <p>AUTO模式，看情况确认，如果此时消费者抛出异常则消息会返回队列中
+   *
+   * <p>WANUAL模式，需要显示的调用当前channel的basicAck方法
+   *
+   * @param channel
+   * @param deliveryTag
+   * @param msg
+   */
+  // @RabbitListener(queues = "ack.qu", ackMode = "AUTO")
+  // @RabbitListener(queues = "ack.qu", ackMode = "NONE")
+  @RabbitListener(queues = "ack.qu", ackMode = "MANUAL")
+  public void handMessageTopic(
+      Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag, @Payload String msg) {
+
+    System.out.println("消息内容：" + msg);
+
+    ThreadLocalRandom current = ThreadLocalRandom.current();
+
+    try {
+      if (current.nextInt(10) % 3 != 0) {
+        // 手动nack，告诉broker消费者处理失败，最后一个参数表示是否需要将消息重新入列
+        // channel.basicNack(deliveryTag, false, true);
+        // 手动拒绝消息，第二个参数表示是否重新入列
+        channel.basicReject(deliveryTag, true);
+      } else {
+        // 手动ACK，deliveryTag表示消息的唯一标志，multiple表示是否批量确认
+        channel.basicAck(deliveryTag, false);
+        System.out.println("已经确认的消息" + msg);
+      }
+      Thread.sleep(ThreadLocalRandom.current().nextInt(500, 3000));
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (InterruptedException e) {
+    }
+  }
+}
+```
+
+消息有33%的概率被拒绝，这样又会被重新放回队列，等待下次推送。
+
+**启动测试**
+
+运行main方法
+
+```sh
+【确认】消息内容：消息:0
+【拒绝】消息内容：消息:1
+【拒绝】消息内容：消息:2
+【拒绝】消息内容：消息:3
+【确认】消息内容：消息:4
+【确认】消息内容：消息:5
+【拒绝】消息内容：消息:6
+【拒绝】消息内容：消息:7
+【拒绝】消息内容：消息:8
+【拒绝】消息内容：消息:9
+【确认】消息内容：消息:1
+【拒绝】消息内容：消息:2
+【拒绝】消息内容：消息:3
+【拒绝】消息内容：消息:6
+【确认】消息内容：消息:7
+【确认】消息内容：消息:8
+【拒绝】消息内容：消息:9
+【拒绝】消息内容：消息:2
+【拒绝】消息内容：消息:3
+【拒绝】消息内容：消息:6
+【确认】消息内容：消息:9
+【确认】消息内容：消息:2
+【拒绝】消息内容：消息:3
+【拒绝】消息内容：消息:6
+【确认】消息内容：消息:3
+【拒绝】消息内容：消息:6
+【确认】消息内容：消息:6
+```
+
+从观察到的结果也印证了，反复的被推送，接收的一个过程中，使用命令查看队列的一个消费的情况
+
+```sh
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 6                       │ 6        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 1                       │ 1        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 0                       │ 0        │ 1         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+```
+
+
+
+
+
+**使用拉确认消息**
+
+```java
+
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.GetResponse;
+import org.springframework.amqp.rabbit.core.ChannelCallback;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+
+@RestController
+public class MsgController {
+
+  @Autowired private RabbitTemplate rabbitTemplate;
+
+  @RequestMapping("/msg")
+  public String getMessage() {
+    String message =
+        rabbitTemplate.execute(
+            new ChannelCallback<String>() {
+              @Override
+              public String doInRabbit(Channel channel) throws Exception {
+
+                GetResponse getResponse = channel.basicGet("ack.qu", false);
+
+                if (null == getResponse) {
+                  return "你已经消费完所有的消息";
+                }
+
+                String message = new String(getResponse.getBody(), StandardCharsets.UTF_8);
+
+                if (ThreadLocalRandom.current().nextInt(10) % 3 == 0) {
+                  // 执行消息确认操作
+                  channel.basicAck(getResponse.getEnvelope().getDeliveryTag(), false);
+
+                  return "已确认的消息:" + message;
+                } else {
+                  // 拒收一条消息并重新放回队列
+                  channel.basicReject(getResponse.getEnvelope().getDeliveryTag(), true);
+                  return "拒绝的消息:" + message;
+                }
+              }
+            });
+
+    return message;
+  }
+}
+
+```
+
+在浏览器中访问，同样有66%的概率会被拒绝，仅33%会被确认。
+
+
+
+注：如果与监听在同一个工程，需将监听器给注释。
+
+启动main函数，在浏览器中访问。http://127.0.0.1:8080/msg
+
+可以看到返回:
+
+```sh
+拒绝的消息:消息:0
+已确认的消息:消息:1
+拒绝的消息:消息:2
+......
+已确认的消息:消息:9
+你已经消费完所有的消息
+```
+
+
+
+同样的观察队列的一个消费情况：
+
+```sh
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 8              │ 0                       │ 8        │ 0         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 3              │ 0                       │ 3        │ 0         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ack.qu        │ 0              │ 0                       │ 0        │ 0         │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]#
+
+```
+
+使用拉模式进行消息ACK确认也已经完成。
+
+
+
+### 7.7 消费端限流
+
+在类似如秒杀活动中，一开始会有大量并发写请求到达服务端，城机对消息进行削峰处理，如何做？
+
+当消息投递的速度远快于消费的速度时，随着时间积累就会出现“消息积压”。消息中间件本身是具备一定的缓冲能力的，但这个能力是有容量限制的，如果长期运行并没有任何处理，最终会导致Broker崩溃，而分布式系统的故障往往会发生上下游传递，连锁反应可能会引起系统大范围的宕机，这就很悲剧了
+
+#### 7.7.1 资源限制限流
+
+
+
+
+
+
+
 
 
 

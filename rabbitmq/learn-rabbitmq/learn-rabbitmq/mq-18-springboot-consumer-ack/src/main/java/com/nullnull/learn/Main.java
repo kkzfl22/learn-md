@@ -21,6 +21,11 @@ public class Main {
     SpringApplication.run(Main.class, args);
   }
 
+  /**
+   * 在启动后就开始向MQ中发送消息
+   *
+   * @return
+   */
   @Bean
   public ApplicationRunner runner() {
     return args -> {
