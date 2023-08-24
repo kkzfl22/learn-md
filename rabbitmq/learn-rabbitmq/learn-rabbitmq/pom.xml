@@ -37,6 +37,7 @@
         <module>mq-17-msg-persistent</module>
         <module>mq-18-springboot-consumer-ack</module>
         <module>mq-19-consumer-ack</module>
+        <module>mq-20-resource-limit</module>
     </modules>
 
     <properties>
