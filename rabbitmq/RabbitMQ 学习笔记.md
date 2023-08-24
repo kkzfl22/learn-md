@@ -5832,7 +5832,53 @@ GB: gigabytes (10^9 - 1000000000 bytes)
 
 
 
+可以通过两种来设置生效
 
+1. **临时生效**
+
+   此配制仅当前生效在重启后将失效。
+
+```sh
+# 硬盘资源限制
+rabbitmqctl set_disk_free_limit 68996808704
+# 内存资源限制
+rabbitmqctl set_vm_memory_high_watermark 0.4
+```
+
+样例：
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl set_disk_free_limit 68996808704
+Setting disk free limit on rabbit@nullnull-os to 68996808704 bytes ...
+```
+
+2. **长期生效**
+
+在rabbitmq.conf的配制文件中加入
+
+```properties
+# 硬盘限制 
+disk_free_limit.absolute=68455178240
+
+# 内存限制
+vm_memory_high_watermark.relative = 0.4
+```
+
+样例：
+
+```sh
+[root@nullnull-os rabbitmq]# vi  /etc/rabbitmq/rabbitmq.conf 
+# 加入以下内容,注意单位到字节
+disk_free_limit.absolute=68455178240
+
+[root@nullnull-os rabbitmq]# cat /etc/rabbitmq/rabbitmq.conf 
+disk_free_limit.absolute=68455178240
+
+[root@nullnull-os rabbitmq]# systemctl restart rabbitmq-server
+[root@nullnull-os rabbitmq]# 
+```
+
+注意，此需要重启rabbitMQ才能生效。
 
 
 
@@ -5940,11 +5986,177 @@ https://www.rabbitmq.com/memory.html
 
 
 
-
-
-
+中文配制可参考：https://www.cnblogs.com/kaishirenshi/p/12132703.html
 
 更多配制可参见：https://www.rabbitmq.com/configure.html#config-file
+
+
+
+
+
+样例程序：
+
+maven导入
+
+```xml
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>5.9.0</version>
+            </dependency>
+```
+
+
+
+生产程序：
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ConfirmCallback;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.MessageProperties;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeoutException;
+
+public class ResourceLimitProduct {
+  public static void main(String[] args) throws Exception {
+    // 资源限制
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+
+      // 定义交换器、队列和绑定
+      channel.exchangeDeclare("res.limit.ex", BuiltinExchangeType.DIRECT, true, false, null);
+      channel.queueDeclare("res.limit.qu", true, false, false, null);
+      channel.queueBind("res.limit.qu", "res.limit.ex", "res.limit.rk");
+
+      // 开启发送方确认机制
+      AMQP.Confirm.SelectOk selectOk = channel.confirmSelect();
+
+      ConfirmCallback confirm =
+          new ConfirmCallback() {
+            @Override
+            public void handle(long deliveryTag, boolean multiple) throws IOException {
+              if (multiple) {
+                System.out.println("【批量确认】:小于" + deliveryTag + "已经确认");
+              } else {
+                System.out.println("【单条确认】:等于" + deliveryTag + "已经确认");
+              }
+            }
+          };
+
+      ConfirmCallback nackConfirm =
+          new ConfirmCallback() {
+            @Override
+            public void handle(long deliveryTag, boolean multiple) throws IOException {
+              if (multiple) {
+                System.out.println("【批量不确认】:小于" + deliveryTag + "已经确认");
+              } else {
+                System.out.println("【单条不确认】:等于" + deliveryTag + "已经确认");
+              }
+            }
+          };
+
+      channel.addConfirmListener(confirm, nackConfirm);
+
+      for (int i = 0; i < 100000000; i++) {
+        String msg = getKbMessage(i);
+        long sequence = channel.getNextPublishSeqNo();
+        System.out.println("【发送】成功了序列消息:" + sequence);
+
+        AMQP.BasicProperties.Builder builder = new AMQP.BasicProperties.Builder();
+        builder.contentType("text/plain");
+        // 发送的消息持久化
+        builder.deliveryMode(2);
+        AMQP.BasicProperties properties = builder.build();
+
+        channel.basicPublish(
+            "res.limit.ex", "res.limit.rk", properties, msg.getBytes(StandardCharsets.UTF_8));
+
+        Thread.sleep(ThreadLocalRandom.current().nextInt(5, 100));
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private static String getKbMessage(int i) {
+    StringBuilder msg = new StringBuilder("发送确认消息:" + i + "--");
+    for (int j = 0; j < 102400; j++) {
+      msg.append(j);
+    }
+    return msg.toString();
+  }
+}
+```
+
+
+
+**设置硬盘资源限制**
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl set_disk_free_limit 68996808704
+Setting disk free limit on rabbit@nullnull-os to 68996808704 bytes ...
+```
+
+运行生产者的应用程序，查看控制台的输出
+
+```sh
+【发送】成功了序列消息:1
+【单条确认】:等于1已经确认
+【发送】成功了序列消息:2
+【发送】成功了序列消息:3
+【单条确认】:等于2已经确认
+【发送】成功了序列消息:4
+【单条确认】:等于3已经确认
+【发送】成功了序列消息:5
+......
+【单条确认】:等于702已经确认
+【单条确认】:等于703已经确认
+【发送】成功了序列消息:704
+【发送】成功了序列消息:705
+【发送】成功了序列消息:706
+【发送】成功了序列消息:707
+【发送】成功了序列消息:708
+【发送】成功了序列消息:709
+【发送】成功了序列消息:710
+【发送】成功了序列消息:711
+```
+
+到此使用硬盘空间限制的测试完成。
+
+
+
+
+
+**内存资源限制**
+
+```sh
+rabbitmqctl set_vm_memory_high_watermark absolute  2097152000
+
+[root@nullnull-os rabbitmq]# rabbitmqctl set_vm_memory_high_watermark absolute  2097152000
+Setting memory threshold on rabbit@nullnull-os to 483713024 bytes ...
+```
+
+
+
+
+
+
+
+
 
 
 
