@@ -65,7 +65,7 @@ public class ResourceLimitProduct {
         AMQP.BasicProperties.Builder builder = new AMQP.BasicProperties.Builder();
         builder.contentType("text/plain");
         // 发送的消息持久化
-        //builder.deliveryMode(2);
+        builder.deliveryMode(2);
         AMQP.BasicProperties properties = builder.build();
 
         channel.basicPublish(

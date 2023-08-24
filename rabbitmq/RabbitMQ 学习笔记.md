@@ -901,6 +901,170 @@ Listing bindings for vhost /...
 
 
 
+### 3.4 交换机队列等详细参数
+
+**队列信息**
+
+```sh
+rabbitmqctl list_queues [-p vhost] [[--offline] | [--online] | [--local]] [queueinfoitem ...]
+# 返回队列的详细信息。如果 "-p" 标志不存在，那么将返回默认虚拟主机的队列详细信息。"-p" 可以用来覆盖默认vhost。可以使用一下互斥选项之一，通过其状态或者位置过滤显示的队列。
+# [--offline] 表示仅仅列出当前不可用的持久队列（更具体地说，他们的主节点不是）
+# [--online] 表示列出当前可用的队列（他们的主节点是）
+# [--local] 表示仅仅列出那些主程序在当前节点上的队列
+# queueinfoitem参数用于指示要包括在结果中的哪些队列信息项。结果中的列顺序将与参数的顺序相匹配。queueinfoitem可以从以下列表中获取任何值：
+# name 表示队列的名称
+# durable 表示服务器重启之后，队列是否存活
+# auto_delete 表示不再使用的队列是否自动被删除
+# arguments 表示队列的参数
+# policy 表示应用在队列中的策略名称
+# pid 表示和队列相关联的Erlang进程的ID
+# owner_pid 表示作为队列的排他所有者的连接的Erlang进程的ID，如果队列是非排他，则为空
+# exclusive 表示队列是否是排他的，有 owner_pid 返回 True，否则返回 False
+# exclusive_consumer_pid 表示排他消费者订阅该队列的频道的Erlang进程的ID，如果没有独家消费者，则为空
+# exclusive_consumer_tag 表示订阅该队列的排他消费者的消费tag。如果没有排他消费者，则为空
+# messages_ready 表示准备被发送到客户端的消息数量
+# messages_unacknowledged 表示已经被发送到客户端但是还没有被确认的消息数量
+# messages 表示准备发送和没有被确认的消息数量总和（队列深度）
+# messages_ready_ram 表示驻留在 ram 里的 messages_ready 的消息数量
+# messages_unacknowledged_ram 表示驻留在 ram 里的 messages_unacknowledged 的消息数量
+# messages_ram 表示驻留在 ram 里的消息总数
+# messages_persistent 表示队列中持久消息的总数（对于临时队列，总是为0）
+# message_bytes 表示在队列中所有消息body的大小，这并不包括消息属性（包括header）或者任何开销
+# message_bytes_ready 表示类似于 messge_bytes 但仅仅计算那些将发送到客户端的消息
+# message_bytes_unacknowledged 表示类似于 message_bytes 但仅仅计算那些已经发送到客户还没有确认的消息
+# message_bytes_ram 表示类似于 message_bytes 但仅仅计算那些驻留在ram中的消息
+# message_bytes_persistent 表示类似于 message_bytes 但仅仅计算那些持久消息
+# head_message_timestamp 表示队列中第一个消息的时间戳属性（如果存在）。只有处在 paged-in 状态的消息才存在时间戳。
+# disk_reads 表示该队列自start起，从磁盘读取消息的次数总和
+# disk_writes 表示该队列自start起，被写入磁盘消息的次数总和
+# consumers 表示consumer的数量
+# consumer_utilisation 表示队列能够立即将消息传递给消费者的时间分数（0.0 ~ 1.0之间），如果消费者受到网络拥塞或者预取计数的限制，该值可能小于1.0
+# memory 表示和该队列相关联的Erlang进程消耗的内存字节数，包括stack/heap/内部数据结构
+# slave_pids 表示该队列目前的slave的ID号（如果该队列被镜像的话）
+# synchronised_slave_pids 表示如果队列被镜像，给出与主队列同步的当前slave的ID号，即可以从主队列接管而不丢失消息的slave的ID
+# state 表示队列的状态，一般是 "running"； 如果队列正在同步，也可能是 "{syncing, MsgCount}"； 如果队列所处的节点当前down了，队列显示的状态为 "down"
+# 如果没有指定queueinfoitem，那么将显示队列的名称（name）和深度（messages）
+
+```
+
+
+
+
+
+
+
+**交换器信息**
+
+```sh
+rabbitmqctl list_exchanges [-p vhost] [exchangeinfoitem ...]
+# 返回交换器的详细信息。如果 "-p" 标志不存在，那么将返回默认虚拟主机的交换器详细信息。"-p" 可以用来覆盖默认vhost。
+# exchangeinfoitem参数用于指示要包括在结果中的哪些交换器信息项。结果中的列顺序将与参数的顺序相匹配。exchangeinfoitem可以从以下列表中获取任何值：
+# name 表示交换器的名称
+# type 表示交换器类型（例如： direct/topic/fanout/headers）
+# durable 表示服务器重启之后，交换器是否存活
+# auto_delete 表示交换器不再使用时，是否被自动删除
+# internal 表示交换器是否是内部的，例如不能被客户端直接发布
+# arguments 表示交换器的参数
+# policy 表示引用在该交换器上的策略名称
+# 如果没有指定任何 exchangeinfoitem，那么该命令将显示交换器的名称（name）和类型（type）
+
+```
+
+
+
+**绑定信息**
+
+```sh
+rabbitmqctl list_bindings [-p vhost] [bindinginfoitem ...]
+# 返回绑定的详细信息。如果 "-p" 标志不存在，那么将返回默认虚拟主机的绑定详细信息。"-p" 可以用来覆盖默认vhost。
+# bindinginfoitem参数用于指示要包括在结果中的哪些绑定信息项。结果中的列顺序将与参数的顺序相匹配。bindinginfoitem可以从以下列表中获取任何值：
+# source_name 表示绑定附加到的消息源的名称
+# source_kind 表示绑定附加到的消息源的类型，目前通常交换器
+# destination_name 表示附加绑定到的消息目的地的名称
+# destination_kind 表示附加绑定到的消息目的地的类型
+# routing_key 表示绑定的routing key
+# arguments 表示绑定的参数
+# 如果没有指定任何的 bindinginfoitem ，那么将展示上述所有的参数
+# rabbitmqctl list_bindings -p /myvhost exchange_name queue_name
+# 上述命令，表示展示在 /myvhost 虚拟主机中的绑定的exchange名称和queue名称
+```
+
+
+
+**连接信息**
+
+```sh
+
+rabbitmqctl list_connections [connectioninfoitem ...]
+# 返回TCP/IP连接统计信息
+# connectioninfoitem 参数用于指示要包括在结果中的哪些连接信息项，结果中的列顺序将与参数的顺序相匹配。connectioninfoitem可以从以下列表中获取任何值：
+# pid 表示与该connection相关联的Erlang进程的id号
+# name 表示该连接的可读性名称
+# port 表示服务端口
+# host 表示通过反向DNS获取的服务器主机名，如果反向DNS失败或未启用，则为其IP地址
+# peer_port 表示对等端口
+# peer_host 表示通过反向DNS获取的对等主机名，如果反向DNS失败或未启用，则为其IP地址
+# ssl 表示该连接是否使用SSL保护的bool值
+# ssl_protocal 表示SSL协议(例如： tlsv1)
+# ssl_key_exchange 表示SSL关键交换器算法（例如： rsa）
+# ssl_cipher 表示SSL密码算法（例如： aes_256_cbc）
+# ssl_hash 表示SSL哈希函数（例如： sha）
+# peer_cert_issuer 表示对等体的SSL证书的颁发者，以RFC4514形式出现
+# peer_cert_validity 表示对等体的SSL证书的有效期限
+# state 表示连接状态（例如： starting/tuning/opening/running/flow/blocking/blocked/closing/closed）
+# channels 表示正在使用连接的通道数量
+# protocol 表示正在使用的AMQP的版本号。注意，如果一个客户端需要一个AMQP 0-9 连接，我们将其作为 AMQP 0-9-1
+# auth_mechanism 表示使用SASL认证机制，如PLAN
+# user 表示和该连接相关联的用户名
+# vhost 表示vhost名称
+# timeout 表示连接超时/协商心跳间隔，单位为秒
+# frame_max 表示最大的frame大小（byte）
+# channel_max 表示该连接上通道的最大数量
+# client_properties 表示在连接建立期间，有客户端传送的消息属性
+# recv_oct 表示接受到的八位字节
+# recv_cnt 表示接受到的包
+# send_oct 表示发送的八位字节
+# send_cnt 表示发送的包
+# send_pend 表示发送的队列大小
+# connected_at 表示该连接被建立的日期和时间的时间戳格式
+# 如果没有指定任何connectioninfoitem，那么将展示：user/peer_host/peer_port/流量控制和内存块状态之后的时间
+
+```
+
+
+
+**通道信息**
+
+```sh
+
+rabbitmqctl list_channels [channelinfoitem ...]
+# 返回所有当前的通道的信息，通道即一个执行大多数AMQP命令的逻辑容器。这包括由普通AMQP连接的一部分通道、由各种插件和其他扩展程序创建的通道。
+# channelinfoitem 参数用于指示要包括在结果中的哪些连接信息项，结果中的列顺序将与参数的顺序相匹配。channelinfoitem 可以从以下列表中获取任何值：
+# pid 表示与该连接相关联的Erlang程序的ID号
+# connection 表示与通道所属连接相关联的Erlang进程的ID号
+# name 表示通道的可读性名称
+# number 表示通道的号码，在连接中唯一表示它
+# user 表示和该通道相关联的用户名
+# vhost 表示通道操作所在的vhost
+# transactional 表示通道是否处于事务模式，返回 true，否则返回 false
+# confirm 表示通道是否处于确认模式，返回 true, 否则返回 false
+# consumer_count 表示通过通道检索消息的逻辑AMQP消费者数量
+# messages_unacknowledged 表示通过通道发送过但还没收到反馈的消息的数量
+# messages_uncommitted 表示尚未提交的事务中接受的消息数
+# acks_uncommitted 表示尚未提交的事务中接受的确认数
+# messages_unconfirmed 表示尚未确认已发布的消息数量。在不处于确认模式中的通道上，该值为0
+# prefetch_count 表示新消费者的QoS预取限制，如果没有限制则为0
+# global_prefetch_count 表示整个通道的QoS预取限制，如果没有限制则为0
+# 如果没有指定任何 channelinfoitem 项，那么将展示 pid/user/consumer_count/messages_unacknowledged
+
+```
+
+
+
+
+
+
+
 ## 4. RabbitMQ工作流程
 
 ### 4.1 基本的工作流程
@@ -5104,7 +5268,7 @@ public class Consumer {
 那此时消息是什么状态呢？查看下消息队列中的信息
 
 ```sh
-[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5197,7 +5361,7 @@ public class Consumer {
 而这一次消息没有再循环打印。只输出一遍，再检查下消息在队列中的状态：
 
 ```sh
-[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5287,7 +5451,7 @@ public class Consumer {
 观察队列中的信息
 
 ```java
-[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5380,7 +5544,7 @@ public class Consumer {
 由于此处采用的是不重新放回队列，所以，数据接收到之后被丢弃了。
 
 ```sh
-[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5625,7 +5789,7 @@ public class MessageListener {
 从观察到的结果也印证了，反复的被推送，接收的一个过程中，使用命令查看队列的一个消费的情况
 
 ```sh
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5635,7 +5799,7 @@ Listing queues for vhost / ...
 ├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
 │ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
 └───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5645,7 +5809,7 @@ Listing queues for vhost / ...
 ├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
 │ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
 └───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5740,7 +5904,7 @@ public class MsgController {
 同样的观察队列的一个消费情况：
 
 ```sh
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5750,7 +5914,7 @@ Listing queues for vhost / ...
 ├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
 │ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
 └───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -5760,7 +5924,7 @@ Listing queues for vhost / ...
 ├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
 │ persistent.qu │ 1              │ 0                       │ 1        │ 0         │
 └───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
-[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
 Timeout: 60.0 seconds ...
 Listing queues for vhost / ...
 ┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
@@ -6143,12 +6307,103 @@ Setting disk free limit on rabbit@nullnull-os to 68996808704 bytes ...
 
 **内存资源限制**
 
-```sh
-rabbitmqctl set_vm_memory_high_watermark absolute  2097152000
+编辑配制文件rabbitmq.conf
 
-[root@nullnull-os rabbitmq]# rabbitmqctl set_vm_memory_high_watermark absolute  2097152000
-Setting memory threshold on rabbit@nullnull-os to 483713024 bytes ...
+```sh
+vi /etc/rabbitmqrabbitmq.conf 
+
+# 添加配制
+vm_memory_high_watermark.absolute=120M
+
 ```
+
+重启让其生效
+
+```sh
+systemctl restart rabbitmq-server
+```
+
+检查配制生效情况
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl environment
+
+......
+      {trace_vhosts,[]},
+      {vhost_restart_strategy,continue},
+      {vm_memory_calculation_strategy,rss},
+      {vm_memory_high_watermark,{absolute,"120MB"}},
+      {vm_memory_high_watermark_paging_ratio,0.5},
+      {writer_gc_threshold,1000000000}]},
+ {rabbit_common,[]},
+......
+```
+
+查看到如下配制说明生效。
+
+
+
+
+
+**运行生产者**
+
+观察客户端输出
+
+```sh
+【发送】成功了序列消息:1
+【发送】成功了序列消息:2
+【单条确认】:等于1已经确认
+【发送】成功了序列消息:3
+【单条确认】:等于2已经确认
+【单条确认】:等于3已经确认
+【发送】成功了序列消息:4
+【发送】成功了序列消息:5
+【发送】成功了序列消息:6
+【单条确认】:等于4已经确认
+【单条确认】:等于5已经确认
+【单条确认】:等于6已经确认
+【发送】成功了序列消息:7
+【单条确认】:等于7已经确认
+......
+【发送】成功了序列消息:174
+【单条确认】:等于174已经确认
+【发送】成功了序列消息:175
+【单条确认】:等于175已经确认
+【发送】成功了序列消息:176
+【单条确认】:等于176已经确认
+【发送】成功了序列消息:177
+【发送】成功了序列消息:178
+【发送】成功了序列消息:179
+【发送】成功了序列消息:180
+【发送】成功了序列消息:181
+【发送】成功了序列消息:182
+【发送】成功了序列消息:183
+【发送】成功了序列消息:184
+【发送】成功了序列消息:185
+【发送】成功了序列消息:186
+【发送】成功了序列消息:187
+
+```
+
+
+
+观察网页端的情况
+
+![image-20230824222907448](img\image-20230824222907448.png)
+
+到此内存资源限制而导致的限流测试完成。
+
+
+
+
+
+
+
+#### 7.7.2 默认的credit flow流控
+
+
+
+
 
 
 
