@@ -6401,11 +6401,237 @@ systemctl restart rabbitmq-server
 
 #### 7.7.2 默认的credit flow流控
 
+RabbitMQ Credit Flow Mechanism (信用流控制机制) 是 RabbitMQ 使用的一种流量控制机制，旨在确保生产者（publishers）不会发送太多的消息给消费者（consumers），从而导致系统超载或资源耗尽。这个机制主要是为了保护消费者免受生产者发送太多消息的影响。
+
+以下是 RabbitMQ Credit Flow 机制的基本工作原理：
+
+1. **信用计数器（Credit Counter）**：对于每个消费者，RabbitMQ 维护一个称为信用计数器的值。这个计数器表示消费者当前可以接收多少条消息。
+2. **初始信用额度（Initial Credit）**：当一个消费者连接到队列并开始消费消息时，RabbitMQ 为该消费者分配一个初始信用额度。这个额度通常与队列中的未确认消息数量有关。
+3. **消费者确认（Consumer Acknowledgments）**：当消费者成功处理一条消息并确认它时，它将会恢复一定数量的信用，这允许 RabbitMQ 将更多的消息发送给消费者。
+4. **信用降低（Decreasing Credit）**：当消费者未确认消息超出其信用额度时，其信用额度将降低。这会导致生产者无法继续发送消息给该消费者，直到其信用额度恢复。
+5. **自动降低的消费者（Auto-decrease Consumers）**：RabbitMQ 还可以配置为自动降低某些消费者的信用，以避免某个消费者占用太多资源。这通常用于处理慢速或长时间处理的消费者。
+
+这个机制有助于平衡生产者和消费者之间的消息流量，防止生产者发送大量消息导致队列爆满，从而提高系统的稳定性和可靠性。
+
+要注意的是，RabbitMQ 的信用流控制机制是可配置的，您可以根据您的需求来调整信用额度和其他参数，以满足特定的应用场景。此外，RabbitMQ 还提供了一些工具和插件，用于监控和管理流量控制，以确保系统的正常运行。
+
+可以通过查看队列的状态信息来了解 Credit Flow 机制的当前状态。以下是一些常见的方式来查看 Credit Flow 状态：
+
+1. **RabbitMQ Management UI**：RabbitMQ 提供了一个基于 Web 的管理界面，您可以通过该界面查看队列的状态和统计信息，包括队列的消息数量、未确认消息数量以及消费者的状态。要访问管理界面，请确保已启用 RabbitMQ Management 插件。默认情况下，它通常在 http://localhost:15672/ 上运行。
+
+   在管理界面中，您可以选择特定的队列，然后查看其状态和相关的统计信息，包括未确认消息数量。这可以帮助您了解 Credit Flow 是否生效，是否有消费者的信用已用尽。
+
+2. **命令行工具**：您还可以使用 RabbitMQ 的命令行工具来查看队列的状态。以下是一个示例命令，用于查看队列的状态：
+
+   ```bash
+   rabbitmqctl list_queues name messages consumers messages_unacknowledged
+   ```
+
+   这将显示队列的名称、消息数量、消费者数量以及未确认消息数量。未确认消息数量表示消费者尚未确认的消息数量，这可以用于判断 Credit Flow 是否生效。
+
+3. **监控工具**：您可以使用监控工具（如Prometheus和Grafana）来设置自定义监控和警报，以便实时跟踪队列的状态和信用流控制情况。通过这些工具，您可以创建仪表板来显示队列的各种指标，包括未确认消息数量和消费者的信用。
+
+通过以上方法，您可以监视 RabbitMQ 中队列的状态和 Credit Flow 机制的工作情况，以确保系统的稳定性和可靠性。
+
+
+
+![image-20230825093023578](img\image-20230825093023578.png)
+
+
+
+#### 7.7.3 Qos机制
+
+>RabbitMQ中有一种Qos保证机制，可以限制channel上接收到的未被Ack的消息数量，如果过这个数量限制RabbitMQ将不会再往消费端推送消息。是一种流控手段，可以防止大量消息瞬时从Broker送达消费端造成消费端巨大压力（甚至压垮消费端）需要注意的是Qos机制仅对消费端推模式有效，对拉模式无效。而且不支持NONE-ACK模式。
+>
+> 执行`channel.basicConsume`方法之前通过channel.basicQos方法可以设置该数量。消息的发送是异步的，消息的确认也是异步的。在消费慢的时候可以设置Qos的prefetchCount，它表示broker在向消费者发送消息的时候，一旦发送了prefetchCount个消息而没有一个消息确认的时候，就停止发送。消费者确认一个.broker就发送一个，确认两个就发送两个，换句话说，消费者确认多少，broker就发送多少，消费者等待处理的个数永远限制在prefetchCount个。
+>
+>如果对于每个消息都发送确认，增加了网络流量，此时可以批量确认消息。如果设置了multiple为true，消费者在确认的时候，比如说id是8的消息确认了，则在8之前的所有消息都确认了。
+
+生产者往往是希望自己产生的消息能快速投递出去，而当消息投递太快县城超过了下游的消费速度时就容易出现消息积压、堆积，所以，从上游来讲我们应该在生产端应用程序中也可以加入限流、应急开关等手段，避免超过broker端的极限承载能力或者压垮下游消费者。
+
+ 再讲消费者，我们期望消费者能够尽快的消费完消息，而且还要防止瞬时大量消息压垮消费端（推模式），我们期望消费端能够处理速度是最快、最稳定而且还相对均匀（比较理想化）
+
+提供应用吞吐量和缩短消费过程的耗时，主要以下几种方式：
+
+>1. 优化应用程序的性能，缩短响应时间
+>2. 增加消费节点实例。
+>3. 调整并发消费的线程数。
+
+
+
+**测试**
+
+maven导入:
+
+```xml
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>5.9.0</version>
+            </dependency>
+```
+
+
+
+生产者
+
+```java
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class QosProduct {
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换机
+    channel.exchangeDeclare(
+        "qos.ex",
+        BuiltinExchangeType.DIRECT,
+        // 持久化标识
+        false,
+        // 是否自动删除
+        false,
+        // 属性信息
+        null);
+
+    for (int i = 0; i < 100; i++) {
+      String msg = "这是发送的消息:" + i;
+      channel.basicPublish("qos.ex", "qos.rk", null, msg.getBytes(StandardCharsets.UTF_8));
+    }
+  }
+}
+
+```
+
+
+
+消费者 ：
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.concurrent.ThreadLocalRandom;
+
+
+public class QosConsumer {
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换器、队列和绑定
+    channel.exchangeDeclare("qos.ex", BuiltinExchangeType.DIRECT, false, false, null);
+    channel.queueDeclare("qos.qu", false, false, false, null);
+    channel.queueBind("qos.qu", "qos.ex", "qos.rk");
+
+    // 设置Qos为5，未被确认ACK的为5，还有一个参数，即是否为全局,true为全局
+    channel.basicQos(5);
+
+    channel.basicConsume(
+        "qos.qu",
+        false,
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
+              throws IOException {
+
+            LocalDateTime time = LocalDateTime.now();
+            System.out.println(
+                "[消费]" + time + "+收到的消息:" + new String(body, StandardCharsets.UTF_8));
+
+            int randomSleep = ThreadLocalRandom.current().nextInt(20, 1000);
+            try {
+              Thread.sleep(randomSleep);
+            } catch (InterruptedException e) {
+              e.printStackTrace();
+            }
+
+            if (envelope.getDeliveryTag() % 3 == 0) {
+              // 进行消息确认
+              channel.basicAck(envelope.getDeliveryTag(), true);
+            }
+          }
+        });
+  }
+}
+
+```
+
+
+
+测试
+
+先启动消费都，再启动生产者，查看控制台输出
+
+```tex
+[消费]2023-08-25T12:08:13.143+收到的消息:这是发送的消息:0
+[消费]2023-08-25T12:08:13.765+收到的消息:这是发送的消息:1
+[消费]2023-08-25T12:08:14.127+收到的消息:这是发送的消息:2
+[消费]2023-08-25T12:08:14.892+收到的消息:这是发送的消息:3
+......
+[消费]2023-08-25T12:08:57.437+收到的消息:这是发送的消息:96
+[消费]2023-08-25T12:08:57.530+收到的消息:这是发送的消息:97
+[消费]2023-08-25T12:08:57.566+收到的消息:这是发送的消息:98
+[消费]2023-08-25T12:08:57.649+收到的消息:这是发送的消息:99
+```
+
+
+
+查看队列的情况：
+
+```sh
+[root@nullnull-os ~]# rabbitmqctl list_channels name,prefetch_count,global_prefetch_count --formatter pretty_table
+Listing channels ...
+┌───────────────────────────────────────────┬────────────────┬───────────────────────┐
+│ name                                      │ prefetch_count │ global_prefetch_count │
+├───────────────────────────────────────────┼────────────────┼───────────────────────┤
+│ 61.170.208.88:59116 -> 10.0.4.16:5672 (1) │ 5              │ 0                     │
+└───────────────────────────────────────────┴────────────────┴───────────────────────┘
+[root@nullnull-os ~]# 
+```
+
+如果Qos设置为全局，则可以看到到
+
+```sh
+[root@nullnull-os ~]# rabbitmqctl list_channels name,prefetch_count,global_prefetch_count --formatter pretty_table
+Listing channels ...
+┌───────────────────────────────────────────┬────────────────┬───────────────────────┐
+│ name                                      │ prefetch_count │ global_prefetch_count │
+├───────────────────────────────────────────┼────────────────┼───────────────────────┤
+│ 61.170.208.88:60591 -> 10.0.4.16:5672 (1) │ 0              │ 5                     │
+├───────────────────────────────────────────┼────────────────┼───────────────────────┤
+│ 61.170.208.88:60610 -> 10.0.4.16:5672 (1) │ 0              │ 0                     │
+└───────────────────────────────────────────┴────────────────┴───────────────────────┘
+[root@nullnull-os ~]# 
+```
 
 
 
 
 
+网页端查看
+
+![image-20230825112021066](img\image-20230825112021066.png)
 
 
 
