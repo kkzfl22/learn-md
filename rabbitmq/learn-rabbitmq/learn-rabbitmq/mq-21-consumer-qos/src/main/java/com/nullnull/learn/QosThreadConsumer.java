@@ -59,7 +59,7 @@ public class QosThreadConsumer {
                     + ",收到的消息:"
                     + new String(body, StandardCharsets.UTF_8));
 
-            int randomSleep = ThreadLocalRandom.current().nextInt(20, 1000);
+            int randomSleep = ThreadLocalRandom.current().nextInt(1, 200);
             try {
               Thread.sleep(randomSleep);
             } catch (InterruptedException e) {

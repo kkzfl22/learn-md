@@ -39,6 +39,7 @@
         <module>mq-19-consumer-ack</module>
         <module>mq-20-resource-limit</module>
         <module>mq-21-consumer-qos</module>
+        <module>mq-22-trace</module>
     </modules>
 
     <properties>

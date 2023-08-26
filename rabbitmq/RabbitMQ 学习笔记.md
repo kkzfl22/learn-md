@@ -6534,7 +6534,7 @@ public class QosConsumer {
   public static void main(String[] args) throws Exception {
     ConnectionFactory factory = new ConnectionFactory();
     factory.setUri("amqp://root:123456@node1:5672/%2f");
-
+      
     Connection connection = factory.newConnection();
     Channel channel = connection.createChannel();
 
@@ -6610,6 +6610,121 @@ Listing channels ...
 [root@nullnull-os ~]# 
 ```
 
+
+
+网页端查看
+
+![image-20230825112021066](img\image-20230825112021066.png)
+
+
+
+
+
+
+
+**并行消费者**
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadLocalRandom;
+
+public class QosThreadConsumer {
+  public static void main(String[] args) throws Exception {
+
+    // 资源限制
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    // 设置channel并发请求最大数
+    factory.setRequestedChannelMax(5);
+
+    // 自定义线程池工厂
+    ThreadFactory thsFactory = Executors.privilegedThreadFactory();
+    factory.setThreadFactory(thsFactory);
+
+    Connection connection = factory.newConnection();
+    Channel channel = connection.createChannel();
+
+    // 定义交换器、队列和绑定
+    channel.exchangeDeclare("qos.ex", BuiltinExchangeType.DIRECT, false, false, null);
+    channel.queueDeclare("qos.qu", false, false, false, null);
+    channel.queueBind("qos.qu", "qos.ex", "qos.rk");
+
+    // 设置每秒处理2个
+    channel.basicQos(5, true);
+
+    channel.basicConsume(
+        "qos.qu",
+        false,
+        new DefaultConsumer(channel) {
+          @Override
+          public void handleDelivery(
+              String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
+              throws IOException {
+
+            LocalDateTime time = LocalDateTime.now();
+            long threadId = Thread.currentThread().getId();
+            System.out.println(
+                "[消费]"
+                    + time
+                    + ",线程:"
+                    + threadId
+                    + ",收到的消息:"
+                    + new String(body, StandardCharsets.UTF_8));
+
+            int randomSleep = ThreadLocalRandom.current().nextInt(20, 1000);
+            try {
+              Thread.sleep(randomSleep);
+            } catch (InterruptedException e) {
+              e.printStackTrace();
+            }
+
+            if (envelope.getDeliveryTag() % 3 == 0) {
+              // 进行消息确认
+              channel.basicAck(envelope.getDeliveryTag(), true);
+            }
+          }
+        });
+  }
+}
+
+```
+
+
+
+控制台输出：
+
+```sh
+[消费]2023-08-26T09:37:21.430,线程:24,收到的消息:这是发送的消息:0
+[消费]2023-08-26T09:37:21.866,线程:25,收到的消息:这是发送的消息:1
+[消费]2023-08-26T09:37:22.434,线程:25,收到的消息:这是发送的消息:2
+[消费]2023-08-26T09:37:22.847,线程:25,收到的消息:这是发送的消息:3
+[消费]2023-08-26T09:37:23.685,线程:25,收到的消息:这是发送的消息:4
+[消费]2023-08-26T09:37:23.847,线程:26,收到的消息:这是发送的消息:5
+......
+[消费]2023-08-26T09:39:10.684,线程:28,收到的消息:这是发送的消息:526
+[消费]2023-08-26T09:39:10.695,线程:32,收到的消息:这是发送的消息:527
+[消费]2023-08-26T09:39:10.767,线程:32,收到的消息:这是发送的消息:528
+......
+[消费]2023-08-26T09:39:58.270,线程:27,收到的消息:这是发送的消息:996
+[消费]2023-08-26T09:39:58.405,线程:27,收到的消息:这是发送的消息:997
+[消费]2023-08-26T09:39:58.575,线程:27,收到的消息:这是发送的消息:998
+[消费]2023-08-26T09:39:58.671,线程:27,收到的消息:这是发送的消息:999
+```
+
+
+
 如果Qos设置为全局，则可以看到到
 
 ```sh
@@ -6629,25 +6744,333 @@ Listing channels ...
 
 
 
-网页端查看
+### 7.8 消息幂等性处理
 
-![image-20230825112021066](img\image-20230825112021066.png)
+RabbitMQ层面有实现“去重机制”来保证“恰好一次”吗？答案是没并没有，而且现在主流的消息中间件都没有实现。
+
+一般解决重复消息的办法是：在消费端让我们消费消息操作具有幂等性。
+
+幂等性问题并不是消息系统独有，而是（分布式）系统中普遍存在的问题。一个幂等操作的特点是，其任意多次执行所产生的影响均与一次执行的影响相同。一个幂等的方法，使用同样的参数，对它进行多次调用和一次调用，对系统产生的影响是一样的。
+
+对于幂等的方法，不用担心重复执行会对系统造成任何改变。
+
+业界对于幂等性的一些常见的做法：
+
+>1. 借助数据库唯一索引，重复插入直接报错，事务回滚。以经典的转账为例，为了保证不重复扣款或者重复加钱，系统维护一张资金变动表，这个表里至少需要记录交易单号、变动账户、变动金额等字段，使用交换单号和变动账号做联合唯一索引（单号一般由上游系统生成保证唯一性）这样如果同一笔交易发生重复请求时就会直接报索引冲突，事务直接回滚，现实中数据库唯一索引的方法通常做为兜底的保证；
+>
+>2. 前置检查机制。还以上面的转账为例，当我们在执行更改帐号余额这个动作之前，先检查下资金变动表是否存在这笔交换相关的记录了，如果已经存在，直接返回。否则执行正常的更新余额的动作。为防止并发问题，通常需要借助“排他锁”，我们也可以使用乐观锁或者CAS机制。乐观锁一般会使用扩展一个版本号字段做判断条件。
+>3.  唯一ID机制。比较通用的方法。对于每条消息都可以生成唯一的ID,消费前判断交易表中是否存在，消费成功后将状态写入。可以防止重复消费。
 
 
 
+### 7.9 可靠性分析
+
+在使用消息中间件的过程中，难免会出现消息错误或者消息丢失等异常情况。这个时候就需要有一个良好的机制来跟踪记录消息的过程（轨迹溯源），帮助我们排查问题。
+
+在RabbitMQ中可以使用Firehose实现消息的跟踪，Firehose可以记录每一次发送或者消息的记录，方便RabbitMQ的使用都进行调试、排错等。
+
+FireHose的原理是将生产者投递给RabbitMQ的消息，或者RabbitMQ投递给消费者的消息按照指定的格式，发送到默认交换器上，这个默认交换器的名称是：`amq.rabbitmq.trace`它是一个topic类型的交换器。发送到交换器的消息的路由键为`publis.{exchangename}`和`deliver.{queuename}`。其中exchangename和queuename为交换器和队列名字。分别对应生产者投递到交换器的消息和消费者从队列中获取的消息。
 
 
 
+![image-20230826103101487](img\image-20230826103101487.png)
 
 
 
+上图是一个样例。生产者将消息发送至`trace.ex`交换器，交换器将消息路由至`trace.qu`这个队列，然后由消息者将消息取走。当消息到达`trace.ex`这个队列后，消息就会投递一份到名称为`amq.rabbitmq.trace`的交换器，按收到交换器的名称加上一个前缀变更`publish.trace.ex`作为路由的KEY，投递一份至publishtrace这个队列中；接收消息也样如此，当消费都取走消息时，会将消息发送一份到名称为`amq.rabbitmq.trace`的交换器,按消费者队列的名称加一个前缀变成`deliver.trace.qu`作为路由的KEY，投递至delivertrace这个队列中。
+
+Firehose命令：
+
+```sh
+# 开启命令
+rabbitmqctl trace_on [-p vhose]
+# [-p vhose]是可选参数，用来指定虚拟主机的vhose
+
+# 关闭命令
+rabbitmqctl trace_off [-p vhose]
+```
+
+Firehose默认情况下处于关闭状态，并且Firehose的状态是非持久化的，会在RabbitMQ服务重启的时候还原成默认的状态。Firehose开启之后会影响RabbitMQ整体服务性能，因为它会引起额外的消息生成、路由和存储 。
 
 
 
+#### 7.9.1 Firehose验证
+
+首先开启追溯
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl trace_on -p / 
+Starting tracing for vhost "/" ...
+Trace enabled for vhost /
+```
+
+生产者
+
+```sh
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeoutException;
+
+public class TraceProduce {
+  public static void main(String[] args) throws Exception {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+      // 定义交换机
+      channel.exchangeDeclare("trace.ex", BuiltinExchangeType.DIRECT, false, true, null);
+      // 定义队列
+      channel.queueDeclare("trace.qu", false, false, true, null);
+      // 队列绑定
+      channel.queueBind("trace.qu", "trace.ex", "");
+
+      // 定义保留数据队列
+      channel.queueDeclare("publishtrace", false, false, false, null);
+      // 绑定
+      channel.queueBind("publishtrace", "amq.rabbitmq.trace", "publish.trace.ex");
+
+      for (int i = 0; i < 100; i++) {
+        String msg = "这是发送的消息:" + i;
+        channel.basicPublish("trace.ex", "", null, msg.getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+    }
+  }
+}
+
+```
+
+检查队列的信息:
+
+```sh
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌──────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name         │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├──────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ publishtrace │ 100            │ 0                       │ 100      │ 0         │
+├──────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ trace.qu     │ 100            │ 0                       │ 100      │ 0         │
+└──────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+这样生产者发送的消息就已经被保存至publishtrace中了，后缀便可以通过检查队列中的消息，检查消息内容。
 
 
 
+消费者
 
+```sh
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.GetResponse;
+import java.nio.charset.StandardCharsets;
+
+public class TraceConsumer {
+  public static void main(String[] args) throws Exception {
+
+    // 资源限制
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+
+      // 定义交换机
+      channel.exchangeDeclare("trace.ex", BuiltinExchangeType.DIRECT, false, true, null);
+      // 定义队列
+      channel.queueDeclare("trace.qu", false, false, true, null);
+      // 队列绑定
+      channel.queueBind("trace.qu", "trace.ex", "");
+
+      // 定义队列
+      channel.queueDeclare("delivertrace", false, false, true, null);
+      // 队列绑定
+      channel.queueBind("delivertrace", "amq.rabbitmq.trace", "deliver.trace.qu");
+
+      // 接收消息
+      for (int i = 0; i < 25; i++) {
+        GetResponse getResponse = channel.basicGet("trace.qu", true);
+        String msg = new String(getResponse.getBody(), StandardCharsets.UTF_8);
+        System.out.println("收到的消息：" + msg);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+}
+```
+
+此处采用的是拉模式，从队列中获取了25条记录，也就是说队列中还剩余75条记录。
+
+首先查看控制台输出：
+
+```sh
+收到的消息：这是发送的消息:0
+收到的消息：这是发送的消息:1
+收到的消息：这是发送的消息:2
+收到的消息：这是发送的消息:3
+......
+收到的消息：这是发送的消息:22
+收到的消息：这是发送的消息:23
+收到的消息：这是发送的消息:24
+```
+
+检查队列的情况：
+
+```sh
+[root@nullnull-os rabbitmq]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌──────────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name         │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├──────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ delivertrace │ 25             │ 0                       │ 25       │ 0         │
+├──────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ publishtrace │ 100            │ 0                       │ 100      │ 0         │
+├──────────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ trace.qu     │ 75             │ 0                       │ 75       │ 0         │
+└──────────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+[root@nullnull-os rabbitmq]# 
+```
+
+可以发现，拉的消息，都已经被推送到了delivertrace中了。
+
+
+
+最后关闭Tracehose
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl trace_off -p / 
+Stopping tracing for vhost "/" ...
+Trace disabled for vhost /
+```
+
+使用Firehose验证完成。
+
+
+
+#### 7.9.2 rabbitmq_tracing插件
+
+rabbitmq_tracing插件相当于Firehose的GUI版本，它同样能跟踪RabbitMQ中消息的注入流出情况。rabbitmq_tracing插件同样会对流入流出的消息进行封装，然后将封装后的消息日志存入相应的trace文件中。
+
+```sh
+# 开启插件
+rabbitmq-plugins enable rabbitmq_tracing
+
+# 关闭插件
+rabbitmq-plugins disable rabbitmq_tracing
+```
+
+代码使用之前Firehose的代码.
+
+首先开启插件
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmq-plugins disable rabbitmq_tracing
+Disabling plugins on node rabbit@nullnull-os:
+rabbitmq_tracing
+The following plugins have been configured:
+  rabbitmq_management
+  rabbitmq_management_agent
+  rabbitmq_web_dispatch
+Applying plugin configuration to rabbit@nullnull-os...
+The following plugins have been disabled:
+  rabbitmq_tracing
+
+stopped 1 plugins.
+[root@nullnull-os rabbitmq]# rabbitmq-plugins list
+Listing plugins with pattern ".*" ...
+ Configured: E = explicitly enabled; e = implicitly enabled
+ | Status: * = running on rabbit@nullnull-os
+ |/
+[  ] rabbitmq_amqp1_0                  3.8.5
+[  ] rabbitmq_auth_backend_cache       3.8.5
+[  ] rabbitmq_auth_backend_http        3.8.5
+[  ] rabbitmq_auth_backend_ldap        3.8.5
+[  ] rabbitmq_auth_backend_oauth2      3.8.5
+[  ] rabbitmq_auth_mechanism_ssl       3.8.5
+[  ] rabbitmq_consistent_hash_exchange 3.8.5
+[  ] rabbitmq_event_exchange           3.8.5
+[  ] rabbitmq_federation               3.8.5
+[  ] rabbitmq_federation_management    3.8.5
+[  ] rabbitmq_jms_topic_exchange       3.8.5
+[E*] rabbitmq_management               3.8.5
+[e*] rabbitmq_management_agent         3.8.5
+[  ] rabbitmq_mqtt                     3.8.5
+[  ] rabbitmq_peer_discovery_aws       3.8.5
+[  ] rabbitmq_peer_discovery_common    3.8.5
+[  ] rabbitmq_peer_discovery_consul    3.8.5
+[  ] rabbitmq_peer_discovery_etcd      3.8.5
+[  ] rabbitmq_peer_discovery_k8s       3.8.5
+[  ] rabbitmq_prometheus               3.8.5
+[  ] rabbitmq_random_exchange          3.8.5
+[  ] rabbitmq_recent_history_exchange  3.8.5
+[  ] rabbitmq_sharding                 3.8.5
+[  ] rabbitmq_shovel                   3.8.5
+[  ] rabbitmq_shovel_management        3.8.5
+[  ] rabbitmq_stomp                    3.8.5
+[  ] rabbitmq_top                      3.8.5
+[E*] rabbitmq_tracing                  3.8.5
+[  ] rabbitmq_trust_store              3.8.5
+[e*] rabbitmq_web_dispatch             3.8.5
+[  ] rabbitmq_web_mqtt                 3.8.5
+[  ] rabbitmq_web_mqtt_examples        3.8.5
+[  ] rabbitmq_web_stomp                3.8.5
+[  ] rabbitmq_web_stomp_examples       3.8.5
+[root@nullnull-os rabbitmq]# 
+```
+
+至网页端
+
+![image-20230826113118594](img\image-20230826113118594.png)
+
+
+
+填充跟踪信息
+
+name表示rabbitmq_tracing的一个条目的名称，
+
+format可以选择text或者JSON
+
+连接用户名和密码，按创建的用户名管密码，这里填充:root/123456
+
+pattern: 发布的消息: publish.<exchangename>
+
+pattern: 消费的消息: deliver.<queuename>
+
+![image-20230826144002791](img\image-20230826144002791.png)
+
+分别添加生产者的追溯和消费都的追溯,然后分别运行生产者和消费者。
+
+![image-20230826150047626](img\image-20230826150047626.png)
+
+text格式的文件信息:
+
+![image-20230826150205839](img\image-20230826150205839.png)
+
+json格式数据：
+
+![image-20230826150248019](img\image-20230826150248019.png)
+
+在这里还在两个队列：
+
+![image-20230826150358454](img\image-20230826150358454.png)
+
+这两个临时队列，在追溯停止后，也将不存在了。这就是网页端的追溯，相对于Firehose使用起来也更简单。可以直接通过网页端进行查看。
 
 ## 结束
 
