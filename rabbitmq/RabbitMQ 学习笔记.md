@@ -7175,11 +7175,178 @@ RabbitMQ可以对消息和队列两个维度来设置TTL。
 
 **使用原生API操作**
 
+在队列上设置消息的过期时间
+
+```java
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+public class ProductTTL {
+  public static void main(String[] args) throws Exception {
+
+    ConnectionFactory factory = new ConnectionFactory();
+
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+      // 定义相关的参数
+      Map<String, Object> param = new HashMap<>();
+
+      // 设置队列的TTL，即此消息10秒后过期，
+      param.put("x-message-ttl", 10000);
+      // 设置队列的空闲时间，（如果队列没有消费者或者一直没有使用，队列可存活的时间）
+      // 可以理解为没有消费者时，消息队列20秒后删除。
+      param.put("x-expires", 20000);
+
+      channel.queueDeclare("ttl.qu", false, false, false, param);
+
+      for (int i = 0; i < 100; i++) {
+        String sendMsg = "this is test msg :" + i;
+        channel.basicPublish("", "ttl.qu", null, sendMsg.getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+}
+```
+
+
+
+启动生产者
+
+检查队列的信息
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name   │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ttl.qu │ 100            │ 0                       │ 100      │ 0         │
+└────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+```
+
+经过10秒后
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌────────┬────────────────┬─────────────────────────┬──────────┬───────────┐
+│ name   │ messages_ready │ messages_unacknowledged │ messages │ consumers │
+├────────┼────────────────┼─────────────────────────┼──────────┼───────────┤
+│ ttl.qu │ 0              │ 0                       │ 0        │ 0         │
+└────────┴────────────────┴─────────────────────────┴──────────┴───────────┘
+```
+
+再经过10秒后
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+```
+
+
+
+经过操作后可以发现，此消息队列中的消息存活了10秒，然后消息就被清空了，由于队列的存活时间设置为20秒，没有消费者，所以经过了20秒后，队列就被清空了。
+
+
+
+还可以将消息指定在消息中，效果相同
+
+```java
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+public class ProductTTLMsg {
+  public static void main(String[] args) throws Exception {
+
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setUri("amqp://root:123456@node1:5672/%2f");
+    try (Connection connection = factory.newConnection();
+        Channel channel = connection.createChannel(); ) {
+      // 定义相关的参数
+      Map<String, Object> param = new HashMap<>();
+      // 设置队列的空闲时间，（如果队列没有消费者或者一直没有使用，队列可存活的时间）
+      // 可以理解为没有消费者时，消息队列20秒后删除。
+      param.put("x-expires", 20000);
+      channel.queueDeclare("ttl.qu", false, false, false, param);
+
+      for (int i = 0; i < 100; i++) {
+        String sendMsg = "this is test msg :" + i;
+        // 在消息上指定存活时间为8秒
+        AMQP.BasicProperties properties =
+            new AMQP.BasicProperties().builder().expiration("8000").build();
+        channel.basicPublish("", "ttl.qu", properties, sendMsg.getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+}
+```
+
+
+
+还可以通过命令设置全局的TTL
+
+```sh
+rabbitmqctl set_policy TTL ".*" '{"message-ttl": 9000}' --apply-to queues
+```
 
 
 
 
 
+观察队列的policy信息
+
+未设置策略前
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers,policy  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┬────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │ policy │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ ttl.tmp.queue │ 0              │ 0                       │ 0        │ 0         │        │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┴────────┘
+```
+
+设置策略后
+
+```sh
+[root@nullnull-os rabbitmq]# rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers,policy  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌───────────────┬────────────────┬─────────────────────────┬──────────┬───────────┬────────┐
+│ name          │ messages_ready │ messages_unacknowledged │ messages │ consumers │ policy │
+├───────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ ttl.tmp.queue │ 0              │ 0                       │ 0        │ 0         │ TTL    │
+└───────────────┴────────────────┴─────────────────────────┴──────────┴───────────┴────────┘
+```
+
+
+
+
+
+默认规则：
+
+1. 如果不设置TTL，则表示此消息不会过期；
+2. 如果TTL设置为0，则表示除非此时可以直接将消息投递到消费者，否则该消息会被立即丢弃。
 
 
 
