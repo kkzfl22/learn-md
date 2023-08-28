@@ -40,6 +40,7 @@
         <module>mq-20-resource-limit</module>
         <module>mq-21-consumer-qos</module>
         <module>mq-22-trace</module>
+        <module>mq-23-ttl</module>
     </modules>
 
     <properties>

@@ -7072,5 +7072,118 @@ json格式数据：
 
 这两个临时队列，在追溯停止后，也将不存在了。这就是网页端的追溯，相对于Firehose使用起来也更简单。可以直接通过网页端进行查看。
 
+
+
+
+
+## 8. TTL机制
+
+![image-20230828092522336](img\image-20230828092522336.png)
+
+在支付类的场景中，创建订单成功后，一般会给30分钟左右的等待时间，如果在这段时间内用户没有支付，则默认订单取消。
+
+那如何实现呢？
+
+### 8.1 定期轮询（数据库等）
+
+用户下单成功，将订单信息放入数据库，同时将支付状态放入数据库，用户付款更改数据库状态。定期轮询数据库支付状态，如果超过30分钟就将该订单取消。
+
+优点：设计实现简单
+
+缺点：需要对数据库进行大量的IO操作，效率低下。
+
+### 8.2 定时操作-Timer
+
+```java
+  public void timerTask() throws Exception {
+    Timer timer = new Timer();
+
+    TimerTask task =
+        new TimerTask() {
+          @Override
+          public void run() {
+            LocalDateTime outTime = LocalDateTime.now();
+            System.out.println("用户没有付款，交易取消:" + outTime);
+            timer.cancel();
+          }
+        };
+
+    System.out.println("等待用户付款:" + LocalDateTime.now());
+    // 在20秒后执行定时调用
+    timer.schedule(task, 5 * 1000);
+
+    Thread.sleep(7000);
+  }
+```
+
+缺点：
+
+1. timers没有持久化机制。
+2. timers不灵活（只可以设置开始时间与重复间隔，但对于等待支付的场景是够用的）
+3. timers不能够利用池，一个timer一个线程。
+4. times没有真正的管理计划。
+
+
+
+### 8.3 使用ScheduledExecutorService
+
+```java
+  public void scheduleExecute() throws Exception {
+    ThreadFactory factory = Executors.defaultThreadFactory();
+    ScheduledExecutorService service = new ScheduledThreadPoolExecutor(10, factory);
+
+    System.out.println("等待用户付款:" + LocalDateTime.now());
+
+    service.schedule(
+        new Runnable() {
+          @Override
+          public void run() {
+            LocalDateTime outTime = LocalDateTime.now();
+            System.out.println("用户没有付款，交易取消:" + outTime);
+          }
+        },
+        // 等待5秒
+        5,
+        TimeUnit.SECONDS);
+
+    Thread.sleep(7000);
+  }
+```
+
+优点：可以多线程执行，一定程序上避免任何任务间的想到影响，单个任务异常不影响其他任务。
+
+缺点：在高并情况下，不建议使用定时任务去做，因为太浪费服务器性能。不推荐。
+
+
+
+### 8.4 RabbitMQ的TTL机制
+
+TTL，time to live 的简称，即过期时间。
+
+RabbitMQ可以对消息和队列两个维度来设置TTL。
+
+任何消息中间件的容量和堆积都是有限的，如果有一些消息总是不被消费掉，那么需要有一种过期的机制来做兜底。
+
+目前有两种方法可以设置消息的TTL。
+
+1. 通过Queue属性设置，队列中所有的消息使用相同的过期时间。
+2. 对消息自身进行单独的设置。每条消息的TTL可以不同。
+
+如果两种方法一起使用，则消息的TTL以两者之间较小数值为准，通常来说，消息在队列中的生存时间一旦超过设置的TTL值时，就会变更“死信（Dead Message）”，消费者默认就无法再收到该消息。当然，“死信”也是可以被取出来消费的。
+
+
+
+**使用原生API操作**
+
+
+
+
+
+
+
+
+
+
+
 ## 结束
 
