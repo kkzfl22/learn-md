@@ -42,6 +42,8 @@
         <module>mq-22-trace</module>
         <module>mq-23-ttl</module>
         <module>mq-24-ttl-springboot</module>
+        <module>mq-25-dlx</module>
+        <module>mq-26-dlx-springboot</module>
     </modules>
 
     <properties>
