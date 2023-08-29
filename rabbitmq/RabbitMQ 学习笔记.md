@@ -7171,9 +7171,7 @@ RabbitMQ可以对消息和队列两个维度来设置TTL。
 
 如果两种方法一起使用，则消息的TTL以两者之间较小数值为准，通常来说，消息在队列中的生存时间一旦超过设置的TTL值时，就会变更“死信（Dead Message）”，消费者默认就无法再收到该消息。当然，“死信”也是可以被取出来消费的。
 
-
-
-**使用原生API操作**
+#### **使用原生API操作**
 
 在队列上设置消息的过期时间
 
@@ -7347,6 +7345,278 @@ Listing queues for vhost / ...
 
 1. 如果不设置TTL，则表示此消息不会过期；
 2. 如果TTL设置为0，则表示除非此时可以直接将消息投递到消费者，否则该消息会被立即丢弃。
+
+
+
+#### **使用SpringBoot**
+
+maven导入
+
+```xml
+<dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+            <version>2.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>2.2.8.RELEASE</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>2.2.8.RELEASE</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
+            <version>2.2.7.RELEASE</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+```
+
+springboot配制
+
+```yaml
+spring:
+  application:
+    name: ttl
+  rabbitmq:
+    host: node1
+    port: 5672
+    virtual-host: /
+    username: root
+    password: 123456
+```
+
+主入口类
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class TtlApplication {
+  public static void main(String[] args) {
+    SpringApplication.run(TtlApplication.class, args);
+  }
+}
+
+```
+
+
+
+创建队列与交换器
+
+```java
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Exchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Controller;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration
+public class TtlConfig {
+
+  /**
+   * 在队列上设置等待时间
+   *
+   * @return
+   */
+  @Bean
+  public Queue queueTtlWaiting() {
+    Map<String, Object> props = new HashMap<>();
+    // 设置消息队列的等待时间为10S
+    props.put("x-message-ttl", 10000);
+    // 设置过期时间为20秒
+    props.put("x-expires", 20000);
+    Queue queue = new Queue("ttl.wait.qu", false, false, false, props);
+    return queue;
+  }
+
+  /**
+   * 定义交换器
+   *
+   * @return
+   */
+  @Bean
+  public Exchange exchangeTtlWaiting() {
+    return new DirectExchange("ttl.wait.ex", false, false);
+  }
+
+  /**
+   * 队列与交换器绑定
+   *
+   * @return
+   */
+  @Bean
+  public Binding bindingTtlWaiting() {
+    return BindingBuilder.bind(queueTtlWaiting())
+        .to(exchangeTtlWaiting())
+        .with("ttl.wait.rk")
+        .noargs();
+  }
+
+  /**
+   * 定义一个普通的队列，不设置TTL，给每个消息设置过期时间
+   *
+   * @return
+   */
+  @Bean
+  public Queue queueWaiting() {
+    Map<String, Object> props = new HashMap<>();
+    // 设置队列的过期时间为20秒，如果没有消费者20秒后，队列被删除
+    props.put("x-expires", 20000);
+
+    Queue queue = new Queue("wait.qu", false, false, false, props);
+    return queue;
+  }
+
+  /**
+   * 定义交换器,给每个消息设置过期时间
+   *
+   * @return
+   */
+  @Bean
+  public Exchange exchangeWaiting() {
+    return new DirectExchange("wait.ex", false, false);
+  }
+
+  /**
+   * 定义一个队列与交换器的绑定,给每个消息设置过期时间
+   *
+   * @return
+   */
+  @Bean
+  public Binding bingingWaiting() {
+    return BindingBuilder.bind(queueWaiting()).to(exchangeWaiting()).with("wait.rk").noargs();
+  }
+}
+
+```
+
+
+
+控制器处理
+
+```java
+import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.MessagePropertiesBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import java.nio.charset.StandardCharsets;
+
+@RestController
+public class TtlController {
+  @Autowired private AmqpTemplate template;
+  /**
+   * 队列中设置了TTL
+   *
+   * @return
+   */
+  @RequestMapping("/queue/ttl")
+  public String sendQueueTtl() {
+    String msg = "这是发送的测试TTL数据-TTL-WAITING-MESSAGE";
+    // 发送
+    template.convertAndSend("ttl.wait.ex", "ttl.wait.rk", msg);
+    return "ttl-ok";
+  }
+
+  @RequestMapping("/message/ttl")
+  public String sendMessageTtl() {
+    MessageProperties build =
+        MessagePropertiesBuilder.newInstance()
+            // 过期时间为5秒
+            .setExpiration("5000")
+            .build();
+    String msgStr = "这是发送的数据-消息的TTL";
+    Message msg = new Message(msgStr.getBytes(StandardCharsets.UTF_8), build);
+    template.convertAndSend("wait.ex", "wait.rk", msg);
+    return "msg-ok";
+  }
+}
+
+```
+
+启动SpringBoot的工程
+
+首先测试给队列指定过期时间
+
+http://127.0.0.1:8080/queue/ttl
+
+首先观察队列中的数据
+
+```java
+[root@nullnull-os ~]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers,policy  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌─────────────┬────────────────┬─────────────────────────┬──────────┬───────────┬────────┐
+│ name        │ messages_ready │ messages_unacknowledged │ messages │ consumers │ policy │
+├─────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ wait.qu     │ 0              │ 0                       │ 0        │ 0         │ TTL    │
+├─────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ ttl.wait.qu │ 1              │ 0                       │ 1        │ 0         │ TTL    │
+└─────────────┴────────────────┴─────────────────────────┴──────────┴───────────┴────────┘
+```
+
+可以看到数据已经成功的进入了队列。
+
+再等待10秒，观察队列
+
+```java
+[root@nullnull-os ~]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers,policy  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+┌─────────────┬────────────────┬─────────────────────────┬──────────┬───────────┬────────┐
+│ name        │ messages_ready │ messages_unacknowledged │ messages │ consumers │ policy │
+├─────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ wait.qu     │ 0              │ 0                       │ 0        │ 0         │ TTL    │
+├─────────────┼────────────────┼─────────────────────────┼──────────┼───────────┼────────┤
+│ ttl.wait.qu │ 0              │ 0                       │ 0        │ 0         │ TTL    │
+└─────────────┴────────────────┴─────────────────────────┴──────────┴───────────┴────────┘
+
+```
+
+队列中的消息已经过期，但队列还是存在的。
+
+最后超过队列的过期时间后，队列被删除
+
+```java
+[root@nullnull-os ~]#  rabbitmqctl list_queues name,messages_ready,messages_unacknowledged,messages,consumers,policy  --formatter pretty_table
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+```
+
+消息的过期时间：http://127.0.0.1:8080/message/ttl
+
+此结果与队列的效果一致。
+
+
+
+注意，消息的TTL和队列的TTL两个同时设置了，以两者之间较小数值为准。消息的TTL与队列的过期时间之间，同时被设置了也是一样，以较小的数值为准。
+
+
+
+## 9. 死信队列
 
 
 

@@ -41,6 +41,7 @@
         <module>mq-21-consumer-qos</module>
         <module>mq-22-trace</module>
         <module>mq-23-ttl</module>
+        <module>mq-24-ttl-springboot</module>
     </modules>
 
     <properties>

@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: ttl
+  rabbitmq:
+    host: node1
+    port: 5672
+    virtual-host: /
+    username: root
+    password: 123456
