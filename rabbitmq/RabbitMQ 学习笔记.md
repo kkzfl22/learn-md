@@ -2015,6 +2015,8 @@ public class Consumer {
 
 #### 4.3.4 路由模式
 
+官方文档参考：https://www.rabbitmq.com/tutorials/tutorial-four-python.html
+
 ![](img\direct-exchange.png)
 
 使用`direct`类型的Exchange,发N条消息并使用不同的routingKey,消费者定义队列并将队列`routingKey`、Exchange绑定。此时使用`direct`模式Exchange必须要`routingKey`完成匹配的情况下消息才会转发到对应的队列中被消费。
@@ -2334,6 +2336,8 @@ warn收到的消息:[WARN] 消息发送 :29
 
 
 #### 4.3.5 主题模式
+
+官方文档参考：https://www.rabbitmq.com/tutorials/tutorial-five-python.html
 
 
 
