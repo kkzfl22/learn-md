@@ -8453,3 +8453,168 @@ http://127.0.0.1:8080/notify/2
 
 ![image-20230830141504301](img\image-20230830141504301.png)
 
+
+
+
+
+
+
+
+
+
+
+## 12. 单机多实例部署
+
+在单个节点上实现多个RabbitMQ的实例部署需要有以下几点：
+
+1. 多个RabbitMQ使用的端口号不能冲突。
+2. 多个RabbitMQ使用磁盘路径不能冲突。
+3. 多个RabbitMQ的配制文件也不能冲突。
+4. 多个RabbitMQ的虚拟主机的名称不能重复。
+
+**端口号**
+
+关于使用的端口号的说明：
+
+RABBITMQ_NODE_PORT 用于设置RabbitMQ的服务发现，对外发布的其他端口在这个端口基础上计算得来的
+
+| 端口号       | 说明                                                         |
+| ------------ | ------------------------------------------------------------ |
+| 4369         | epmd,RabbitMQ节点和CLI工具使用对等发现服务                   |
+| 5672、5671   | 不带TLS和带TLS的AMQP 0-9-1和1.0客户端使用                    |
+| 25672        | 用于节点间和CLI工具通信（Erlang分发服务器端口），并从动态范围分配（默认情况下限制为单个端口、计算AMQP端口+20000）。一般这些端口不应暴露出去。 |
+| 35672-35782  | 由CLI工具（Erlang分发客户端端口）用于与节点进行难，并从动态范围（计算为服务器分发端口+10000通过服务器分发端口+10010）分配 |
+| 15672        | HTTP的API客户端，管理 UI和RabbitMQadmin（仅在启用了插件的情况下） |
+| 61613、61614 | 不带TLS和带TLS的STOMP客户端（仅在启用STOMP插件的情况下）     |
+| 1883、8883   | 如果启用了MQTT插件，则不带TLS和具有TLS的MQTT客户端           |
+| 15674        | STOMP-over-WebSockets客户端（仅在启用了Web STOMP插件的情况下） |
+| 15675        | MQTT-over-WebSockets客户端（仅在启用Web MQTT插件的情况下）   |
+| 15692        | Promethenus指标（仅在启用Promethenus插件的情况下）           |
+
+**磁盘路径**
+
+RABBITMQ_NODENAME 用于设置RabbitMQ的节点名称，@前缀是用户名，@后缀是RabbitMQ所在的Linux主机的hostname。
+
+数据存储目录 
+
+```sh
+[root@nullnull-os rabbitmq]# pwd
+/var/lib/rabbitmq
+[root@nullnull-os rabbitmq]# cd mnesia/
+[root@nullnull-os mnesia]# ll
+drwxr-x---  4 rabbitmq rabbitmq 4096 Aug 30 14:08 rabbit@nullnull-os
+-rw-r-----  1 rabbitmq rabbitmq  135 Aug 30 12:35 rabbit@nullnull-os-feature_flags
+-rw-r-----  1 rabbitmq rabbitmq    5 Aug 30 12:35 rabbit@nullnull-os.pid
+drwxr-x--- 10 rabbitmq rabbitmq 4096 Aug 30 12:35 rabbit@nullnull-os-plugins-expand
+[root@nullnull-os mnesia]# ls
+rabbit@nullnull-os                rabbit@nullnull-os-plugins-expand
+rabbit@nullnull-os-feature_flags
+rabbit@nullnull-os.pid
+```
+
+日志存储目录 
+
+```sh
+[root@nullnull-os rabbitmq]# pwd
+/var/log/rabbitmq
+[root@nullnull-os rabbitmq]# ls
+log                                       rabbit@nullnull-os.log              rabbit@nullnull-os_upgrade.log-20230820.gz
+rabbit@nullnull-os.log-20230820.gz  rabbit@nullnull-os_upgrade.log-20230827.gz
+rabbit@nullnull-os.log-20230827.gz  rabbit@nullnull-os_upgrade.log-20230903.gz
+rabbit@nullnull-os.log-20230903.gz
+rabbit@nullnull-os_upgrade.log
+[root@nullnull-os rabbitmq]# cd log/
+[root@nullnull-os log]# ls
+crash.log  crash.log.0  crash.log.1  crash.log.2  crash.log.3  crash.log.4
+```
+
+
+
+**环境变量**
+
+| **环境变量**                                                 |
+| ------------------------------------------------------------ |
+| **RABBITMQ_NODE_IP_ADDRESS**                                 |
+| 将RabbitMQ绑定到一个网络接口。 如果要绑定多个网络接口，可以在配置文件中配置。 默认值：空字串。表示绑定到所有的网络接口。 |
+| **RABBITMQ_NODE_PORT**                                       |
+| 默认值：5672                                                 |
+| **RABBITMQ_DIST_PORT**                                       |
+| RabbitMQ节点之间通信以及节点和CLI工具通信用到的端口。 如果在配置文件中配置了kernel.inet_dist_listen_min 或者kernel.inet_dist_listen_max，则忽略该配置。 默认值：$RABBITMQ_NODE_PORT + 20000 |
+| **ERL_EPMD_ADDRESS**                                         |
+| epmd 使用的网络接口， epmd 用于节点之间以及节点和CLI之间的通信。 默认值：所有网络接口，包括和IPv4。 |
+| **ERL_EPMD_PORT**                                            |
+| epmd 使用的端口。 默认值：4369。                             |
+| **RABBITMQ_DISTRIBUTION_BUFFER_SIZE**                        |
+| 节点之间通信连接使用的发送数据缓冲区大小限制， 单位是KB。推荐使用小于64MB的值。 默认值： |
+| 128000。                                                     |
+| **RABBITMQ_IO_THREAD_POOL_SIZE**                             |
+| Erlang运行时的 I/O 用到的线程数。不推荐小于32的值。 默认值：128（Linux），64（Windows）。 |
+| **RABBITMQ_NODENAME**                                        |
+| RabbitMQ的节点名称。对于Erlang节点和机器，此名称应该唯一。 通过设置此值，可以在一台机器上多个RabbitMQ节点。 默认值：rabbit@$HOSTNAME（Unix-like），rabbit@%COMPUTERNAME%（Windows）。 |
+| **RABBITMQ_CONFIG_FILE**                                     |
+| RabbitMQ主要配置文件的路径。例如 /etc/rabbitmq/rabbitmq.conf 或者 /data/configuration/rabbitmq.conf 是新格式的配置文件。 如果是老格式的配置文件，扩展名是 .config 或者不写。 默认值： 对于Unix： $RABBITMQ_HOME/etc/rabbitmq/rabbitmq Debian: /etc/rabbitmq/rabbitmq RPM： /etc/rabbitmq/rabbitmq MacOS(Homebrew)：${install_prefix}/etc/rabbitmq/rabbitmq ， Homebrew的前缀通常是： /usr/local/  Windo %APPDATA%\RabbitMQ\rabbitmq |
+| **RABBITMQ_ADVANCED_CONFIG_FILE**                            |
+| RabbitMQ带 .config 的高级配置文件路径（基于Erlang配置）。例如， /data/rabbitmq/advanced.config 。默认值： Unix： $RABBITMQ_HOME/etc/rabbitmq/advanced   <br/> Debian： /etc/rabbitmq/advanced<br/> RPM： /etc/rabbitmq/advanced   <br/> MacOS(Homebrew)： ${install_prefix}/etc/rabbitmq/advanced ， 其中Homebrew前缀通常 <br/> 是 /etc/local/  <br/> Windows： %APPDATA%\RabbitMQ\advanced 。 |
+| **RABBITMQ_CONF_ENV_FILE**                                   |
+| 包含了环境变量定义的文件的目录（不使用 RABBITMQ_ 前缀）。 Windows上的文件名称与其他操作系同。 **默认值**： **UNIX**： $RABBITMQ_HOME/etc/rabbitmq/rabbitmq-env.conf **Ubuntu** **和** **Debian**： /etc/rabbitmq/rabbitmq-env.conf **RPM**： /etc/rabbitmq/rabbitmq-env.conf **Mac**  **(Homebrew)**： ${install_prefix}/etc/rabbitmq/rabbitmq-env.conf ，Homebrew的前缀一般是 /usr/local **Windows**： %APPDATA%\RabbitMQ\rabbitmq-env-conf.bat |
+| **RABBITMQ_MNESIA_BASE**                                     |
+| 包含了RabbitMQ服务器的节点数据库、消息存储以及 集群状态文件子目录的根目录。除非显式设置了RABBITMQ_MNESIA_DIR 的值。需要确保RabbitMQ用户 在该目录拥有读、写和创建文件以及子目录的该变量一般不要覆盖。一般覆盖 RABBITMQ_MNESIA_DIR 变量。 默认值： Unix：$RABBITMQ_HOME/var/lib/rabbitmq/mnesia Ubuntu和Debian： /var/lib/rabbitmq/mnesia/  RPM： /var/lib/rabbitmq/plugins MacOS（Homebrew）：${install_prefix}/var/lib/rabbitmq/mnesia ， 其中Homebrew的前缀一般是 /usr/local Windows： %APPDATA%\RabbitMQ |
+| **RABBITMQ_MNESIA_DIR**                                      |
+| RabbitMQ节点存储数据的目录。该目录中包含了数据库、 消息存储、集群成员信息以及节点其他的持状态。 默认值： **通用**  **UNIX**  **包**： $RABBITMQ_MNESIA_BASE/$RABBITMQ_NODENAME **Ubuntu ** **和** **Debia** $RABBITMQ_MNESIA_BASE/$RABBITMQ_NODENAME **RPM**： $RABBITMQ_MNESIA_BASE/$RABBITMQ_NO **MacOS (Homebrew)**： ${install_prefix}/var/lib/rabbitmq/mnesia/$RABBITMQ_NODENAME ，Homebrew的前缀一般是 /usr/local **Windows**: %APPDATA%\RabbitMQ\$RABBITMQ_NODENAME |
+| **RABBITMQ_PLUGINS_DIR**                                     |
+| 存放插件压缩文件的目录。RabbitMQ从此目录解压插件。 跟PATH变量语法类似，多个路径之间使用统的分隔符分隔 （Unix是 : ，Windows是';'）。插件可以安装到该变量指定的任何目录。 路径不要有符。 **默认值**： **通用** **UNIX** **包** ： $RABBITMQ_HOME/plugins **Ubuntu** **和** **Debian** 包： /var/lib/rabbitmq/plugins **RPM**： /var/lib/rabbitmq/plugins **MacOS (Homebrew)**：${install_prefix}/Cellar/rabbitmq/${version}/plugins ， Homebrew的前缀一般是 /usr/local **Windows**： %RABBITMQ_HOME%\plugins |
+| **RABBITMQ_PLUGINS_EXPAND_DIR**                              |
+| 节点解压插件的目录，并将该目录添加到代码路径。该路径不要包含特殊字符。 **默认值**： **UNIX**：<br/>$RABBITMQ_MNESIA_BASE/$RABBITMQ_NODENAME-plugins-expand **Ubuntu** **和** **Debian**  packages：<br/>$RABBITMQ_MNESIA_BASE/$RABBITMQ_NODENAME-plugins-expand **RPM**：$RABBITMQ_MNESIA_BASE/$RABBITMQ_NODENAME-plugins-expand **MacOS (Homebrew)**：${install_prefix}/var/lib/rabbitmq/mnesia/$RABBITMQ_NODENAME-plugins-expand **Window**%APPDATA%\RabbitMQ\$RABBITMQ_NODENAME-plugins-expand |
+| **RABBITMQ_USE_LONGNAME**                                    |
+| 当设置为 true 的时候，RabbitMQ会使用全限定主机名标记节点。 在使用全限定域名的环境中使用。重置节点， 不能在全限定主机名和短名之间切换。 默认值： false 。 |
+| **RABBITMQ_SERVER_CODE_PATH**                                |
+| 当启用运行时的时候指定的外部代码路径（目录）。 当节点启动的时候，这个是值传给 erl 的命令行,默认值：(none) |
+| **RABBITMQ_CTL_ERL_ARGS**                                    |
+| 当调用 rabbitmqctl 的时候传给 erl 的命令行参数。 可以给Erlang设置使用端口的范围： -kernel,inet_dist_listen_min 35672 -kernel inet_dist_listen_max 35680 默认值：(none) |
+| **RABBITMQ_SERVER_ERL_ARGS**                                 |
+| 当调用RabbitMQ服务器的时候 erl 的标准命令行参数。 仅用于测试目的。使用该环境变量会覆盖默认,默认值： Unix*： +P 1048576 +t 5000000 + stbt db +zdbbl 128000 Windows：没有 |
+| **RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS**                      |
+| 调用RabbitMQ服务器的时候传递给 erl 命令的额外参数。 该变量指定的变量追加到默认参数列表,（ RABBITMQ_SERVER_ERL_ARGS ）。 **默认值**： **Unix\* ** **：** 没有 **Windows** **：** 没有 |
+| **RABBITMQ_SERVER_START_ARGS**                               |
+| 调用RabbitMQ服务器的时候传给 erl 命令的额外参数。该变量不覆盖 RABBITMQ_SERVER_ERL_ARGS |
+| **默认值**：没有                                             |
+| **RABBITMQ_ENABLED_PLUGINS_FILE**                            |
+| 用于指定 enabled_plugins 文件所在的位置。默认： /etc/rabbitmq/enabled_plugins |
+
+**方式1：**
+
+```sh
+export RABBITMQ_NODE_PORT=5672
+export RABBITMQ_NODENAME=rabbit2
+rabbitmq-server
+
+export RABBITMQ_NODE_PORT=5673
+export RABBITMQ_NODENAME=rabbit3
+rabbitmq-server
+
+export RABBITMQ_NODE_PORT=5674
+export RABBITMQ_NODENAME=rabbit4
+rabbitmq-server
+```
+
+**方式2：**
+
+```sh
+RABBITMQ_NODE_PORT=5672 RABBITMQ_NODENAME=rabbit2 rabbitmq-server
+RABBITMQ_NODE_PORT=5673 RABBITMQ_NODENAME=rabbit3 rabbitmq-server
+RABBITMQ_NODE_PORT=5674 RABBITMQ_NODENAME=rabbit4 rabbitmq-server
+```
+
+这两种方式涉及到一个环境变量的可见性问题。
+
+使用分行来执行时，需要使用export来导出环境变量。凡是当前进程的sh文件都可以拿到值。
+
+如果使用一行，则可以直接拿到环境变量的值。
+
+
+
+
+
+
+
+## 结束
