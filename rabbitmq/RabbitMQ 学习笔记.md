@@ -8613,7 +8613,267 @@ RABBITMQ_NODE_PORT=5674 RABBITMQ_NODENAME=rabbit4 rabbitmq-server
 
 
 
+**WEB控制台管理插件**
 
+rabbitMQ从3.3开始禁用使用guest/guest权限通过除localhost外的访问，如果想使用guest/guest通过远程机器访问，需要在rabbitMQ配制文件中设置loopback_user.guest=false,当然还可以自己创建用户。
+
+
+
+
+
+**单机启动单实例操作--方式1**
+
+```sh
+export RABBITMQ_NODE_PORT=5672
+export RABBITMQ_NODENAME=rabbit2
+rabbitmq-server
+```
+
+使可看到如下提示：
+
+```sh
+[root@nullnull-os ~]# export RABBITMQ_NODE_PORT=5672
+[root@nullnull-os ~]# export RABBITMQ_NODENAME=rabbit2
+[root@nullnull-os ~]# rabbitmq-server
+
+  ##  ##      RabbitMQ 3.8.5
+  ##  ##
+  ##########  Copyright (c) 2007-2020 VMware, Inc. or its affiliates.
+  ######  ##
+  ##########  Licensed under the MPL 1.1. Website: https://rabbitmq.com
+
+  Doc guides: https://rabbitmq.com/documentation.html
+  Support:    https://rabbitmq.com/contact.html
+  Tutorials:  https://rabbitmq.com/getstarted.html
+  Monitoring: https://rabbitmq.com/monitoring.html
+
+  Logs: /var/log/rabbitmq/rabbit2@nullnull-os.log
+        /var/log/rabbitmq/rabbit2@nullnull-os_upgrade.log
+
+  Config file(s): /etc/rabbitmq/rabbitmq.conf
+
+  Starting broker... completed with 5 plugins.
+
+```
+
+
+
+输入浏览器地址便可查看WEB管理端:
+
+http://node1:15672/
+
+![image-20230907232456911](img\image-20230907232456911.png)
+
+
+
+
+
+
+
+**单机启动多实例操作--方式2**
+
+1. 创建配制文件，指定web管理的端口号
+
+```sh
+# 创建三个管理端的配制文件
+mkdir -p /opt/rabbitmq
+cd  /opt/rabbitmq
+touch rabbitmq1.conf rabbitmq2.conf rabbitmq3.conf
+
+# 修改文件的组归属为rabbitmq
+chown :rabbitmq *.conf
+
+
+# 在rabbitmq1.conf添加以下内容 vi rabbitmq1.conf ,主要是配制端口及放开guest可远程登录,
+management.tcp.port=5001
+loopback_users.guest=false
+
+
+# rabbitmq2.conf添加以下内容,vi rabbitmq2.conf, 主要是配制端口及放开guest可远程登录
+management.tcp.port=5002
+loopback_users.guest=false
+
+
+# rabbitmq3.conf添加以下内容,vi rabbitmq3.conf ,主要是配制端口及放开guest可远程登录
+management.tcp.port=5003
+loopback_users.guest=false
+
+```
+
+2. 启动多个实例
+
+```sh
+RABBITMQ_NODENAME=rabbit1 RABBITMQ_NODE_PORT=5671  RABBITMQ_CONFIG_FILE=/opt/rabbitmq/rabbitmq1.conf rabbitmq-server
+
+RABBITMQ_NODENAME=rabbit2 RABBITMQ_NODE_PORT=5672  RABBITMQ_CONFIG_FILE=/opt/rabbitmq/rabbitmq2.conf rabbitmq-server
+
+RABBITMQ_NODENAME=rabbit3 RABBITMQ_NODE_PORT=5673  RABBITMQ_CONFIG_FILE=/opt/rabbitmq/rabbitmq3.conf rabbitmq-server
+```
+
+当启动功能便会有如下输出：
+
+```sh
+[root@nullnull-os ~]# RABBITMQ_NODENAME=rabbit3 RABBITMQ_NODE_PORT=5673  RABBITMQ_CONFIG_FILE=/opt/rabbitmq/rabbitmq3.conf rabbitmq-server
+
+  ##  ##      RabbitMQ 3.8.5
+  ##  ##
+  ##########  Copyright (c) 2007-2020 VMware, Inc. or its affiliates.
+  ######  ##
+  ##########  Licensed under the MPL 1.1. Website: https://rabbitmq.com
+
+  Doc guides: https://rabbitmq.com/documentation.html
+  Support:    https://rabbitmq.com/contact.html
+  Tutorials:  https://rabbitmq.com/getstarted.html
+  Monitoring: https://rabbitmq.com/monitoring.html
+
+  Logs: /var/log/rabbitmq/rabbit3@nullnull-os.log
+        /var/log/rabbitmq/rabbit3@nullnull-os_upgrade.log
+
+  Config file(s): /opt/rabbitmq/rabbitmq3.conf
+
+  Starting broker... completed with 5 plugins.
+```
+
+
+
+3. 通过浏览器访问测试：
+
+http://node1:5001/
+
+http://node1:5002/
+
+http://node1:5003/
+
+
+
+![image-20230907231241165](img\image-20230907231241165.png)
+
+
+
+![image-20230907231330401](img\image-20230907231330401.png)
+
+
+
+4. 通过命令行查看状态
+
+```sh
+rabbitmqctl status --node rabbit1@nullnull-os
+```
+
+可看到信息如下：
+
+```sh
+[root@nullnull-os ~]# rabbitmqctl status --node rabbit1@nullnull-os
+Status of node rabbit1@nullnull-os ...
+Runtime
+
+OS PID: 14034
+OS: Linux
+Uptime (seconds): 1306
+RabbitMQ version: 3.8.5
+Node name: rabbit1@nullnull-os
+Erlang configuration: Erlang/OTP 23 [erts-11.0.2] [source] [64-bit] [smp:2:2] [ds:2:2:10] [async-threads:64] [hipe]
+Erlang processes: 450 used, 1048576 limit
+Scheduler run queue: 1
+Cluster heartbeat timeout (net_ticktime): 60
+
+Plugins
+
+Enabled plugin file: /etc/rabbitmq/enabled_plugins
+Enabled plugins:
+
+ * rabbitmq_delayed_message_exchange
+ * rabbitmq_tracing
+ * rabbitmq_management
+ * amqp_client
+ * rabbitmq_web_dispatch
+ * cowboy
+ * cowlib
+ * rabbitmq_management_agent
+
+Data directory
+
+Node data directory: /var/lib/rabbitmq/mnesia/rabbit1@nullnull-os
+Raft data directory: /var/lib/rabbitmq/mnesia/rabbit1@nullnull-os/quorum/rabbit1@nullnull-os
+
+Config files
+
+ * /opt/rabbitmq/rabbitmq1.conf
+
+Log file(s)
+
+ * /var/log/rabbitmq/rabbit1@nullnull-os.log
+ * /var/log/rabbitmq/rabbit1@nullnull-os_upgrade.log
+
+Alarms
+
+(none)
+
+Memory
+
+Calculation strategy: rss
+Memory high watermark setting: 0.4 of available memory, computed to: 1.5893 gb
+code: 0.0278 gb (32.15 %)
+other_proc: 0.0238 gb (27.49 %)
+other_system: 0.014 gb (16.16 %)
+allocated_unused: 0.0097 gb (11.25 %)
+plugins: 0.0057 gb (6.63 %)
+other_ets: 0.0033 gb (3.83 %)
+atom: 0.0014 gb (1.64 %)
+metrics: 0.0002 gb (0.24 %)
+binary: 0.0002 gb (0.21 %)
+mgmt_db: 0.0002 gb (0.2 %)
+mnesia: 0.0001 gb (0.1 %)
+quorum_ets: 0.0 gb (0.06 %)
+msg_index: 0.0 gb (0.03 %)
+connection_other: 0.0 gb (0.0 %)
+connection_channels: 0.0 gb (0.0 %)
+connection_readers: 0.0 gb (0.0 %)
+connection_writers: 0.0 gb (0.0 %)
+queue_procs: 0.0 gb (0.0 %)
+queue_slave_procs: 0.0 gb (0.0 %)
+quorum_queue_procs: 0.0 gb (0.0 %)
+reserved_unallocated: 0.0 gb (0.0 %)
+
+File Descriptors
+
+Total: 2, limit: 99904
+Sockets: 0, limit: 89911
+
+Free Disk Space
+
+Low free disk space watermark: 0.05 gb
+Free disk space: 68.6983 gb
+
+Totals
+
+Connection count: 0
+Queue count: 0
+Virtual host count: 1
+
+Listeners
+
+Interface: [::], port: 25671, protocol: clustering, purpose: inter-node and CLI tool communication
+Interface: [::], port: 5671, protocol: amqp, purpose: AMQP 0-9-1 and AMQP 1.0
+Interface: [::], port: 5001, protocol: http, purpose: HTTP API
+[root@nullnull-os ~]# 
+```
+
+
+
+5. 停止实例
+
+```sh
+rabbitmqctl -n rabbit1 stop
+
+rabbitmqctl -n rabbit2 stop
+
+rabbitmqctl -n rabbit3 stop
+```
+
+
+
+至此在单个机器上管理多个实例，便 已经成功了。
 
 
 
