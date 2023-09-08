@@ -8877,4 +8877,63 @@ rabbitmqctl -n rabbit3 stop
 
 
 
+## 13. MQ的集群的管理
+
+首先搭建RabitMQ集群。使用镜像队列，并借助HAProxy实现负载均衡。
+
+**环境说明**
+
+| 名称  | IP            | 说明  |
+| ----- | ------------- | ----- |
+| node1 | 192.168.3.150 | 节点1 |
+| node2 | 192.168.3.151 | 节点2 |
+| node3 | 192.168.3.152 | 节点3 |
+
+### 3.1 搭建rabbitMQ集群
+
+**1. 安装基础软件**
+
+以下操作在每台节点上都需要执行.
+
+```sh
+# 安装socat
+yum install -y socat
+
+# 安装erlang和rabbitMQ-server
+rpm -ivh erlang-23.0.2-1.el7.x86_64.rpm rabbitmq-server-3.8.5-1.el7.noarch.rpm
+```
+
+
+
+**2. 配制.erlang.cookie文件**
+
+由于现在已经使集群了，用户登录后，需要能操作任意一台节点，此`.erlang.cookie`文件是会话的cookie.一旦登录将会全局有效。
+
+如果没有`.erlang.cookie`文件，可以手动创建`/var/lib/rabbitmq/.erlang.cookie`,生成cookie字符串，或者启动一次RabbitMQ自动生成该文件。生产中建议使用第三方工具生成。
+
+首先可以启动一个`rabbitmq-server`，以生成cookie文件。
+
+```sh
+systemctl start rabbitmq-server
+```
+
+开始同步`.erlang.cookie`文件。RabbitMQ的集群依赖Erlang的分布式特性，需要保持Erlang Cookie的一致才能实现集群节点的认证和通信，可以直接使用SCP命令从node节点远程传输。
+
+```sh
+# 直接拷贝到node2的当前目录.
+#scp /var/lib/rabbitmq/.elrang.cookie node2:`pwd`
+
+scp /var/lib/rabbitmq/.erlang.cookie root@node1:/var/lib/rabbitmq/
+scp /var/lib/rabbitmq/.erlang.cookie root@node3:/var/lib/rabbitmq/
+
+```
+
+
+
+
+
+
+
+
+
 ## 结束
