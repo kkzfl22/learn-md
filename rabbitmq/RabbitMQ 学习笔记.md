@@ -3151,6 +3151,22 @@ public class ListenerApplication {
 
 ### 5.2 基于注解的整合
 
+
+
+maven导入
+
+```xml
+            <dependency>
+                <groupId>org.springframework.amqp</groupId>
+                <artifactId>spring-rabbit</artifactId>
+                <version>2.2.7.RELEASE</version>
+            </dependency>
+```
+
+
+
+
+
 #### **5.2.1 消息的生产者**
 
 ```java
@@ -3168,15 +3184,19 @@ public class ProducterApplication {
 
     public static void main(String[] args) throws Exception {
         AbstractApplicationContext context = new AnnotationConfigApplicationContext(RabbitConfig.class);
-
+		
         RabbitTemplate template = context.getBean(RabbitTemplate.class);
-
+		
+        //构造消息属性对象
         MessageProperties msgBuild = MessagePropertiesBuilder.newInstance()
+            	//设置消息的类型为文本
                 .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+            	//消息的编码方式为UTF-8
                 .setContentEncoding(StandardCharsets.UTF_8.name())
+            	//自定义消息头信息
                 .setHeader("test.header", "test.value")
                 .build();
-
+		//对象消息进行编码操作
         Message msg = MessageBuilder.withBody("你好 RabbitMQ!".getBytes(StandardCharsets.UTF_8))
                 .andProperties(msgBuild)
                 .build();
