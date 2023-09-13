@@ -3151,6 +3151,22 @@ public class ListenerApplication {
 
 ### 5.2 基于注解的整合
 
+
+
+maven导入
+
+```xml
+            <dependency>
+                <groupId>org.springframework.amqp</groupId>
+                <artifactId>spring-rabbit</artifactId>
+                <version>2.2.7.RELEASE</version>
+            </dependency>
+```
+
+
+
+
+
 #### **5.2.1 消息的生产者**
 
 ```java
@@ -3168,15 +3184,19 @@ public class ProducterApplication {
 
     public static void main(String[] args) throws Exception {
         AbstractApplicationContext context = new AnnotationConfigApplicationContext(RabbitConfig.class);
-
+		
         RabbitTemplate template = context.getBean(RabbitTemplate.class);
-
+		
+        //构造消息属性对象
         MessageProperties msgBuild = MessagePropertiesBuilder.newInstance()
+            	//设置消息的类型为文本
                 .setContentType(MessageProperties.CONTENT_TYPE_TEXT_PLAIN)
+            	//消息的编码方式为UTF-8
                 .setContentEncoding(StandardCharsets.UTF_8.name())
+            	//自定义消息头信息
                 .setHeader("test.header", "test.value")
                 .build();
-
+		//对象消息进行编码操作
         Message msg = MessageBuilder.withBody("你好 RabbitMQ!".getBytes(StandardCharsets.UTF_8))
                 .andProperties(msgBuild)
                 .build();
@@ -8883,15 +8903,15 @@ rabbitmqctl -n rabbit3 stop
 
 **环境说明**
 
-| 名称  | IP            | 说明  |
-| ----- | ------------- | ----- |
-| node1 | 192.168.3.150 | 节点1 |
-| node2 | 192.168.3.151 | 节点2 |
-| node3 | 192.168.3.152 | 节点3 |
+| 名称  | IP        | 说明  |
+| ----- | --------- | ----- |
+| node1 | 10.0.2.17 | 节点1 |
+| node2 | 10.0.2.18 | 节点2 |
+| node3 | 10.0.2.19 | 节点3 |
 
 ### 3.1 搭建rabbitMQ集群
 
-**1. 安装基础软件**
+**1. 安装基础软件及配制**
 
 以下操作在每台节点上都需要执行.
 
@@ -8901,6 +8921,11 @@ yum install -y socat
 
 # 安装erlang和rabbitMQ-server
 rpm -ivh erlang-23.0.2-1.el7.x86_64.rpm rabbitmq-server-3.8.5-1.el7.noarch.rpm
+
+# 配制hosts vi /etc/hosts
+10.0.2.17 node1
+10.0.2.18 node2
+10.0.2.19 node3
 ```
 
 
@@ -8919,16 +8944,48 @@ systemctl start rabbitmq-server
 
 开始同步`.erlang.cookie`文件。RabbitMQ的集群依赖Erlang的分布式特性，需要保持Erlang Cookie的一致才能实现集群节点的认证和通信，可以直接使用SCP命令从node节点远程传输。
 
+查看下`.erlang.cookie`文件内容
+
+```sh
+[root@node1 rabbitmq]# cat .erlang.cookie 
+PQCITNGXVYGBYBBETBQJ
+```
+
+拷贝至其他机器
+
 ```sh
 # 直接拷贝到node2的当前目录.
 #scp /var/lib/rabbitmq/.elrang.cookie node2:`pwd`
 
-scp /var/lib/rabbitmq/.erlang.cookie root@node1:/var/lib/rabbitmq/
+scp /var/lib/rabbitmq/.erlang.cookie root@node2:/var/lib/rabbitmq/
 scp /var/lib/rabbitmq/.erlang.cookie root@node3:/var/lib/rabbitmq/
 
 ```
 
+修改node2和node3的`.erlang.cookie`文件所有者
 
+```sh
+chown rabbitmq:rabbitmq /var/lib/rabbitmq/.erlang.cookie
+```
+
+需要保证所属组和用户都是rabbitmq,并且注意`.erlang.cookie`的文件权限为400，即为只读
+
+```sh
+[root@node3 rabbitmq]# ls -al
+total 8
+drwxr-xr-x.  3 rabbitmq rabbitmq   42 Sep  8 23:22 .
+drwxr-xr-x. 24 root     root     4096 Sep  8 23:10 ..
+-r--------.  1 rabbitmq rabbitmq   20 Sep  8 23:22 .erlang.cookie
+drwxr-x---.  2 rabbitmq rabbitmq    6 Jun 15  2020 mnesia
+```
+
+
+
+**3.启动node2和node3节点上的rabbitmq**
+
+```sh
+systemctl start rabbitmq-server
+```
 
 
 
