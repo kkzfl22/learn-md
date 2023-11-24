@@ -8901,6 +8901,8 @@ rabbitmqctl -n rabbit3 stop
 
 首先搭建RabitMQ集群。使用镜像队列，并借助HAProxy实现负载均衡。
 
+使用RabbitMQ集群的目的，是为了扩容，
+
 **环境说明**
 
 | 名称  | IP        | 说明  |
@@ -8947,6 +8949,8 @@ systemctl start rabbitmq-server
 查看下`.erlang.cookie`文件内容
 
 ```sh
+[root@node1 rabbitmq]# ls -a
+.  ..  .erlang.cookie  mnesia
 [root@node1 rabbitmq]# cat .erlang.cookie 
 PQCITNGXVYGBYBBETBQJ
 ```
@@ -8959,7 +8963,6 @@ PQCITNGXVYGBYBBETBQJ
 
 scp /var/lib/rabbitmq/.erlang.cookie root@node2:/var/lib/rabbitmq/
 scp /var/lib/rabbitmq/.erlang.cookie root@node3:/var/lib/rabbitmq/
-
 ```
 
 修改node2和node3的`.erlang.cookie`文件所有者
@@ -8989,7 +8992,180 @@ systemctl start rabbitmq-server
 
 
 
+**4. 将node2和node3节点加入到集群中**
 
+```sh
+# 执行以下命令
+# 停止Erlang VM上运行的RabbitMQ应用，保持Erlang VM运行
+rabbitmqctl stop _app
+
+# 移除当前RabbitMQ虚拟主机中的所有数据
+rabbitmqctl reset
+
+# 将当前RabbitMQ的主机加入到rabbit@node1这个虚拟主机的集群中。一个节点也是集群。通过rabbitmqctl cluster_status查看节点信息
+rabbitmqctl join_cluster rabbit@node1
+
+# 启动当前Erlang VM上的RabbitMQ的应用
+rabbitmqctl start_app
+```
+
+1. rabbit@node1表示RabbitMQ节点名称，默认前缀就是rabbit，@之后是当前虚拟主机所在的物理主机hostname
+2. 注意检查下hostname要可以相互ping通
+3. join_cluster默认使用disk默认，后面可以加入参数-ram启动内存模式
+
+
+
+查看节点中的信息,用于确定要加入的集群的信息
+
+```sh
+[root@node1 rabbitmq]# rabbitmqctl cluster_status
+Cluster status of node rabbit@node1 ...
+Basics
+
+Cluster name: rabbit@node1
+
+Disk Nodes
+
+rabbit@node1
+
+Running Nodes
+
+rabbit@node1
+
+Versions
+
+rabbit@node1: RabbitMQ 3.8.5 on Erlang 23.0.2
+
+Alarms
+
+(none)
+
+Network Partitions
+
+(none)
+
+Listeners
+
+Node: rabbit@node1, interface: [::], port: 25672, protocol: clustering, purpose: inter-node and CLI tool communication
+Node: rabbit@node1, interface: [::], port: 5672, protocol: amqp, purpose: AMQP 0-9-1 and AMQP 1.0
+
+Feature flags
+
+Flag: implicit_default_bindings, state: enabled
+Flag: quorum_queue, state: enabled
+Flag: virtual_host_metadata, state: enabled
+[root@node1 rabbitmq]# 
+```
+
+当集群中的节点都加入完成后，检查集群中状态
+
+```sh
+[root@node1 rabbitmq]# rabbitmqctl cluster_status
+Cluster status of node rabbit@node1 ...
+Basics
+
+Cluster name: rabbit@node1
+
+Disk Nodes
+
+rabbit@node1
+rabbit@node2
+rabbit@node3
+
+Running Nodes
+
+rabbit@node1
+rabbit@node2
+rabbit@node3
+
+Versions
+
+rabbit@node1: RabbitMQ 3.8.5 on Erlang 23.0.2
+rabbit@node2: RabbitMQ 3.8.5 on Erlang 23.0.2
+rabbit@node3: RabbitMQ 3.8.5 on Erlang 23.0.2
+
+Alarms
+
+(none)
+
+Network Partitions
+
+(none)
+
+Listeners
+
+Node: rabbit@node1, interface: [::], port: 25672, protocol: clustering, purpose: inter-node and CLI tool communication
+Node: rabbit@node1, interface: [::], port: 5672, protocol: amqp, purpose: AMQP 0-9-1 and AMQP 1.0
+Node: rabbit@node2, interface: [::], port: 25672, protocol: clustering, purpose: inter-node and CLI tool communication
+Node: rabbit@node2, interface: [::], port: 5672, protocol: amqp, purpose: AMQP 0-9-1 and AMQP 1.0
+Node: rabbit@node3, interface: [::], port: 25672, protocol: clustering, purpose: inter-node and CLI tool communication
+Node: rabbit@node3, interface: [::], port: 5672, protocol: amqp, purpose: AMQP 0-9-1 and AMQP 1.0
+
+Feature flags
+
+Flag: implicit_default_bindings, state: enabled
+Flag: quorum_queue, state: enabled
+Flag: virtual_host_metadata, state: enabled
+```
+
+
+
+失败信息：
+
+```sh
+[root@node2 rabbitmq]# rabbitmqctl join_cluster rabbit@node1
+Clustering node rabbit@node2 with rabbit@node1
+Error: unable to perform an operation on node 'rabbit@node1'. Please see diagnostics information and suggestions below.
+
+Most common reasons for this are:
+
+ * Target node is unreachable (e.g. due to hostname resolution, TCP connection or firewall issues)
+ * CLI tool fails to authenticate with the server (e.g. due to CLI tool's Erlang cookie not matching that of the server)
+ * Target node is not running
+
+In addition to the diagnostics info below:
+
+ * See the CLI, clustering and networking guides on https://rabbitmq.com/documentation.html to learn more
+ * Consult server logs on node rabbit@node1
+ * If target node is configured to use long node names, don't forget to use --longnames with CLI tools
+
+DIAGNOSTICS
+===========
+
+attempted to contact: [rabbit@node1]
+
+rabbit@node1:
+  * unable to connect to epmd (port 4369) on node1: address (cannot connect to host/port)
+
+
+Current node details:
+ * node name: 'rabbitmqcli-3237-rabbit@node2'
+ * effective user's home directory: /var/lib/rabbitmq
+ * Erlang cookie hash: lOU+wwtP8njlyJzsZfSQIQ==
+
+[root@node2 rabbitmq]# 
+```
+
+解决方案：
+
+需要在防火墙打开4369和25672端口
+
+```sh
+[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=4369/tcp --permanent
+success
+[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=25672/tcp --permanent
+success
+[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=5672/tcp --permanent
+success
+[root@node1 rabbitmq]# firewall-cmd --reload
+success
+```
+
+集群中的所有节点都需要执行。
+
+
+
+如果需要移除集群。
 
 
 
