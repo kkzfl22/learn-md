@@ -8925,9 +8925,9 @@ yum install -y socat
 rpm -ivh erlang-23.0.2-1.el7.x86_64.rpm rabbitmq-server-3.8.5-1.el7.noarch.rpm
 
 # 配制hosts vi /etc/hosts
-10.0.2.17 node1
-10.0.2.18 node2
-10.0.2.19 node3
+192.168.5.11 os11
+192.168.5.12 os12
+192.168.5.13 os13
 ```
 
 
@@ -8997,7 +8997,7 @@ systemctl start rabbitmq-server
 ```sh
 # 执行以下命令
 # 停止Erlang VM上运行的RabbitMQ应用，保持Erlang VM运行
-rabbitmqctl stop _app
+rabbitmqctl stop_app
 
 # 移除当前RabbitMQ虚拟主机中的所有数据
 rabbitmqctl reset
@@ -9007,6 +9007,18 @@ rabbitmqctl join_cluster rabbit@node1
 
 # 启动当前Erlang VM上的RabbitMQ的应用
 rabbitmqctl start_app
+
+# 启动插件
+rabbitmq-plugins enable  rabbitmq_management
+firewall-cmd --zone=public --add-port=15672/tcp --permanent
+firewall-cmd --reload
+
+# 添加用户
+rabbitmqctl add_user root 123456
+rabbitmqctl set_permissions --vhost "/" root ".*" ".*" ".*"
+rabbitmqctl set_user_tags --vhost "/" root administrator
+
+
 ```
 
 1. rabbit@node1表示RabbitMQ节点名称，默认前缀就是rabbit，@之后是当前虚拟主机所在的物理主机hostname
@@ -9151,21 +9163,222 @@ Current node details:
 需要在防火墙打开4369和25672端口
 
 ```sh
-[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=4369/tcp --permanent
-success
-[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=25672/tcp --permanent
-success
-[root@node1 rabbitmq]# firewall-cmd --zone=public --add-port=5672/tcp --permanent
-success
-[root@node1 rabbitmq]# firewall-cmd --reload
-success
+firewall-cmd --zone=public --add-port=4369/tcp --permanent
+firewall-cmd --zone=public --add-port=25672/tcp --permanent
+firewall-cmd --zone=public --add-port=5672/tcp --permanent
+firewall-cmd --reload
+
 ```
 
 集群中的所有节点都需要执行。
 
 
 
-如果需要移除集群。
+移除节点命令：
+
+```sh
+# 将虚拟主机（RabbitMQ的节点）rabbit@node3从集群中移除，但是rabbit@node3还保留集群信
+息
+# 还是会尝试加入集群，但是会被拒绝。可以重置rabbit@node3节点。
+rabbitmqctl forget_cluster_node rabbit@node3
+```
+
+当移除节点后，需要重新加入节点，需要执行reset命令，再加入。
+
+
+
+### 3.2 镜像队列的配制
+
+RabbitMQ中队列的内容是保存在单个节点本地的（声明队列的节点）。跟交换器和绑定不同，它 们是对于集群中所有节点的。如此，则队列内容存在单点故障，解决方式之一就是使用镜像队列。在多 个节点上拷贝队列的副本。
+
+ 每个镜像队列包含一个master，若干个镜像。
+
+ master存在于称为master的节点上。 
+
+所有的操作都是首先对master执行，之后广播到镜像。
+
+ 这涉及排队发布，向消费者传递消息，跟踪来自消费者的确认等。 
+
+镜像意味着集群，不应该WAN使用。
+
+发布到队列的消息会拷贝到该队列所有的镜像。消费者连接到master，当消费者对消息确认之后， 镜像删除master确认的消息。
+
+
+
+master选举策略： 
+
+1. 最长的运行镜像升级为主镜像，前提是假定它与主镜像完全同步。如果没有与主服务器同步的 镜像，则仅存在于主服务器上的消息将丢失。 
+2.  镜像认为所有以前的消费者都已突然断开连接。它重新排队已传递给客户端但正在等待确认的 所有消息。这包括客户端已为其发出确认的消息，例如，确认是在到达节点托管队列主节点之 前在线路上丢失了，还是在从主节点广播到镜像时丢失了。在这两种情况下，新的主服务器都 别无选择，只能重新排队它尚未收到确认的所有消息。
+3. 队列故障转移时请求通知的消费者将收到取消通知。当镜像队列发生了master的故障转移， 系统就不知道向哪些消费者发送了哪些消息。已经发送的等待确认的消息会重新排队 
+4.  重新排队的结果是，从队列重新使用的客户端必须意识到，他们很可能随后会收到已经收到的 消息。 
+5.  当所选镜像成为主镜像时，在此期间发布到镜像队列的消息将不会丢失（除非在提升的节点上 发生后续故障）。发布到承载队列镜像的节点的消息将路由到队列主服务器，然后复制到所有 镜像。如果主服务器发生故障，则消息将继续发送到镜像，并在完成向主服务器的镜像升级后 将其添加到队列中。 
+6. 即使主服务器（或任何镜像）在正在发布的消息与发布者收到的确认之间失败，由客户端使用 发布者确认发布的消息仍将得到确认。从发布者的角度来看，发布到镜像队列与发布到非镜像 队列没有什么不同。
+
+| ha-mode | ha-params  | 结果                                                         |
+| ------- | ---------- | ------------------------------------------------------------ |
+| exactly | count      | 设置集群中队列副本的个数（镜像+master）。1表示一个副本；也就 是master。如果master不可用，行为依赖于队列的持久化机制。2表示 1个master和1个镜像。如果master不可用，则根据镜像推举策略从镜 像中选出一个做master。如果节点数量比镜像副本个数少，则镜像覆盖 到所有节点。如果count个数少于集群节点个数，则在一个镜像宕机 后，会在其他节点创建出来一个镜像。将“exactly”模式与“ha-promoteon-shutdown”: “ always”一起使用可能很危险，因为队列可以在整个集 群中迁移并在关闭时变得不同步。 |
+| all     | （none）   | 镜像覆盖到集群中的所有节点。当添加一个新的节点，队列就会复制过 去。这个配置很保守。一般推荐N/2+1个节点。在集群所有节点拷贝镜 像会给集群所有节点施加额外的负载，包括网络IO，磁盘IO和磁盘空间 使用。 |
+| nodes   | node names | 在指定node name的节点上复制镜像。node name就是在rabbitmqctl cluster_status命令输出中的node name。如果有不属于集群的节点名 称，它不报错。如果指定的节点都不在线，则仅在客户端连接到的声明 镜像的节点上创建镜像。 |
+
+```sh
+# 对/节点配置镜像队列，使用全局复制
+rabbitmqctl set_policy ha-all "^" '{"ha-mode":"all"}'
+# 配置过半（N/2 + 1）复制镜像队列
+rabbitmqctl set_policy ha-halfmore "queueA" '{"ha-mode":"exactly", "ha-params":2}'
+# 指定优先级，数字越大，优先级越高
+rabbitmqctl set_policy --priority 1 ha-all "^" '{"ha-mode":"all"}'
+```
+
+
+
+创建队列并设置镜像队列，并设置
+
+```sh
+[root@os11 rabbitmq]# rabbitmqctl set_policy ha-halfmore "cluser.image.1" '{"ha-mode":"exactly", "ha-params":2}'
+Setting policy "ha-halfmore" for pattern "cluser.image.1" to "{"ha-mode":"exactly", "ha-params":2}" with priority "0" for vhost "/" ...
+```
+
+
+
+
+
+![image-20231206223836289](./img\image-20231206223836289.png)
+
+
+
+
+
+### 3.3 负载均衡-HAProxy
+
+将客户端的连接和操作的压力分散到集群中的不同节点，防止单个或几台服务器压力过大成为访问 的瓶颈，甚至宕机。
+
+HAProxy是一款开源免费，并提供高可用性、负载均衡以及基于TCP和HTTP协议的代理软件，可以 支持四层、七层负载均衡，
+
+经过测试单节点可以支持10W左右并发连接。 
+
+LVS是工作在内核模式（IPVS），支持四层负载均衡，实测可以支撑百万并发连接。
+
+ Nginx支持七层的负载均衡（后期的版本也支持四层了），是一款高性能的反向代理软件和Web服 务器，可以支持单机3W以上的并发连接。
+
+这里我们使用HAProxy来做RabbitMQ的负载均衡，通过暴露VIP给上游的应用程序直接连接，上游 应用程序不感知底层的RabbitMQ的实例节点信息。
+
+
+
+```sh
+# 包下载地址：
+https://www.haproxy.org/download/2.1/src/haproxy-2.1.12.tar.gz
+
+# 手动编译安装方法
+yum install gcc -y
+tar -zxf haproxy-2.1.0.tar.gz
+cd haproxy-2.1.0
+make TARGET=linux-glibc
+make install
+mkdir /etc/haproxy
+#赋权
+groupadd -r -g 149 haproxy
+# 添加用户
+useradd -g haproxy -r -s /sbin/nologin -u 149 haproxy
+#创建haproxy配置文件
+touch /etc/haproxy/haproxy.cfg
+```
+
+也可以用yum进行安装
+
+```sh
+yum -y install haproxy
+```
+
+如果使用yum安装的，那么haproxy默认在/usr/sbin/haproxy，且会自动创建配置文 件/etc/haproxy/haproxy.cfg
+
+配制HAProxy
+
+```sh
+vim /etc/haproxy/haproxy.cfg
+```
+
+内容如下：
+
+```tex
+global
+    log 127.0.0.1 local0 info
+    # 服务器最大并发连接数；如果请求的连接数高于此值，将其放入请求队列，等待其它连接被释放；
+    maxconn 5120
+    # chroot /tmp
+    # 指定用户
+    uid 149
+    # 指定组
+    gid 149
+    # 让haproxy以守护进程的方式工作于后台，其等同于“-D”选项的功能
+    # 当然，也可以在命令行中以“-db”选项将其禁用；
+    daemon
+    # debug参数
+    quiet
+    # 指定启动的haproxy进程的个数，只能用于守护进程模式的haproxy；
+    # 默认只启动一个进程，
+    # 鉴于调试困难等多方面的原因，在单进程仅能打开少数文件描述符的场景中才使用多进程模式；
+    # nbproc 20
+    nbproc 1
+    pidfile /var/run/haproxy.pid
+
+defaults
+    log global
+    # tcp：实例运行于纯TCP模式，第4层代理模式，在客户端和服务器端之间将建立一个全双工的连接，
+    # 且不会对7层报文做任何类型的检查；
+    # 通常用于SSL、SSH、SMTP等应用；
+    mode tcp
+    option tcplog
+    option dontlognull
+    retries 3
+    option redispatch
+    maxconn 2000
+    # contimeout 5s
+    timeout connect 5s
+    # 客户端空闲超时时间为60秒则HA 发起重连机制
+    timeout client 60000
+    # 服务器端链接超时时间为15秒则HA 发起重连机制
+    timeout server 15000
+    
+listen rabbitmq_cluster
+    # VIP，反向代理到下面定义的三台Real Server
+    bind 192.168.5.15:10672
+    #配置TCP模式
+    mode tcp
+    #简单的轮询
+    balance roundrobin
+    # rabbitmq集群节点配置
+    # inter 每隔五秒对mq集群做健康检查，2次正确证明服务器可用，2次失败证明服务器不可用，并且配置主备机制
+    server rabbitmqNode1 192.168.5.11:5672 check inter 5000 rise 2 fall 2
+    server rabbitmqNode2 192.168.5.12:5672 check inter 5000 rise 2 fall 2
+    server rabbitmqNode3 192.168.5.13:5672 check inter 5000 rise 2 fall 2
+    
+#配置haproxy web监控，查看统计信息
+listen stats
+    bind 192.168.5.15:9000
+    mode http
+    option httplog
+    # 启用基于程序编译时默认设置的统计报告
+    stats enable
+    #设置haproxy监控地址为http://node1:9000/rabbitmq-stats
+    stats uri /rabbitmq-stats
+    # 每5s刷新一次页面
+    stats refresh 5s
+
+```
+
+
+
+**启动HAProxy`**
+
+```sh
+ haproxy -f /etc/haproxy/haproxy.cfg
+```
+
+
+
+
+
+
 
 
 
