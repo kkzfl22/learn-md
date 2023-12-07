@@ -45,6 +45,7 @@
         <module>mq-25-dlx</module>
         <module>mq-26-dlx-springboot</module>
         <module>mq-27-delay-ex</module>
+        <module>mq-28-cluster</module>
     </modules>
 
     <properties>
