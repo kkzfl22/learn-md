@@ -159,8 +159,7 @@ yum update -y
 yum install -y docker-ce docker-ce-cli containerd.io
 
 # 安装指定版本：
-# 语法规则：yum install docker-ce-<VERSION_STRING> docker-ce-cli-<VERSION_STRING> 
-containerd.io
+# 语法规则：yum install docker-ce-<VERSION_STRING> docker-ce-cli-<VERSION_STRING> containerd.io
 yum -y install docker-ce-18.06.3.ce-3.el7 docker-ce-cli.x86_64
  
 yum install -y docker-ce-19.03.9-3.el7 docker-ce-cli-19.03.9-3.el7 
@@ -176,6 +175,176 @@ systemctl start docker
 # 查看docker版本
 docker -v
 
+```
+
+**阿里云安装说明**
+
+### CentOS 7 (使用yum进行安装)
+
+```sh
+# step 1: 安装必要的一些系统工具
+sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+# Step 2: 添加软件源信息
+sudo yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+# Step 3: 更新并安装 Docker-CE
+sudo yum makecache fast
+sudo yum -y install docker-ce
+# Step 4: 开启Docker服务
+sudo service docker start
+
+注意：其他注意事项在下面的注释中
+# 官方软件源默认启用了最新的软件，您可以通过编辑软件源的方式获取各个版本的软件包。例如官方并没有将测试版本的软件源置为可用，你可以通过以下方式开启。同理可以开启各种测试版本等。
+# vim /etc/yum.repos.d/docker-ce.repo
+#   将 [docker-ce-test] 下方的 enabled=0 修改为 enabled=1
+#
+# 安装指定版本的Docker-CE:
+# Step 1: 查找Docker-CE的版本:
+# yum list docker-ce.x86_64 --showduplicates | sort -r
+#   Loading mirror speeds from cached hostfile
+#   Loaded plugins: branch, fastestmirror, langpacks
+#   docker-ce.x86_64            17.03.1.ce-1.el7.centos            docker-ce-stable
+#   docker-ce.x86_64            17.03.1.ce-1.el7.centos            @docker-ce-stable
+#   docker-ce.x86_64            17.03.0.ce-1.el7.centos            docker-ce-stable
+#   Available Packages
+# Step2 : 安装指定版本的Docker-CE: (VERSION 例如上面的 17.03.0.ce.1-1.el7.centos)
+# sudo yum -y install docker-ce-[VERSION]
+# 注意：在某些版本之后，docker-ce安装出现了其他依赖包，如果安装失败的话请关注错误信息。例如 docker-ce 17.03 之后，需要先安装 docker-ce-selinux。
+# yum list docker-ce-selinux- --showduplicates | sort -r
+# sudo yum -y install docker-ce-selinux-[VERSION]
+
+# 通过经典网络、VPC网络内网安装时，用以下命令替换Step 2中的命令
+# 经典网络：
+# sudo yum-config-manager --add-repo http://mirrors.aliyuncs.com/docker-ce/linux/centos/docker-ce.repo
+# VPC网络：
+# sudo yum-config-manager --add-repo http://mirrors.could.aliyuncs.com/docker-ce/linux/centos/docker-ce.repo
+```
+
+
+
+**docker镜像加速**
+
+使用阿里云做镜像加速
+
+```sh
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json <<-'EOF'
+{
+  "registry-mirrors": ["https://ys2mfbsh.mirror.aliyuncs.com"]
+}
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+到此阿云的镜像回事配制已经完成
+
+检查下配制是否生产
+
+```sh
+[root@dockeros ~]# docker info
+Client: Docker Engine - Community
+ Version:    24.0.7
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.11.2
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.21.0
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ Containers: 0
+  Running: 0
+  Paused: 0
+  Stopped: 0
+ Images: 0
+ Server Version: 24.0.7
+ Storage Driver: overlay2
+  Backing Filesystem: xfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: inactive
+ Runtimes: io.containerd.runc.v2 runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: d8f198a4ed8892c764191ef7b3b06d8a2eeb5c7f
+ runc version: v1.1.10-0-g18a0cb0
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+ Kernel Version: 3.10.0-1160.102.1.el7.x86_64
+ Operating System: CentOS Linux 7 (Core)
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 4
+ Total Memory: 15.51GiB
+ Name: dockeros
+ ID: c185e0e5-64d8-44ba-b405-02b4344cbaf1
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Registry Mirrors:
+  https://ys2mfbsh.mirror.aliyuncs.com/
+ Live Restore Enabled: false
 
 ```
+
+在Registry中，可以发现配制的镜像加速已经生效.
+
+
+
+## docker相关的命令
+
+本章节记录的docker命令在大部分情况下的使用，如果想了解每一个选项的细节，请参考官方文档，根据docker官网案例，可以分为以下几类：
+
+- Docker环境信息 —— docker [info  | version]
+- 容器生命周期管理 —— docker [create | exec | run | start | stop | restart | kill | rm | pause | unpause ]
+- 容器操作命令 —— docker [ps | inspect | top | attach | wait | export | port | rename | stat]
+- 容器rootfs命令——docker [commit | cp | diff]
+- 镜像仓库 ——docker [login | pull | push | search]
+- 本地镜像管理——docker [build | images | rmi | tag | save | import | load]
+- 容器资源管理——docker [volume | network]
+- 系统日志信息——docker [events | history logs]
+
+官网地址：
+
+```
+https://docs.docker.com/engine/reference/run/
+```
+
+基本的容器的操作命令的一个结构：
+
+![image-20231207233006739](./images\image-20231207233006739.png)
+
+
+
+**Docker镜像（image)**
+
+docker Hub类似maven远程仓库地址：
+
+```sh
+https://hub.docker.com/
+```
+
+### Docker镜像常用命令
+
+**pull命令**
+
+下载镜像命令，镜像从远程镜像仓库服务的仓库中下载。默认情况下，镜像会从Docker Hub的仓库中摘取。
+
+
 
