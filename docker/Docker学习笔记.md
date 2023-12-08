@@ -340,11 +340,125 @@ docker Hub类似maven远程仓库地址：
 https://hub.docker.com/
 ```
 
-### Docker镜像常用命令
-
-**pull命令**
+### **pull命令**
 
 下载镜像命令，镜像从远程镜像仓库服务的仓库中下载。默认情况下，镜像会从Docker Hub的仓库中摘取。
+
+
+
+```sh
+# docker官方镜像的容器地址，搜索tomcat
+https://hub.docker.com/_/tomcat
+
+# 下载tomcat的9.0.20版本
+docker pull tomcat:9.0.20-jre8
+docker pull tomcat:9.0.20-jre8-alpine
+docker pull tomcat:9.0.20-jre8-slim
+
+
+# centos7.8.2003的系统
+https://hub.docker.com/_/centos
+docker pull centos:centos7.8.2003
+docker pull centos:centos7.9.2009
+
+# ubuntu的系统镜像
+https://hub.docker.com/_/ubuntu
+docker pull ubuntu:20.04
+
+# debian
+https://hub.docker.com/_/debian
+docker pull debian:10.6-slim
+docker pull debian:10.6
+
+
+# alpine
+https://hub.docker.com/_/alpine
+docker pull alpine:3.12.1
+
+```
+
+**常用参数**
+
+- -a, --all-tags=true|false 是否获取仓库中的所有镜像，默认为false
+- --disable-content-trus 跳过镜像内容的校验，默认为true
+
+### images命令
+
+通过images，可以列出本机已有的镜像
+
+```sh
+docker images
+docker images ls
+```
+
+样例：
+
+```sh
+[root@dockeros ~]# docker images
+REPOSITORY   TAG                  IMAGE ID       CREATED       SIZE
+ubuntu       20.04                ba6acccedd29   2 years ago   72.8MB
+centos       centos7.9.2009       eeb6ee3f44bd   2 years ago   204MB
+debian       10.6-slim            79fa6b1da13a   3 years ago   69.2MB
+debian       10.6                 ef05c61d5112   3 years ago   114MB
+alpine       3.12.1               d6e46aa2470d   3 years ago   5.57MB
+centos       centos7.8.2003       afb6fca791e0   3 years ago   203MB
+tomcat       9.0.20-jre8-alpine   387f9d021d3a   4 years ago   108MB
+tomcat       9.0.20-jre8-slim     66140ac62adb   4 years ago   225MB
+tomcat       9.0.20-jre8          e24825d32965   4 years ago   464MB
+```
+
+REPOSITORY : 表示镜像的仓库源
+
+TAG: 镜像的标签
+
+IMAGE ID : 镜像的ID
+
+CREATED： 镜像创建的时间
+
+SIZE: 镜像的大小
+
+
+
+### save 命令
+
+save命令可以用于保存一个或者多个镜像至文件中
+
+```sh
+# 保存一个镜像
+docker save tomcat:9.0.20-jre8-alpine -o tomcat9-alpine.image
+docker save tomcat:9.0.20-jre8-alpine > tomcat9-alpine.image
+
+
+#  保存多个镜像
+docker save \
+> debian:10.6-slim \
+> alpine:3.12.1 \
+> ubuntu:20.04 \
+> -o image-mult.tar
+
+```
+
+- `-o` 输出到文件中
+
+
+
+### load命令
+
+将save保存下载的镜像加载到仓库中
+
+```sh
+docker load -i tomcat9-alpine.image
+docker load <  image-mult.tar
+```
+
+**常用参数**
+
+- --input , -i 指定导入的文件
+- --quiet , -q 精简输出信息
+
+
+
+
 
 
 
