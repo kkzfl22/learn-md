@@ -307,7 +307,7 @@ Server:
 
 
 
-## docker相关的命令
+## docker镜像相关的命令
 
 本章节记录的docker命令在大部分情况下的使用，如果想了解每一个选项的细节，请参考官方文档，根据docker官网案例，可以分为以下几类：
 
@@ -455,6 +455,444 @@ docker load <  image-mult.tar
 
 - --input , -i 指定导入的文件
 - --quiet , -q 精简输出信息
+
+
+
+### search命令
+
+search命令不推荐使用，最主要是不够直观
+
+```sh
+docker search tomcat
+```
+
+样例
+
+```
+[root@dockeros ~]# docker search tomcat
+NAME                          DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED
+tomcat                        Apache Tomcat is an open source implementati…   3615      [OK]       
+tomee                         Apache TomEE is an all-Apache Java EE certif…   113       [OK]       
+bitnami/tomcat                Bitnami Tomcat Docker Image                     51                   [OK]
+bitnamicharts/tomcat                                                          0                    
+secoresearch/tomcat-varnish   Tomcat and Varnish 5.0                          0                    [OK]
+vulhub/tomcat                                                                 0                    
+islandora/tomcat                                                              0                    
+wnprcehr/tomcat                                                               0                    
+hivdb/tomcat-with-nucamino                                                    0                    
+jumpserver/tomcat                                                             0                    
+sismics/tomcat                Apache Tomcat Servlet Container                 1                    
+eclipse/rdf4j-workbench       Dockerfile for Eclipse RDF4J Server and Work…   6                    
+semoss/docker-tomcat          Tomcat, Java, Maven, and Git on top of debian   0                    [OK]
+eclipse/hadoop-dev            Ubuntu 14.04, Maven 3.3.9, JDK8, Tomcat 8       0                    [OK]
+gbif/ipt                      The GBIF Integrated Publishing Toolkit (IPT)…   2                    
+dhis2/base-dev                Images in this repository contains DHIS2 WAR…   0                    
+eclipse/alpine_jdk8           Based on Alpine 3.3. JDK 1.8, Maven 3.3.9, T…   1                    [OK]
+misolims/miso-base            MySQL 5.7 Database and Tomcat 8 Server neede…   0                    
+dhis2/base                    Images in this repository contains DHIS2 WAR…   0                    
+jelastic/tomcat               An image of the Tomcat Java application serv…   4                    
+cfje/tomcat-resource          Tomcat Concourse Resource                       2                    
+rightctrl/tomcat              CentOS , Oracle Java, tomcat application ssl…   7                    [OK]
+amd64/tomcat                  Apache Tomcat is an open source implementati…   8                    
+arm64v8/tomcat                Apache Tomcat is an open source implementati…   9                    
+tomcat2111/papercut-mf        PaperCut MF Application Server                  0                    
+[root@dockeros ~]# 
+```
+
+这用参数
+
+- -f,--filter filter: 过滤输出的内容
+- --limit int 指定搜索内容展示个数
+- --no-index 不截断输出内容
+- --no-trunc: 不戴断输出内容
+
+### inspect命令
+
+通过docker inspect命令，可以获取镜像的详细信息，其中包括创建者、各层的数字摘要等
+
+docker inspect返回的是json格式的信息，如果想获取其中指定的一项内容，可以通过-f来指定，如获取镜像大小
+
+```sh
+docker inspect tomcat:9.0.20-jre8-alpine
+
+docker inspect -f {{".Size"}} tomcat:9.0.20-jre8-alpine
+```
+
+例如：
+
+```sh
+[root@dockeros ~]# docker inspect tomcat:9.0.20-jre8-alpine
+[
+    {
+        "Id": "sha256:387f9d021d3ae76a2dafd661142a2659939389def2f390d40ab73bd49df242ba",
+        "RepoTags": [
+            "tomcat:9.0.20-jre8-alpine"
+        ],
+        "RepoDigests": [
+            "tomcat@sha256:17accf0afeeecce0310d363490cd60a788aa4630ab9c9c802231d6fbd4bb2375"
+        ],
+        "Parent": "",
+        "Comment": "",
+        "Created": "2019-05-16T00:57:50.863755612Z",
+        "Container": "24ab35a23fd83a3748e701f6fdca86f3618ffb29a29bd32ed2db6f9b4336056d",
+        "ContainerConfig": {
+            "Hostname": "24ab35a23fd8",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/tomcat/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin",
+                "LANG=C.UTF-8",
+                "JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk/jre",
+                "JAVA_VERSION=8u212",
+                "JAVA_ALPINE_VERSION=8.212.04-r0",
+                "CATALINA_HOME=/usr/local/tomcat",
+                "TOMCAT_NATIVE_LIBDIR=/usr/local/tomcat/native-jni-lib",
+                "LD_LIBRARY_PATH=/usr/local/tomcat/native-jni-lib",
+                "GPG_KEYS=05AB33110949707C93A279E3D3EFE6B686867BA6 07E48665A34DCAFAE522E5E6266191C37C037D42 47309207D818FFD8DCD3F83F1931D684307A10A5 541FBE7D8F78B25E055DDEE13C370389288584E7 61B832AC2F1C5A90F0F9B00A1C506407564C17A3 79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED 9BA44C2621385CB966EBA586F72C284D731FABEE A27677289986DB50844682F8ACB77FC2E86E29AC A9C5DF4D22E99998D9875A5110C01C5A2F6059E7 DCFD35E0BF8CA7344752DE8B6FB21E8933C60243 F3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE F7DA48BB64BCB84ECBA7EE6935CD23C10D498E23",
+                "TOMCAT_MAJOR=9",
+                "TOMCAT_VERSION=9.0.20",
+                "TOMCAT_SHA512=6d2df51f0bfc6a90cfca61c86473b8843da4162c430ab06b8f66f364931f3d8a3ad399703acdd600ff4f633d7d6725edf05d5d5d19534716a2f3f9f5238a32a0",
+                "TOMCAT_TGZ_URLS=https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://www-us.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://www.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://archive.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz",
+                "TOMCAT_ASC_URLS=https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://www-us.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://www.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://archive.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc"
+            ],
+            "Cmd": [
+                "/bin/sh",
+                "-c",
+                "#(nop) ",
+                "CMD [\"catalina.sh\" \"run\"]"
+            ],
+            "ArgsEscaped": true,
+            "Image": "sha256:a9ebb0fcc929c1b8ddd758efe32531ddadb78547da29a01dd8854c2d32ab5eb8",
+            "Volumes": null,
+            "WorkingDir": "/usr/local/tomcat",
+            "Entrypoint": null,
+            "OnBuild": null,
+            "Labels": {}
+        },
+        "DockerVersion": "18.06.1-ce",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "8080/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/tomcat/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin",
+                "LANG=C.UTF-8",
+                "JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk/jre",
+                "JAVA_VERSION=8u212",
+                "JAVA_ALPINE_VERSION=8.212.04-r0",
+                "CATALINA_HOME=/usr/local/tomcat",
+                "TOMCAT_NATIVE_LIBDIR=/usr/local/tomcat/native-jni-lib",
+                "LD_LIBRARY_PATH=/usr/local/tomcat/native-jni-lib",
+                "GPG_KEYS=05AB33110949707C93A279E3D3EFE6B686867BA6 07E48665A34DCAFAE522E5E6266191C37C037D42 47309207D818FFD8DCD3F83F1931D684307A10A5 541FBE7D8F78B25E055DDEE13C370389288584E7 61B832AC2F1C5A90F0F9B00A1C506407564C17A3 79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED 9BA44C2621385CB966EBA586F72C284D731FABEE A27677289986DB50844682F8ACB77FC2E86E29AC A9C5DF4D22E99998D9875A5110C01C5A2F6059E7 DCFD35E0BF8CA7344752DE8B6FB21E8933C60243 F3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE F7DA48BB64BCB84ECBA7EE6935CD23C10D498E23",
+                "TOMCAT_MAJOR=9",
+                "TOMCAT_VERSION=9.0.20",
+                "TOMCAT_SHA512=6d2df51f0bfc6a90cfca61c86473b8843da4162c430ab06b8f66f364931f3d8a3ad399703acdd600ff4f633d7d6725edf05d5d5d19534716a2f3f9f5238a32a0",
+                "TOMCAT_TGZ_URLS=https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://www-us.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://www.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz \thttps://archive.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz",
+                "TOMCAT_ASC_URLS=https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://www-us.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://www.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc \thttps://archive.apache.org/dist/tomcat/tomcat-9/v9.0.20/bin/apache-tomcat-9.0.20.tar.gz.asc"
+            ],
+            "Cmd": [
+                "catalina.sh",
+                "run"
+            ],
+            "ArgsEscaped": true,
+            "Image": "sha256:a9ebb0fcc929c1b8ddd758efe32531ddadb78547da29a01dd8854c2d32ab5eb8",
+            "Volumes": null,
+            "WorkingDir": "/usr/local/tomcat",
+            "Entrypoint": null,
+            "OnBuild": null,
+            "Labels": null
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 107881954,
+        "VirtualSize": 107881954,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/76a969bb3e2a81dc50d62ab3916fa0422946832d3521ba1621a24108ff7f987b/diff:/var/lib/docker/overlay2/2932f798aac8f161adfafb4704f93a6e204a44ac8b7f1ffa2fd26c0bb7f99fab/diff:/var/lib/docker/overlay2/06b9d577eccd5bbad73d0018452e23a508066956ebceff055d88b8ffe578d0af/diff:/var/lib/docker/overlay2/13499780bcc8d61a7b51fbe5c9d397bcd9e5aa1c78655c45224ad5c9faf6800d/diff:/var/lib/docker/overlay2/2cec91e030e7d3041443d78871bdf6b90873e6964f0875f68eb0bba378041bb6/diff",
+                "MergedDir": "/var/lib/docker/overlay2/7ceb0be1e3e98d7adcf864a5d231959ed43ce52b15e042bd535a0d18611c4abb/merged",
+                "UpperDir": "/var/lib/docker/overlay2/7ceb0be1e3e98d7adcf864a5d231959ed43ce52b15e042bd535a0d18611c4abb/diff",
+                "WorkDir": "/var/lib/docker/overlay2/7ceb0be1e3e98d7adcf864a5d231959ed43ce52b15e042bd535a0d18611c4abb/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:f1b5933fe4b5f49bbe8258745cf396afe07e625bdab3168e364daf7c956b6b81",
+                "sha256:9b9b7f3d56a01e3d9076874990c62e7a516cc4032f784f421574d06b18ef9aa4",
+                "sha256:edd61588d12669e2d71a0de2aab96add3304bf565730e1e6144ec3c3fac339e4",
+                "sha256:48988bb7b8615c1af859b04776a46ddeb4d2bd1aa9b0a9a3ac099cf3f73ab29d",
+                "sha256:d1d0b1719b963394ea25c3936f2d67f8bdb6c90bd7166137167c7b7f135742e1",
+                "sha256:b7d850202de0030b2e8e076a40364bb695c891339ba321e6a743e9db0cc72766"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
+[root@dockeros ~]# docker inspect -f {{".Size"}} tomcat:9.0.20-jre8-alpine
+107881954
+
+```
+
+
+
+### history 命令
+
+一个命令由多个层组成的，那么如何知道各层的具体内容呢？这便可以通过docker history命令，列出各个层的创建信息
+
+```
+docker history tomcat:9.0.20-jre8-alpine
+```
+
+样例：
+
+```sh
+[root@dockeros ~]# docker history tomcat:9.0.20-jre8-alpine
+IMAGE          CREATED       CREATED BY                                      SIZE      COMMENT
+387f9d021d3a   4 years ago   /bin/sh -c #(nop)  CMD ["catalina.sh" "run"]    0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  EXPOSE 8080                  0B        
+<missing>      4 years ago   /bin/sh -c set -e  && nativeLines="$(catalin…   0B        
+<missing>      4 years ago   /bin/sh -c set -eux;   apk add --no-cache --…   23MB      
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_ASC_URLS=https…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_TGZ_URLS=https…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_SHA512=6d2df51…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_VERSION=9.0.20    0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_MAJOR=9           0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV GPG_KEYS=05AB33110949…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV LD_LIBRARY_PATH=/usr/…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV TOMCAT_NATIVE_LIBDIR=…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop) WORKDIR /usr/local/tomcat     0B        
+<missing>      4 years ago   /bin/sh -c mkdir -p "$CATALINA_HOME"            0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV PATH=/usr/local/tomca…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV CATALINA_HOME=/usr/lo…   0B        
+<missing>      4 years ago   /bin/sh -c set -x  && apk add --no-cache   o…   79.4MB    
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV JAVA_ALPINE_VERSION=8…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV JAVA_VERSION=8u212       0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV PATH=/usr/local/sbin:…   0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV JAVA_HOME=/usr/lib/jv…   0B        
+<missing>      4 years ago   /bin/sh -c {   echo '#!/bin/sh';   echo 'set…   87B       
+<missing>      4 years ago   /bin/sh -c #(nop)  ENV LANG=C.UTF-8             0B        
+<missing>      4 years ago   /bin/sh -c #(nop)  CMD ["/bin/sh"]              0B        
+<missing>      4 years ago   /bin/sh -c #(nop) ADD file:a86aea1f3a7d68f6a…   5.53MB 
+```
+
+
+
+### tag命令
+
+标记本地镜像，将其归入某一仓库
+
+```sh
+docker tag tomcat:9.0.20-jre8-alpine nullnull/tomcat:9
+```
+
+样例:
+
+```sh
+[root@dockeros ~]# docker tag tomcat:9.0.20-jre8-alpine nullnull/tomcat:9
+[root@dockeros ~]# docker images
+REPOSITORY        TAG                  IMAGE ID       CREATED       SIZE
+ubuntu            20.04                ba6acccedd29   2 years ago   72.8MB
+centos            centos7.9.2009       eeb6ee3f44bd   2 years ago   204MB
+debian            10.6-slim            79fa6b1da13a   3 years ago   69.2MB
+debian            10.6                 ef05c61d5112   3 years ago   114MB
+alpine            3.12.1               d6e46aa2470d   3 years ago   5.57MB
+centos            centos7.8.2003       afb6fca791e0   3 years ago   203MB
+tomcat            9.0.20-jre8-alpine   387f9d021d3a   4 years ago   108MB
+nullnull/tomcat   9                    387f9d021d3a   4 years ago   108MB
+tomcat            9.0.20-jre8-slim     66140ac62adb   4 years ago   225MB
+tomcat            9.0.20-jre8          e24825d32965   4 years ago   464MB
+```
+
+
+
+### rmi命令
+
+ 如下两个命令都可以删除镜像：
+
+```sh
+docker rmi nullnull/tomcat:9
+docker image rm nullnull/tomcat:9
+```
+
+- -f ,-force: 强制删除镜像，即便有容器引用该镜像
+- -no-prune: 不要删除未带标签的父镜像
+
+通过id删除镜像
+
+除了通过标签来删除镜像外，还可以通过镜像id来删除镜像。一旦通过ID来删除镜像，它会先尝试删除所有指向该镜像的标签，然后再删除镜像本身
+
+```sh
+docker rmi 387f9d021d3a
+
+# 如果存在多个镜像指向同一个ID，删除时，需要添加强制删除的参数，将多个镜像进行删除
+docker rmi -f  387f9d021d3a
+```
+
+如果不添加强制删除的标识将报错：
+
+```
+[root@dockeros ~]# docker rmi 387f9d021d3a
+Error response from daemon: conflict: unable to delete 387f9d021d3a (must be forced) - image is referenced in multiple repositories
+```
+
+总结：
+
+- 推荐通过image的名称删除镜像。
+- image的ID在终端长度未完成显示，ID值会出现重复。
+- 极力不推荐进行暴力的（添加-f参数）进行删除操作
+- 推荐正确的做法：先删除引用这个镜像的容器；再删除这个镜像。
+
+
+
+### 清理镜像
+
+在使用docker一段时间后，系统一般都会残存一些临时的、没有被使用的镜像文件，可以通过以下命令进行清理。执行命令后还会告诉我们释放了多少存储空间
+
+```sh
+docker image prune
+```
+
+常用参数
+
+- -a,--all 删除所有没有用的镜像，而不仅仅是临时文件
+- -f, --force: 强制删除镜像文件，无需弹出提示确认。
+
+
+
+## Docker容器常用命令
+
+
+
+### 新建并启动容器
+
+语法：
+
+```sh
+docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+```
+
+运行容器
+
+```sh
+docker run -it --rm -p 8080:8080 tomcat:9.0.20-jre8-alpine
+```
+
+**常见参数：**
+
+docker run命令常用参数比较多，这里列出开发常用参数：
+
+- -d,--detach=false: 后台运行容器，并返回容器的ID
+- -i， --interactive=false : 以交互模式运行容器，通常与-t同时使用
+- -P, --publish-all=false: 随机端口映射，容器内部端口随机映射到主机的端口。不推荐使用该参数
+- -p, --publish=[] 指定端口映射，格式为主机（宿主）端口：容器端口，推荐使用此参数配制
+- -t,--tty=false 为容器重新分配一个伪输入终端，通常与-i同时使用
+- --name=“tomcat” 为容器指定一个名称
+- -h ,--hostname="tomcathost" 指定容器的hostname
+- -e,--env=[] 设置环境变量，容器中可以使用该环境变量。
+- --net="bridge" 指定容器的网络连接类型，支持bridge/host/nonde/container:四种类型
+- --link=[] 添加链接到另一个容器；不推荐使用此参数
+- -v, --volume: 绑定一个卷
+- --privileged=false 指定容器是否为特权容器，特权容器拥有所有的capabilities
+- --restart=no 指定容器停止后的重启策略
+  - no:容器退出时不重启
+  - on-failure: 容器故障退出（返回值非零）时重启
+  - always： 容器退出时总是重启，推荐此参数
+- --rm=false,指定容器停止后自动删除容器，不能以docker run -d启动的容器
+
+​	
+
+### 容器日志
+
+docker logs: 获取容器的日志
+
+```sh
+docker logs [OPTIONS] CONTAINER
+```
+
+日志查看
+
+```sh
+ docker run -itd --name tomcat9 -p 8080:8080 tomcat:9.0.20-jre8-alpine
+
+ docker logs -f tomcat9
+```
+
+样例输出：
+
+```sh
+[root@dockeros ~]# docker run -itd --name tomcat9 -p 8080:8080 tomcat:9.0.20-jre8-alpine
+c4df62105d0ec2a8220e21391afa35fd7fd584f0e1c3d03323678a9fe328e200
+[root@dockeros ~]# docker logs -f tomcat9
+Using CATALINA_BASE:   /usr/local/tomcat
+Using CATALINA_HOME:   /usr/local/tomcat
+Using CATALINA_TMPDIR: /usr/local/tomcat/temp
+Using JRE_HOME:        /usr/lib/jvm/java-1.8-openjdk/jre
+Using CLASSPATH:       /usr/local/tomcat/bin/bootstrap.jar:/usr/local/tomcat/bin/tomcat-juli.jar
+09-Dec-2023 15:20:28.775 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version name:   Apache Tomcat/9.0.20
+09-Dec-2023 15:20:28.777 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server built:          May 3 2019 22:26:00 UTC
+.......
+09-Dec-2023 15:20:29.266 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["http-nio-8080"]
+09-Dec-2023 15:20:29.283 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["ajp-nio-8009"]
+09-Dec-2023 15:20:29.286 INFO [main] org.apache.catalina.startup.Catalina.start Server startup in [326] milliseconds
+```
+
+常用参数：
+
+- -f 跟踪日志输出
+- --tail 仅列出最新N条容器日志
+
+
+
+### 删除容器
+
+docker rm 删除一个或者多个容器，docker rm 命令只能删除处于终止或退出状态的容器，不能删除还处于运行状态的容器
+
+```sh
+docker rm [OPTIONS] CONTAINER [CONTAINER...]
+```
+
+命令操作
+
+```sh
+docker run -itd --name tomcat9 -p 8080:8080 tomcat:9.0.20-jre8-alpine
+
+# 需要首先停止运行中的容器，再做删除操作，否则无法删除
+docker stop tomcat9
+
+# 按照容器名称进行删除 
+docker rm tomcat9
+
+# 按照容器的ID进行删除 
+docker rm c4df62105d0e
+```
+
+常用参数：
+
+- -f 通过SIGKILL信号强制删除一个运行中的容器
+- -l 移除容器间的网络连接，而非容器本身
+- -v 删除与容器关联的卷
 
 
 
