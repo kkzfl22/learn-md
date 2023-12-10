@@ -1474,3 +1474,155 @@ docker start tomcat9
 
 
 
+
+
+## Docker安装软件
+
+### docker安装nginx
+
+```sh
+# nginx官方docker地址:
+https://hub.docker.com/_/nginx
+
+# 摘取镜像
+docker pull nginx:1.19.3-alpine
+
+# 备份镜像
+docker save -o nginx-1.19.3.image nginx:1.19.3-alpine
+
+# 导入镜像
+docker load < nginx-1.19.3.image
+
+# 运行镜像
+docker run -itd --name nginx -p 80:80 nginx:1.19.3-alpine
+
+# 进入容器
+docker exec -it nginx sh
+
+# 查看nginx的页面信息
+cat /usr/share/nginx/html/index.html
+# 或者编辑下vi /usr/share/nginx/html/index.html
+```
+
+浏览器访问
+
+```sh
+http://192.168.5.20/
+```
+
+此为宿主机的IP，由于映射为80端口，无需写入端口
+
+![image-20231210123845573](./images\image-20231210123845573.png)
+
+
+
+### 安装mysql
+
+docker中mysql的官网地址:
+
+```sh
+# mysql官方docker地址:
+https://hub.docker.com/_/mysql
+
+# 摘取镜像
+docker pull mysql:5.7.31
+
+# 备份镜像
+docker save -o mysql-5.7.31.image  mysql:5.7.31 
+
+# 导入镜像 
+docker load < mysql-5.7.31.image
+
+# 运行镜像
+docker run -itd --name mysql-5.7.31 --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin mysql:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+
+```
+
+**参数说明**
+
+-e,--env[] 设置环境变量，容器中可以使用该环境变量
+#官网中给出进入容器的第三种方式，结合前面的/bin/bash,sh，这是第三种，向my.conf文件中追加相关配制项,--character-set-server=utf8 --collation-server=utf8_general_ci
+--privileged=true 对于熟悉UNIX类系统的人，都习惯于通过使用sudo来随意提升自己的权限，成为root用户，在使用docker容器的过程中知道，docker提供了一个--privileged的参数，它与随意使用sudo有很大的区别，它可能让你的应用程序面临不必要的风险，下面将向你展示以root身份运行的区别，以及特权的实际含义
+
+作为Root运行
+
+Docker允许在宿主机上隔离一个进程，capabilities和文件系统，但是大多数容器上都是默认以root身份。
+
+避免以root运行
+
+虽然在容器内以root身份运行是很正常的，但如果你想加固容器的安全性，还是应该避免这样做。
+
+特权模式
+
+--privileged 可以不受限制地访问任何自己的系统调用。在正常的操作中，即使容器有root，Docker也会限制容器的Linux Capabilities的，这种限制包括像CAP_AUDIT_WRITE这样的东西，它允许覆盖内核的审计日志-你的容器化工作负载很可能不需要这个Capabilities，所以特权只应该在你真正需要它的特定设置中使用，简而言之，它给容器提供了几乎所有主机（作为root）可做的事情的权限
+
+本质上，它就是一个免费的通行证，可以逃避容器所包含的文件系统，进程、楼台ets套接字等，当然它有特定的使用场景，比如在很多CI/CD系统中需要使用Docker IN Docker模式（在Docker容器内部需要Docker守护进程）以及需要极端网络的地方。
+
+测试mysql
+
+```sh
+# 进入容器，使用bash命令进入容器
+docker exec -it mysql-5.7.31 bash
+
+# 登录mysql
+mysql -uroot -padmin
+
+# 切换到MySQL数据库
+use mysql
+
+# 查看库信息
+show databases;
+
+exit
+
+exit
+```
+
+日志查看
+
+```sh
+[root@dockeros ~]# docker exec -it mysql-5.7.31 bash
+root@c2078b9dccfc:/# mysql -uroot -padmin
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 5
+Server version: 5.7.31 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> use mysql;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+4 rows in set (0.00 sec)
+
+mysql> exit
+Bye
+root@c2078b9dccfc:/# 
+```
+
+
+
+
+
+
+
+
+
+## 结束
