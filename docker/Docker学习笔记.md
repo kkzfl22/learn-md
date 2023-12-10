@@ -1516,7 +1516,7 @@ http://192.168.5.20/
 
 
 
-### 安装mysql
+### Docker安装mysql
 
 docker中mysql的官网地址:
 
@@ -1615,6 +1615,392 @@ mysql> show databases;
 mysql> exit
 Bye
 root@c2078b9dccfc:/# 
+```
+
+
+
+### Docker安装Zookeeper
+
+```sh
+# 官方docker地址
+https://hub.docker.com/_/zookeeper
+
+# 摘取镜像
+docker pull zookeeper:3.6.2
+
+# 导出镜像
+docker save -o zookeeper.3.6.2.image zookeeper:3.6.2
+
+# 导入镜像
+docker load < zookeeper.3.6.2.image
+```
+
+单机版zookeeper运行
+
+```sh
+docker run -itd --name zookeeper --restart always -p 2181:2181 zookeeper:3.6.2
+
+docker exec -it zookeeper /bin/bash
+
+cat /etc/issue
+# 返回Debian GNU/Linux 10 \n \l
+```
+
+通过客户端工具查看zookeeper的内容
+
+```sh
+#工具地址：
+https://issues.apache.org/jira/secure/attachment/12436620/ZooInspector.zip
+```
+
+查看zookeeper的信息
+
+![image-20231210185645056](./images\image-20231210185645056.png)
+
+
+
+### ActiveMQ
+
+activity没有官网镜像版本，需要使用第三方的镜像。
+
+```sh
+# 镜像地址
+https://hub.docker.com/r/webcenter/activemq
+
+# 拉取镜像
+docker pull webcenter/activemq:5.14.3
+
+# 导出镜像
+docker save webcenter/activemq:5.14.3 -o activity-5.14.3.image
+
+# 导入镜像
+docker load < activity-5.14.3.image
+
+```
+
+单机版运行
+
+```sh
+# 61616为ActiveMQ的外部访问端口，8161为WEB页面访问的端口
+docker run -itd --name activmq --restart always -p 61616:61616 -p 8161:8161 webcenter/activemq:5.14.3
+
+# 查看容器的系统版本信息
+docker exec -it activmq /bin/bash
+cat /etc/issue
+# 返回
+Ubuntu 15.10 \n \l
+```
+
+在WEB端口访问ActivityMQ管理界面，登录账号的密码默认：admin/admin
+
+```
+http://192.168.5.20:8161
+```
+
+![image-20231210190429729](.\images\image-20231210190429729.png)
+
+
+
+## Docker网络
+
+### 网络模式
+
+| Docker网络模式  | 配置                      | 说明                                                         |
+| --------------- | ------------------------- | ------------------------------------------------------------ |
+| host模式        | -net=host                 | 容器和宿主机共享Network namespace。<br/>容器将不会虚拟出自己的网卡，配置自己的IP等，而是使用宿主机的IP和端口 |
+| container模式   | -net=container:NAME_or_ID | 容器和另外一个容器共享Network namespace。<br/>kubernetes中的pod就是多个容器共享一个Network namespace。<br/>创建的容器不会创建自己的网卡，配置自己的IP，<br/>而是和一个指定的容器共享IP、端口范围 |
+| none模式        | -net=none                 | 容器有独立的Network namespace，并没有对其进行任何网络设置，<br/>如分配veth pair和网络连接，配制IP等。<br/>该模式关闭了容器的网络功能。 |
+| bridge模式      | -net=bridge               | 默认该模式.<br/>此模式会为每一个容器分配、设置IP等，<br/>并将容器连接到一个docker0虚拟网络，<br/>通过docker0网桥以及iptables nat表配制与宿主机通信 |
+| Macvlan network | 无                        | 容器具备Mac地址，使其显示为网络上的物理设备。                |
+| overlay         | 无                        | （覆盖网络）：利用VXLAN实现的bridge模式。                    |
+
+**bridge模式**
+
+默认的网络模式。bridge模式下容器没有一个公网IP，只有宿主机可以直接访问，外部主机是不可见的，但容器通过宿主机的NAT规则后可以访问外网。
+
+bridge桥接模式工实现步骤：
+
+- Docker Daemon利用veth pair技术，在宿主机上创建两个虚拟网络接口设备，假设为veth0和vetho1.而veth pair技术的特性可以保证无论哪一个veth接收到网络报文，都会将报文传输给另一方。
+- Docker Daemon将veth0附加到Docker Daemon创建的docker0网桥上。保证宿主机的网络报文可以发往veth0;
+- Docker Daemon将veth1添加到Docker Container所属的namespace下，并被改名为eth0,如果一来，保证宿主机的网络报文若发往veth0，则立即会被eth0接收，实现宿主机到Docker Container网络的联通性同时，也保证Docker Container单独使用eth0，实现容器网络环境隔离性。
+
+Bridge桥接模式的缺陷:
+
+1. 最明显的是，该模式下Docker Container不具有公有IP，即和宿主机的eth0不处于同一个网段。导致结果是宿主机以外的世界不能直接和容器进行通信。
+2. 虽然NAT模式经过中间处理实现了这一段，但是NAT模式仍然存在问题与不便，如：容器均需要在宿主机上竞争端口，容器内部服务的访问者需要使用服务发现获知服务的外部端口等。
+3. 另外NAT模式由于是在三层网络上的实现手段，故肯定会影响网络的传输效率。
+
+**注意：**
+
+veth设备是成对出现的，一端容器内部命令为eth0，一端是加入网桥并命名为veth(通常命令为veth),它们组成了一个数据传输通道，一端进一端出，veth设备连接了两个网络设备并实现了数据通信。
+
+
+
+**host模式**
+
+相当于Vmware中的NAT模式，与宿主机在同一个网络中，但没有独立IP地址。
+
+如果启动容器的时候使用host模式，那么这个容器将不会获得一个独立的NETwork namespace，而是和宿主机共用一个Network namespace。容器将不会虚拟出自己的网卡，配置自己的IP等，而是使用宿主机的IP和端口。但是，容器的其他方面，如果文件系统、进程列表等还是和宿主机隔离的。
+
+使用host模式的容器可以直接使用宿主机的IP地址与外界通信，容器内部服务端口也可以使用宿主机的端口，不需要进行NAT，host最大优势就是网络性能比较好，但是docker host已经使用端口就不能再用了，网络的隔离性不好
+
+host网络模式需要在容器创建时指定-network=host
+
+host模式是bridge桥接模式很好的补充。采用host模式的Docker Container，可以直接使用宿主机的IP地址与外界进行通信，基宿主机的eth0是一个公网IP，那么容器也拥有这个公网IP。同时容器内部的服务端口也可以宿主机的端口，无需进行额外的NAT转换。
+
+host械可以让容器共享宿主机网络栈，这样好处是外部主机与容器直接通信，但是容器的网络缺少隔离性。
+
+host网络模式的缺陷：
+
+最明显的是Docker Container网络环境隔离性弱化。即容器不再拥有隔离、独立的网络环境。
+
+另外，使用host模式的Docker Container虽然可以让容器内部的服务和传统情况无差别、无改造的使用，但是由于网络隔离性的弱化，该容器会与宿主机共享竞争网络栈的使用。
+
+另外、容器内部将不再拥有所有的端口资源，原因是部分端口资源已经被宿主机本身占用，还有部分端口用于bridge网络模式容器的端口映射。
+
+
+
+**Container网络模式**
+
+一种特殊的host网络模式
+
+Container网络模式是Docker中一种较为特别的网络模式，在容器创建时使用-network=container:vm1指定。（vm1指定的是运行的容器名）
+
+处于这个模式下的Docker容器会共享一个网络环境，这样两个容器之间可以使用localhost高效快速通信。
+
+缺陷：它并没有改善容器与宿主机以外世界通信的情况（和桥接模式一样，不能连接宿主机以外的其他设备）
+
+这个模式指定创建的容器和已经存在的一个容器共享一个Network Namespace，而不是和宿主机共享。新创建的容器不会创建自己的网卡，配置自己的IP，而是和一个指定的共享IP、端口范围等。同样，两个容器除了网络方面，其他的如文件系统、进程列表等还是隔离的。两个容器的进程可以通过lo网卡设备通信。
+
+**none模式**
+
+使用none模式，Docker容器拥有自己的Network Namespace，但是，并不为Docker容器进行任何网络配制，也就是说，这个Docker容器没有网卡、IP、路由等信息，需要我们自己为Docker容器添加网卡、配置IP等。
+
+这种网络模式容器只有lo回环网络，没有其他网卡。none模式可以在容器创建时通过network=none来指定。这种类型的网络没有办法联网，封装网络能很的保证容器的安全性。
+
+**overlay网络模式**
+
+overlay网络，也称为覆盖网络，主要用于docker集群部署。
+
+Overlay网络的实现方式和方案有多种。DOcker自身集成了一种，基于VXLAN隧道技术实现。
+
+Overlay网络用于实现跨主机容器之间在的通信。
+
+应用场景：需要管理上千个跨主机的容器集群的网络时。
+
+**macvlan网络模式**
+
+macvlan网络模式，最主要的特征就是他们的通信会基于mac地址进行转发。
+
+这时宿主机充当一个二层交换机。Docker会维护着一个MAC地址表，当宿主机网络收到一个数据包后，直接根据mac地址找到对应的容器，再氢数据交换对应的容器。
+
+容器之间通过IP互通，通过宿主机上内建的虚拟网络设备 （创建macvlan网络时自动创建），但与主机无法直接利用IP互通。
+
+应用场景：由于每个外来的数据包目的mac地址就是容器的mac地址，这时每个容器对于外来网络来说就相当于这个真实的物理网络设备。因此当需要让容器的网络看起来是一个真实的物理机时，使用macvlan模式。
+
+macvlan是一个新的尝试，是真正网络虚拟化技术的转折点。linux实现非常轻量级，因为与传统的Linux Bridge隔离相比，它们只是简单的与一个Linux以太网接口或子接口相关联，以实现网络之间的分离和物理网络的连接。
+
+Macvlan提供了许多独特的功能，并有充足的空间进一步创新与各种模式。这些方法的两个高级优点是绕过Linux的网桥的正面性能以及移动部件少的简单性。删除传统上驻留在Docker主机NIC和容器接口之间的网络留下了一个非常简单的设置，包括容器接口，直接连接Docker主机接口。由于在这些情况下没有端口映射，因此可以轻松访问外部服务。
+
+Macvlan Bridge模式每个容器都有唯一的MAC地址，用于跟踪Docker主机的MAC地址到端口映射。
+
+Macvlan驱动程序网络连接父Docker主机接口。是物理接口，例eth0，用于802.1qVLAN标记的子接口eth0.10（.10代表VLAN10）或者甚至绑定的主机适配器，将两个以太网接口捆绑为单个逻辑接口。指定的网关由网络基础设施提供的主机外部。每个Macvlan Bridge模式的Docker网络彼此隔离，一次只有一个网络连接到父节点。
+
+每个主机适配器有一个理论限制，每个主机适配器可以连接一个Docker网络。同一子网内的任何容器都可以与没有网关的同一网络中的任何其他容器进行通信macvlan bridge。相同的Docker network命令适用于vlan驱动程序。在Macvlan模式下，在两个网络/子网之前没有外部进程路由的情况下，单独网络上的容器无法互联访问，这也适用于同一网络内的多个子网。
+
+
+
+### bridge网络
+
+bridge网络表现形式就是docker0这个网络接口。容器默认都是通过docker0这个接口进行通信。也可通过docker0去和本机的以太网接口连接，这样容器内部才能访问互联网。
+
+```sh
+# 查看docker0网络，默认环境中，一个名为docker0的linux bridge自动被创建好了，其上有一个docker0内部接口，IP为127.17.0.1/16
+ip a
+
+# 查看docker 网络
+docker network ls
+
+# 查看bridge网络详情，主要关注containers节点信息。
+docker network inspect bridge
+```
+
+无容器运行时样例数据
+
+```sh
+[root@dockeros ~]# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:ed:b1:b5 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global noprefixroute dynamic enp0s3
+       valid_lft 70587sec preferred_lft 70587sec
+    inet6 fe80::1026:97f6:36:38b7/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:d4:0a:e2 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.5.20/24 brd 192.168.5.255 scope global noprefixroute enp0s8
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6826:6d62:c48d:5ac/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+4: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:51:ec:9b:bd brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:51ff:feec:9bbd/64 scope link 
+       valid_lft forever preferred_lft forever
+[root@dockeros ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+33e9444e71e1   bridge    bridge    local
+4fc8da9792df   host      host      local
+f6f389d033fe   none      null      local
+[root@dockeros ~]# docker network inspect bridge
+[
+    {
+        "Name": "bridge",
+        "Id": "33e9444e71e1a13da4a9ad8f7b91bfc0a8cc3156785198077579454bb1ef0bbd",
+        "Created": "2023-12-10T18:42:44.091003478+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# 
+```
+
+运行镜像
+
+```sh
+# 运行一个nginx镜像。
+docker run -itd --name nginx nginx:1.19.3-alpine
+
+# 查看bridge网络详情。主要关注Containers节点信息。发现nginx1容器使用bridge网络。
+docker network inspect bridge
+
+# 查看容器创建后IP地址的分配,在主机的网络中，会发现多出一块网卡veth779d309@if13
+ip a
+
+# 查看docker网络,
+docker network ls
+
+```
+
+样例输出：
+
+```sh
+[root@dockeros ~]# docker run -itd --name nginx nginx:1.19.3-alpine
+4564a52f52b821f1dc886bcd85c60ea5b49f869ab2c60d1775327207a506c2b5
+[root@dockeros ~]# docker network inspect bridge
+[
+    {
+        "Name": "bridge",
+        "Id": "33e9444e71e1a13da4a9ad8f7b91bfc0a8cc3156785198077579454bb1ef0bbd",
+        "Created": "2023-12-10T18:42:44.091003478+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "4564a52f52b821f1dc886bcd85c60ea5b49f869ab2c60d1775327207a506c2b5": {
+                "Name": "nginx",
+                "EndpointID": "1f1d4099e246bd83aa63c1310fc41fa2bd8c065013e5477fd4c19619cb4c7886",
+                "MacAddress": "02:42:ac:11:00:02",
+                "IPv4Address": "172.17.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:ed:b1:b5 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global noprefixroute dynamic enp0s3
+       valid_lft 70322sec preferred_lft 70322sec
+    inet6 fe80::1026:97f6:36:38b7/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:d4:0a:e2 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.5.20/24 brd 192.168.5.255 scope global noprefixroute enp0s8
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6826:6d62:c48d:5ac/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+4: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:51:ec:9b:bd brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:51ff:feec:9bbd/64 scope link 
+       valid_lft forever preferred_lft forever
+14: veth779d309@if13: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
+    link/ether 82:cc:c3:40:34:54 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet6 fe80::80cc:c3ff:fe40:3454/64 scope link 
+       valid_lft forever preferred_lft forever
+[root@dockeros ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+33e9444e71e1   bridge    bridge    local
+4fc8da9792df   host      host      local
+f6f389d033fe   none      null      local
 ```
 
 
