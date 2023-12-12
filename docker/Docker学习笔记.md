@@ -1977,7 +1977,7 @@ docker network ls
 2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
     link/ether 08:00:27:ed:b1:b5 brd ff:ff:ff:ff:ff:ff
     inet 10.0.2.15/24 brd 10.0.2.255 scope global noprefixroute dynamic enp0s3
-       valid_lft 70322sec preferred_lft 70322sec
+       valid_lft 85616sec preferred_lft 85616sec
     inet6 fe80::1026:97f6:36:38b7/64 scope link noprefixroute 
        valid_lft forever preferred_lft forever
 3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
@@ -1987,21 +1987,326 @@ docker network ls
     inet6 fe80::6826:6d62:c48d:5ac/64 scope link noprefixroute 
        valid_lft forever preferred_lft forever
 4: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
-    link/ether 02:42:51:ec:9b:bd brd ff:ff:ff:ff:ff:ff
+    link/ether 02:42:3f:68:21:16 brd ff:ff:ff:ff:ff:ff
     inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
        valid_lft forever preferred_lft forever
-    inet6 fe80::42:51ff:feec:9bbd/64 scope link 
+    inet6 fe80::42:3fff:fe68:2116/64 scope link 
        valid_lft forever preferred_lft forever
-14: veth779d309@if13: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
-    link/ether 82:cc:c3:40:34:54 brd ff:ff:ff:ff:ff:ff link-netnsid 0
-    inet6 fe80::80cc:c3ff:fe40:3454/64 scope link 
+6: veth7ea6b4e@if5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
+    link/ether ba:57:ba:40:2c:9f brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet6 fe80::b857:baff:fe40:2c9f/64 scope link 
        valid_lft forever preferred_lft forever
 [root@dockeros ~]# docker network ls
 NETWORK ID     NAME      DRIVER    SCOPE
 33e9444e71e1   bridge    bridge    local
 4fc8da9792df   host      host      local
 f6f389d033fe   none      null      local
+[root@dockeros ~]# docker exec -it nginx ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+5: eth0@if6: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue state UP 
+    link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
 ```
+
+
+
+Docker创建一个容器的时候，会执行如下操作：
+
+- 创建一对虚拟接口/网卡，也就是veth pair,分别放到本地主机和新容器中中；
+- 本地主机一端桥接到默认的docker0或指定网桥上，并具有一个唯一的名字，如veth7ea6b4e;
+- 新容器一端放到新容器中，并修改名称作为eth0，这个网卡/接口只在容器的命名空间内可见；
+- 从桥接可以地址段中（也就是与该bridge对应的network）获取一个空闲地址分配给容器的eth0，并配置默认路由到桥接网卡veth7ea6b4e。
+
+完成这些后，容器就可以使用eth0虚拟网卡来连接其他容器和其他网络。
+
+如果不指定--network，创建的容器默认都会挂到docker0上，使用本地主机上docker0接口的IP作为所有容器的默认网关。
+
+安装bridge工具。来查看对应的桥接信息
+
+```sh
+yum install -y bridge-utils
+
+# 运行命令
+brctl show
+
+```
+
+样例输出：
+
+```sh
+[root@dockeros ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.02423f682116       no              veth7ea6b4e
+```
+
+
+
+结合之前的输出，可以发现，在宿主主机创建了一个虚拟网卡veth7ea6b4e，这个虚拟网卡将连接docker0上，通就过`brctl show`也能发现此docker0的网卡与veth7ea6b4e是相通的。然后在运行的容器中，将通过docker0这`172.16.0.1/16`这个地址段中获取一个IP，并给容器内部的eth0来使用，这样容器内部与外部就联系在了一起。
+
+
+
+**多容器之间的通讯**
+
+```sh
+docker rm $(docker stop $(docker ps -q))
+
+# 创建多容器
+docker run -itd --name nginx1 nginx:1.19.3-alpine
+docker run -itd --name nginx2 nginx:1.19.3-alpine
+
+
+# 查看网桥
+docker network inspect bridge
+
+docker exec -it nginx1 sh 
+ping 172.17.0.2
+ping nginx1
+ping 172.17.0.3
+ping nginx2
+ping www.baidu.com
+exit
+
+docker exec -it nginx2 sh
+ping 127.17.0.2
+ping nginx1
+ping 172.17.0.3
+ping nginx3
+ping www.baidu.com
+exit
+
+
+```
+
+样例输出
+
+```sh
+[root@dockeros ~]# docker rm $(docker stop $(docker ps -q))
+4564a52f52b8
+[root@dockeros ~]# docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros ~]# docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros ~]# docker run -itd --name nginx1 nginx:1.19.3-alpine
+
+3f9598707f8789ae5a57e8aad3a29d4a7a7aa8703c38784fe5bd6b0237a14a64
+[root@dockeros ~]# docker run -itd --name nginx2 nginx:1.19.3-alpine
+b976a79292faf00e30c3528010023938b0c62e70a78e40b8a49d2d6df2a7033f
+[root@dockeros ~]# docker network inspect bridge
+[
+    {
+        "Name": "bridge",
+        "Id": "5e93f62ab84e84db7ae43ce144b735df98289e57da2f88682fc430e5309dfa63",
+        "Created": "2023-12-11T12:11:39.326176651+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "3f9598707f8789ae5a57e8aad3a29d4a7a7aa8703c38784fe5bd6b0237a14a64": {
+                "Name": "nginx1",
+                "EndpointID": "6221946ff5b31f135c1d6b925b41cae6ae32c38b2e5c0bb0e52bd38aafdf0dde",
+                "MacAddress": "02:42:ac:11:00:02",
+                "IPv4Address": "172.17.0.2/16",
+                "IPv6Address": ""
+            },
+            "b976a79292faf00e30c3528010023938b0c62e70a78e40b8a49d2d6df2a7033f": {
+                "Name": "nginx2",
+                "EndpointID": "671b3cbf3887600cb3271509bffbf1ff154e8744f16eeee659eca96ca6d9132f",
+                "MacAddress": "02:42:ac:11:00:03",
+                "IPv4Address": "172.17.0.3/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker exec -it nginx1 sh 
+/ # ping 172.17.0.2
+PING 172.17.0.2 (172.17.0.2): 56 data bytes
+64 bytes from 172.17.0.2: seq=0 ttl=64 time=0.027 ms
+64 bytes from 172.17.0.2: seq=1 ttl=64 time=0.058 ms
+^C
+--- 172.17.0.2 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.027/0.042/0.058 ms
+/ # ping nginx1
+ping: bad address 'nginx1'
+/ # ping 172.17.0.3
+PING 172.17.0.3 (172.17.0.3): 56 data bytes
+64 bytes from 172.17.0.3: seq=0 ttl=64 time=0.089 ms
+64 bytes from 172.17.0.3: seq=1 ttl=64 time=0.075 ms
+64 bytes from 172.17.0.3: seq=2 ttl=64 time=0.078 ms
+^C
+--- 172.17.0.3 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 0.075/0.080/0.089 ms
+/ # ping nginx2
+ping: bad address 'nginx2'
+/ # ping www.baidu.com
+PING www.baidu.com (180.101.50.242): 56 data bytes
+64 bytes from 180.101.50.242: seq=0 ttl=50 time=14.444 ms
+64 bytes from 180.101.50.242: seq=1 ttl=50 time=17.937 ms
+64 bytes from 180.101.50.242: seq=2 ttl=50 time=12.389 ms
+^C
+--- www.baidu.com ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 12.389/14.923/17.937 ms
+/ # exit
+[root@dockeros ~]# docker exec -it nginx2 sh 
+/ # ping 172.17.0.2
+PING 172.17.0.2 (172.17.0.2): 56 data bytes
+64 bytes from 172.17.0.2: seq=0 ttl=64 time=0.048 ms
+64 bytes from 172.17.0.2: seq=1 ttl=64 time=0.077 ms
+64 bytes from 172.17.0.2: seq=2 ttl=64 time=0.077 ms
+^C
+--- 172.17.0.2 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 0.048/0.067/0.077 ms
+/ # ping nginx1
+ping: bad address 'nginx1'
+/ # ping 172.17.0.3
+PING 172.17.0.3 (172.17.0.3): 56 data bytes
+64 bytes from 172.17.0.3: seq=0 ttl=64 time=0.027 ms
+64 bytes from 172.17.0.3: seq=1 ttl=64 time=0.057 ms
+64 bytes from 172.17.0.3: seq=2 ttl=64 time=0.154 ms
+^C
+--- 172.17.0.3 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 0.027/0.079/0.154 ms
+/ # ping nginx2
+ping: bad address 'nginx2'
+/ # ping www.baidu.com
+PING www.baidu.com (180.101.50.242): 56 data bytes
+64 bytes from 180.101.50.242: seq=0 ttl=50 time=14.444 ms
+64 bytes from 180.101.50.242: seq=1 ttl=50 time=17.937 ms
+64 bytes from 180.101.50.242: seq=2 ttl=50 time=12.389 ms
+^C
+--- www.baidu.com ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 12.389/14.923/17.937 ms
+/ # exit
+[root@dockeros ~]# 
+```
+
+经过上面的试验可以发现，使用IP都可以ping通两个主机，但是用运行的容器的名称是不可能ping通的。
+
+
+
+
+
+
+
+**容器停止后IP的变化**
+
+```sh
+# 容器停止后，容器的IP之后会如何变化，
+docker stop nginx1 nginx2
+
+# 先启动nginx2,再启动nginx1
+docker start nginx2
+
+docker start nginx1
+
+docker network inspect bridge
+```
+
+样例输出
+
+```sh
+[root@dockeros ~]# docker stop nginx1 nginx2
+nginx1
+nginx2
+[root@dockeros ~]# docker start nginx2
+nginx2
+[root@dockeros ~]# docker start nginx1
+nginx1
+[root@dockeros ~]# docker network inspect bridge
+[
+    {
+        "Name": "bridge",
+        "Id": "5e93f62ab84e84db7ae43ce144b735df98289e57da2f88682fc430e5309dfa63",
+        "Created": "2023-12-11T12:11:39.326176651+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "3f9598707f8789ae5a57e8aad3a29d4a7a7aa8703c38784fe5bd6b0237a14a64": {
+                "Name": "nginx1",
+                "EndpointID": "366fe7a4f1dd55b94f783ddb7edd9a7db92c9dd6be421515be6fb925d2911785",
+                "MacAddress": "02:42:ac:11:00:03",
+                "IPv4Address": "172.17.0.3/16",
+                "IPv6Address": ""
+            },
+            "b976a79292faf00e30c3528010023938b0c62e70a78e40b8a49d2d6df2a7033f": {
+                "Name": "nginx2",
+                "EndpointID": "24a0bc7fcb968e296fb9cd5f6ae8b34a331c353f0cc2e97f694aea46ddfb7e32",
+                "MacAddress": "02:42:ac:11:00:02",
+                "IPv4Address": "172.17.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# 
+```
+
+经过此项验证发现，容器的域名所绑定的IP并不是固定不变的，而是在启动时动态分配的。
+
+
 
 
 
