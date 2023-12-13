@@ -2739,9 +2739,160 @@ ip a
 
 
 
-
-
 ### host网络
+
+执行：
+
+```sh
+# 容器信息
+docker run -itd --name nginx2 --network host nginx:1.19.3-alpine
+
+# 查看网络信息
+docker network inspect host
+
+```
+
+通过运行的结果来分析，这是也是不显示IP地址的，那是不是和none一样呢？这肯定不是，不然也不会设计成none和host网络进行区分。那进入容器，看下容器的IP地址信息。
+
+```sh
+# 进入nginx2 查看下IP信息
+docker exec -it nginx2 sh
+ip a
+```
+
+从容器的输出来看，host模式，容器和外层linux主机共享一套网络接口。这种容器和本机使用共享一套网络接口，缺点也很明显，例如我们知道Web服务器的端口是80，共享一套网络接口，那么这台机器上只能启动一个nginx端口为80的服务了，否则会出现端口被占用的情况
+
+
+
+样例输出:
+
+```sh
+[root@dockeros ~]# docker run -itd --name nginx2 --network host nginx:1.19.3-alpine
+ac06c6f161d8aaf2cf618d357f1c9d8b6a3743fce49fed8e5972c68a78c517db
+[root@dockeros ~]# docker network inspect host
+[
+    {
+        "Name": "host",
+        "Id": "4fc8da9792df79859b506a85c78faaf3597b26d15210b3c66bffae37ff83ef91",
+        "Created": "2023-12-07T18:49:34.50673008+08:00",
+        "Scope": "local",
+        "Driver": "host",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": []
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "ac06c6f161d8aaf2cf618d357f1c9d8b6a3743fce49fed8e5972c68a78c517db": {
+                "Name": "nginx2",
+                "EndpointID": "cd1f5daa1be6f58af6eb6b38458adc98b8882d32fb238c74fbfec13624f7505d",
+                "MacAddress": "",
+                "IPv4Address": "",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {},
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker exec -it nginx2 sh
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:ed:b1:b5 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic enp0s3
+       valid_lft 62824sec preferred_lft 62824sec
+    inet6 fe80::1026:97f6:36:38b7/64 scope link 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:d4:0a:e2 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.5.20/24 brd 192.168.5.255 scope global enp0s8
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6826:6d62:c48d:5ac/64 scope link 
+       valid_lft forever preferred_lft forever
+4: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN 
+    link/ether 02:42:ae:dd:5c:16 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:aeff:fedd:5c16/64 scope link 
+       valid_lft forever preferred_lft forever
+/ # 
+```
+
+### 固定IP
+
+```sh
+# 如果想要容器固定一个IP地址。可以这样操作
+docker network create -d bridge --subnet=172.18.0.0/24 --gateway 172.18.0.1 nullnull-network
+
+172.18.0.0/24 : 24代表子码掩码是255.255.255.0
+172.172.0.0/16: 16代表子码掩码是255.255.0.0
+
+docker run -itd --name nginx5 -p 82:80 --net nullnull-network --ip 172.18.0.28 nginx:1.19.3-alpine
+
+# 进入容器查看IP
+docker exec -it nginx5 sh 
+ip a
+
+```
+
+样例输出:
+
+```sh
+[root@dockeros ~]# docker network create -d bridge --subnet=172.18.0.0/24 --gateway 172.18.0.1 nullnull-network
+d946c0b14e28157b80271da76227bd8b98e63bb8554c35ff38f8e16568204670
+[root@dockeros ~]# docker run -itd --name nginx5 -p 82:80 --net nullnull-network --ip 172.18.0.28 nginx:1.19.3-alpine
+810606da612b110216963863059d6256c6772591d2c2b073d7408399920265ed
+[root@dockeros ~]# docker exec -it nginx5 sh 
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+19: eth0@if20: <BROADCAST,MULTICAST,UP,LOWER_UP,M-DOWN> mtu 1500 qdisc noqueue state UP 
+    link/ether 02:42:ac:12:00:1c brd ff:ff:ff:ff:ff:ff
+    inet 172.18.0.28/24 brd 172.18.0.255 scope global eth0
+       valid_lft forever preferred_lft forever
+/ # 
+```
+
+
+
+
+
+## Docker数据卷
+
+什么是数据卷？
+
+当我们在使用docker容器的时候，会产生一系列的数据文件，这些数据文件在我们删除docker容器的时会消失的，但是其中产生的部分内容我们希望能够把它给保存起来另作用途的，Docker将应用与运行环境打包成容器发布，我们希望在运行过程中产生的部分数据是可以持久化的。而且容器之间我们希望能够实现数据共享。
+
+通俗来说，docker容器数据卷可以看作我们生产中常用的U盘，它存在于一个或者多个容器中，由docker挂载以容器，但不属于联合文件系统。Docker不会在容器删除时删除其挂载的数据券。
+
+特点：
+
+1. 数据卷可以在容器之间共享或者重用数据。
+2. 数据卷中的更改可以立即生效。
+3. 数据卷中的更改不会打包在镜像的更新中。
+4. 数据卷会默认一直存在，即使容器被删除。
+5. 数据卷的生命周期一直持续到没有容器使用它为止。
+
+容器中的管理数据主要有两种方式：
+
+- 数据卷，Data Valumes容器内数据直接映射到本地主机环境。
+- 数据卷容器，Data Valumes Containers 使用特定容器维护数据卷。
 
 
 
