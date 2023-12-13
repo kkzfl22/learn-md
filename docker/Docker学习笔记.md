@@ -2894,6 +2894,283 @@ d946c0b14e28157b80271da76227bd8b98e63bb8554c35ff38f8e16568204670
 - 数据卷，Data Valumes容器内数据直接映射到本地主机环境。
 - 数据卷容器，Data Valumes Containers 使用特定容器维护数据卷。
 
+### cp命令
+
+用于容器与主机之前的数据拷贝。
+
+语法：
+
+```sh
+# 容器向宿主机拷贝数据
+docker cp [OPTIONS] CONTAINER:SRC_PATH DEST_PATH|-
+
+# 宿主机向容器拷贝数据
+docker cp [OPTIONS] SRC_PATH|- CONTAINER:DEST_PATH
+```
+
+常用参数
+
+- -L ： 保持源目标中的链接。
+
+
+
+### 数据卷
+
+数据卷（Data Volumes）是一个可供一个或者多个容器使用的特殊目录，它将主机操作系统目录直接映射进容器。
+
+**注意事项**
+
+- 挂载数据卷，最好通过run而非create/start创建启动容器，create/start命令启动容器后，再挂载数据相当麻烦，要修改很多配制文件，但并非不可以。
+- docker官网推荐尽量进行目录挂载，不要进行文件挂载。
+
+**数据卷类型：**
+
+有三种数据卷类型：
+
+1. 宿主数据卷：直接在宿主机的文件系统中但容器可以访问（bind mount)
+2. 命名的数据卷：磁盘上的Docker管理的数据卷，但是这个卷有个名字。
+3. 匿名数据卷：磁盘上Docker管理的数据卷，因为没有名称想要找到不容易，Docker来管理这些文件。
+
+数据卷其实都在（如果没有网络文件系统等情况下）宿主机文件系统里面的。只是第一种是在宿主机内的特定目录下，而后两种则在docker管理的目录下。这个目录一般为/var/lib/docker/volumes/
+
+推荐使用`宿主机数据卷`方式持久化数据
+
+
+
+
+
+### 宿主机数据卷
+
+bind mounts: 容器内的数据被存放在宿主机文件系统的任意位置，甚至存放到一些重要的系统目录或者文件中。除了docker之外的进程也可以任意对他们进行修改。
+
+当使用bind mounts时，宿主机的目录或者文件被挂载到容器中，容器将按照挂载目录或者文件的绝对路径来使用或者修改宿主机的数据。宿主机的目录或者文件不需要预先存在，在需要使用时会自动创建。
+
+使用bind mounts在性能上是非常好的，但这依赖于宿主机有一个目录妥善结构化的文件系统。
+
+使用bind mounts的容器可以通过容器内部的进程对主机文件系统进行修改。包括创建、修改和删除重要的系统文件和目录，这个功能虽然很强大，但显然也会造成安全方面的影响，包括影响到宿主机上Docker进程以外的进程。
+
+
+
+**数据覆盖问题**
+
+- 如果挂载一个空的数据卷到容器中的一个非空目录中，那么这个目录下的文件会被复杂到数据卷中
+- 如果挂载一个非空的数据卷到容器中的一个目录中，那么容器中的目录会显示数据卷中的数据，如果原来容器中有的目录有数据，那么原始数据会被隐藏掉。
+
+语法：
+
+```sh
+docker run -v /宿主机绝对路径目录：/容器内的目录 镜像名
+```
+
+操作
+
+```sh
+# 拉取镜像
+docker pull mysql:5.7.31
+
+# 运行镜像
+# 推荐先将目录创建好，再进行数据挂载
+mkdir -p /data/mysql
+chmod 777 /data/mysql
+
+docker run -itd --name mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin -v /data/mysql:/var/lib/mysql mysql:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+
+# 容器目录权限
+# 通过 -v 容器内路径： ro rw 改变读写权限
+ro:readonly 只读
+rw:readwrite 可读可写
+
+docker run -it -v /宿主机绝对路径目录：/容器内目录：ro 镜像名
+docker run -it -v /宿主机绝对路径目录：/容器内目录：rw 镜像名
+
+ro: 只要看到ro就说明这个路径只能通过宿主机来操作，容器内部是无法操作。
+```
+
+
+
+挂载目录权限问题演示：
+
+```sh
+https://hub.docker.com/r/sonatype/nexus3
+
+
+# 拉取镜像
+docker pull sonatype/nexus3:3.28.1
+
+
+# 备份镜像
+docker save sonatype/nexus3:3.28.1 -o sonatype-nexus.image
+
+
+# 运行容器
+docker run -d -p 8081:8081 --name nexus3 sonatype/nexus3:3.28.1 
+
+# 进入容器查看初始密码
+docker exec -it nexus3 /bin/bash
+
+cd /nexus-data/
+
+cat admin.password
+
+
+# 浏览器访问
+http://192.168.5.20:8081/
+
+docker rm $(docker stop $(docker ps -aq))
+
+
+# 数据卷挂载
+docker run -d -p 8081:8081 --name nexus3 -v /data/nexus3/:/nexus-data  sonatype/nexus3:3.28.1 
+
+# 查看容器日志
+docker logs -f nexus3
+# 在报错信息中可以看到容器的目录存在权限问题。
+mkdir: cannot create directory '../sonatype-work/nexus3/log': Permission denied
+mkdir: cannot create directory '../sonatype-work/nexus3/tmp': Permission denied
+Warning:  Cannot open log file: ../sonatype-work/nexus3/log/jvm.log
+
+# 删除容器
+docker rm -f nexus3
+
+# 查看官网的一个说明：
+A persistent directory, /nexus-data, is used for configuration, logs, and storage. This directory needs to be writable by the Nexus process, which runs as UID 200.
+# 为挂载目录授权
+chown -R 200 /data/nexus3
+
+# 再次运行容器
+docker run -d -p 8081:8081 --name nexus3 -v /data/nexus3/:/nexus-data  sonatype/nexus3:3.28.1 
+
+# 查看日志
+docker logs -f nexus3
+
+```
+
+在开发环境推荐对挂载目录授最高权限777；生产环境需要查看官网文档，结合实际生产环境进行授权。
+
+样例:
+
+```sh
+[root@dockeros mysql]# docker pull sonatype/nexus3:3.28.1
+3.28.1: Pulling from sonatype/nexus3
+ec1681b6a383: Pull complete 
+c4d668e229cd: Pull complete 
+79161e5880bc: Pull complete 
+c65b6b9a3763: Pull complete 
+Digest: sha256:e788154207df95a86287fc8ecae1a5f789e74d0124f2dbda846fc4c769603bdb
+Status: Downloaded newer image for sonatype/nexus3:3.28.1
+docker.io/sonatype/nexus3:3.28.1
+[root@dockeros data]# docker save sonatype/nexus3:3.28.1 -o sonatype-nexus.image
+[root@dockeros data]# docker run -d -p 8081:8081 --name nexus3 sonatype/nexus3:3.28.1 
+6bde52222290b59bbe6d08c9726bc70a0bc756def193f2626f0cb0eee85d50e2
+[root@dockeros data]# docker exec -it nexus3 /bin/bash
+bash-4.4$ cd /nexus-data/
+bash-4.4$ cat admin.password
+28202dab-6b95-46a2-9128-283cfcd2b55a
+[root@dockeros data]# docker rm $(docker stop $(docker ps -aq))
+6bde52222290
+f95126e88fe0
+810606da612b
+ac06c6f161d8
+4548b7443897
+[root@dockeros data]# docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros data]# docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros data]# docker run -d -p 8081:8081 --name nexus3 -v /data/nexus3/:/nexus-data  sonatype/nexus3:3.28.1 
+13bef2125a23ff97a0d44a844c7ff14db243c79b3b37acea57e1b41e778a385b
+[root@dockeros data]# docker logs -f nexus3
+mkdir: cannot create directory '../sonatype-work/nexus3/log': Permission denied
+mkdir: cannot create directory '../sonatype-work/nexus3/tmp': Permission denied
+Warning:  Cannot open log file: ../sonatype-work/nexus3/log/jvm.log
+Warning:  Forcing option -XX:LogFile=/tmp/jvm.log
+OpenJDK 64-Bit Server VM warning: Cannot open file ../sonatype-work/nexus3/log/jvm.log due to No such file or directory
+
+java.io.FileNotFoundException: ../sonatype-work/nexus3/tmp/i4j_ZTDnGON8hezynsMX2ZCYAVDtQog=.lock (No such file or directory)
+        at java.io.RandomAccessFile.open0(Native Method)
+        at java.io.RandomAccessFile.open(RandomAccessFile.java:316)
+        at java.io.RandomAccessFile.<init>(RandomAccessFile.java:243)
+        at com.install4j.runtime.launcher.util.SingleInstance.check(SingleInstance.java:72)
+        at com.install4j.runtime.launcher.util.SingleInstance.checkForCurrentLauncher(SingleInstance.java:31)
+        at com.install4j.runtime.launcher.UnixLauncher.checkSingleInstance(UnixLauncher.java:88)
+        at com.install4j.runtime.launcher.UnixLauncher.main(UnixLauncher.java:67)
+java.io.FileNotFoundException: /nexus-data/karaf.pid (Permission denied)
+        at java.io.FileOutputStream.open0(Native Method)
+        at java.io.FileOutputStream.open(FileOutputStream.java:270)
+        at java.io.FileOutputStream.<init>(FileOutputStream.java:213)
+        at java.io.FileOutputStream.<init>(FileOutputStream.java:101)
+        at org.apache.karaf.main.InstanceHelper.writePid(InstanceHelper.java:127)
+        at org.apache.karaf.main.Main.launch(Main.java:243)
+        at org.sonatype.nexus.karaf.NexusMain.launch(NexusMain.java:113)
+        at org.sonatype.nexus.karaf.NexusMain.main(NexusMain.java:52)
+        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+        at java.lang.reflect.Method.invoke(Method.java:498)
+        at com.exe4j.runtime.LauncherEngine.launch(LauncherEngine.java:85)
+        at com.install4j.runtime.launcher.UnixLauncher.main(UnixLauncher.java:69)
+java.lang.RuntimeException: /nexus-data/log/karaf.log (No such file or directory)
+        at org.apache.karaf.main.util.BootstrapLogManager.getDefaultHandlerInternal(BootstrapLogManager.java:102)
+        at org.apache.karaf.main.util.BootstrapLogManager.getDefaultHandlersInternal(BootstrapLogManager.java:137)
+        at org.apache.karaf.main.util.BootstrapLogManager.getDefaultHandlers(BootstrapLogManager.java:70)
+        at org.apache.karaf.main.util.BootstrapLogManager.configureLogger(BootstrapLogManager.java:75)
+        at org.apache.karaf.main.Main.launch(Main.java:244)
+        at org.sonatype.nexus.karaf.NexusMain.launch(NexusMain.java:113)
+        at org.sonatype.nexus.karaf.NexusMain.main(NexusMain.java:52)
+        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+        at java.lang.reflect.Method.invoke(Method.java:498)
+        at com.exe4j.runtime.LauncherEngine.launch(LauncherEngine.java:85)
+        at com.install4j.runtime.launcher.UnixLauncher.main(UnixLauncher.java:69)
+Caused by: java.io.FileNotFoundException: /nexus-data/log/karaf.log (No such file or directory)
+        at java.io.FileOutputStream.open0(Native Method)
+        at java.io.FileOutputStream.open(FileOutputStream.java:270)
+        at java.io.FileOutputStream.<init>(FileOutputStream.java:213)
+        at org.apache.karaf.main.util.BootstrapLogManager$SimpleFileHandler.open(BootstrapLogManager.java:193)
+        at org.apache.karaf.main.util.BootstrapLogManager$SimpleFileHandler.<init>(BootstrapLogManager.java:182)
+        at org.apache.karaf.main.util.BootstrapLogManager.getDefaultHandlerInternal(BootstrapLogManager.java:100)
+        ... 12 more
+Error creating bundle cache.
+Unable to update instance pid: Unable to create directory /nexus-data/instances
+[root@dockeros data]# docker run -d -p 8081:8081 --name nexus3 -v /data/nexus3/:/nexus-data  sonatype/nexus3:3.28.1 
+14417d952d4d7d9c15a0039ae14d05adf646c56b5c57cbebadfccf20fe1f3ef9
+[root@dockeros data]# docker logs -f nexus3
+2023-12-13 15:19:29,964+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.pax.logging.NexusLogActivator - start
+2023-12-13 15:19:30,189+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.features.internal.FeaturesWrapper - Fast FeaturesService starting
+2023-12-13 15:19:30,790+0000 WARN  [FelixStartLevel] *SYSTEM uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4JInitialiser - Your logging framework class org.ops4j.pax.logging.slf4j.Slf4jLogger is not known - if it needs access to the standard println methods on the console you will need to register it by calling registerLoggingSystemPackage
+2023-12-13 15:19:30,791+0000 INFO  [FelixStartLevel] *SYSTEM uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J - Package org.ops4j.pax.logging.slf4j registered; all classes within it or subpackages of it will be allowed to print to System.out and System.err
+2023-12-13 15:19:30,794+0000 INFO  [FelixStartLevel] *SYSTEM uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J - Replaced standard System.out and System.err PrintStreams with SLF4JPrintStreams
+2023-12-13 15:19:30,795+0000 INFO  [FelixStartLevel] *SYSTEM uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J - Redirected System.out and System.err to SLF4J for this context
+2023-12-13 15:19:30,797+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.bootstrap.ConfigurationBuilder - Properties:
+2023-12-13 15:19:30,797+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.bootstrap.ConfigurationBuilder -   application-host='0.0.0.0'
+2023-12-13 15:19:30,798+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.bootstrap.ConfigurationBuilder -   application-port='8081'
+2023-12-13 15:19:30,798+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.bootstrap.ConfigurationBuilder -   fabric.etc='/opt/sonatype/nexus/etc/fabric'
+2023-12-13 15:19:30,798+0000 INFO  [FelixStartLevel] *SYSTEM org.sonatype.nexus.bootstrap.ConfigurationBuilder -   jetty.etc='/opt/sonatype/nexus/etc/jetty'
+......
+2023-12-13 15:20:01,237+0000 INFO  [jetty-main-1] *SYSTEM org.sonatype.nexus.repository.httpbridge.internal.ViewServlet - Initialized
+2023-12-13 15:20:01,258+0000 INFO  [jetty-main-1] *SYSTEM org.eclipse.jetty.server.handler.ContextHandler - Started o.e.j.w.WebAppContext@6c8844a9{Sonatype Nexus,/,file:///opt/sonatype/nexus/public/,AVAILABLE}
+2023-12-13 15:20:01,284+0000 INFO  [jetty-main-1] *SYSTEM org.eclipse.jetty.server.AbstractConnector - Started ServerConnector@153042ce{HTTP/1.1, (http/1.1)}{0.0.0.0:8081}
+2023-12-13 15:20:01,284+0000 INFO  [jetty-main-1] *SYSTEM org.eclipse.jetty.server.Server - Started @32247ms
+2023-12-13 15:20:01,284+0000 INFO  [jetty-main-1] *SYSTEM org.sonatype.nexus.bootstrap.jetty.JettyServer - 
+-------------------------------------------------
+
+Started Sonatype Nexus OSS 3.28.1-01
+
+-------------------------------------------------
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
