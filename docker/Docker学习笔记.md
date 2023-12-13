@@ -2306,11 +2306,442 @@ nginx1
 
 经过此项验证发现，容器的域名所绑定的IP并不是固定不变的，而是在启动时动态分配的。
 
+#### 解决bridgem网络模式下ping其他容器不通的问题-方式1-(--link)
+
+```sh
+--link=[]: 添加链接到另一个容器；此方法官方已经不推荐使用。
+```
+
+>场景1：在企业开发环境中，我们有一个mysql服务器容器mysql_1, 还有一个web应用程序web_1, 这个web_1容器是需要连接mysql_1这个数据库。前面的网络命名空间的知识告诉我们，两个容器需要能通信，需要知道对方的具体的IP地址。生产环境还比较好，IP地址很少发生变化，但是在我们内部测试环境，容器的IP可能不断变化的，所以开发人员不能在代码中写死数据库的IP地址。这个时候，可以利用容器之间link来解决这个问题.
+
+```sh
+docker rm -f nginx2
+
+# 使用--linke参数来运行nginx2这个容器
+docker run -itd --name nginx2 --link nginx1 nginx:1.19.3-alpine
+
+# 查看容器的IP信息
+docker network inspect bridge
+
+docker exec -it nginx2 sh 
+
+# ping下IP的情况
+ping 172.17.0.2
+ping 172.17.0.3
+
+# ping域名的情况
+ping nginx2
+ping nginx1
+
+exit
+
+# 在nginx1中去ping下nginx2
+docker exec -it nginx1 sh 
+# ping域名的情况
+ping nginx2
+ping nginx1
+exit
+
+```
+
+操作样例
+
+```sh
+[root@dockeros ~]# docker ps
+CONTAINER ID   IMAGE                 COMMAND                  CREATED      STATUS         PORTS     NAMES
+b976a79292fa   nginx:1.19.3-alpine   "/docker-entrypoint.…"   2 days ago   Up 1 second    80/tcp    nginx2
+3f9598707f87   nginx:1.19.3-alpine   "/docker-entrypoint.…"   2 days ago   Up 2 seconds   80/tcp    nginx1
+[root@dockeros ~]# docker rm -f nginx2
+nginx2
+[root@dockeros ~]# docker run -itd --name nginx2 --link nginx1 nginx:1.19.3-alpine
+33424ed9987d30347ed509f6de38956c1514e2de742cef96b8dbae6a4e6c6b99
+[root@dockeros ~]# docker network inspect  bridge 
+[
+    {
+        "Name": "bridge",
+        "Id": "e64b6ee653c3101c109ce5a329811f800f1f5571cc2e7654ff24cd15c34e6768",
+        "Created": "2023-12-13T12:23:31.163071662+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.17.0.0/16",
+                    "Gateway": "172.17.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "33424ed9987d30347ed509f6de38956c1514e2de742cef96b8dbae6a4e6c6b99": {
+                "Name": "nginx2",
+                "EndpointID": "fd7ab1974924de91d77091b721ca5a0f3e29aaa1ade07d23c848da6fd91d88de",
+                "MacAddress": "02:42:ac:11:00:03",
+                "IPv4Address": "172.17.0.3/16",
+                "IPv6Address": ""
+            },
+            "3f9598707f8789ae5a57e8aad3a29d4a7a7aa8703c38784fe5bd6b0237a14a64": {
+                "Name": "nginx1",
+                "EndpointID": "8719789d28e95810de47d437ec437b15bb970d89b9c9c67b635642051b69d77c",
+                "MacAddress": "02:42:ac:11:00:02",
+                "IPv4Address": "172.17.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker exec -it nginx2 sh
+/ # ping 172.17.0.2
+PING 172.17.0.2 (172.17.0.2): 56 data bytes
+64 bytes from 172.17.0.2: seq=0 ttl=64 time=0.075 ms
+64 bytes from 172.17.0.2: seq=1 ttl=64 time=0.120 ms
+^C
+--- 172.17.0.2 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.075/0.097/0.120 ms
+/ # ping 172.17.0.3
+PING 172.17.0.3 (172.17.0.3): 56 data bytes
+64 bytes from 172.17.0.3: seq=0 ttl=64 time=0.031 ms
+64 bytes from 172.17.0.3: seq=1 ttl=64 time=0.062 ms
+^C
+--- 172.17.0.3 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.031/0.046/0.062 ms
+/ # ping nginx2
+ping: bad address 'nginx2'
+/ # ping nginx1
+PING nginx1 (172.17.0.2): 56 data bytes
+64 bytes from 172.17.0.2: seq=0 ttl=64 time=0.055 ms
+64 bytes from 172.17.0.2: seq=1 ttl=64 time=0.079 ms
+^C
+--- nginx1 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.055/0.067/0.079 ms
+/ # exit
+[root@dockeros ~]# docker exec -it nginx1 sh 
+/ # ping nginx2
+ping: bad address 'nginx2'
+/ # ping nginx1
+ping: bad address 'nginx1'
+/ # exit
+[root@dockeros ~]# 
+```
+
+到此可以发现，在nginx2容器中，已经可以成功的将nginx1这个容器名称ping通了,link的作用添加了DNS解析。但在这里提醒下nginx1容器里去ping容器nginx2还是不通的,因为link关系是单向的，不可逆的。
+
+实际工作中，docker官网已经不推荐我们使用--link参数
+
+dokcer用其他方式替换掉了link参数
+
+
+
+#### 解决bridgem网络模式下ping其他容器不通的问题-方式2-新建bridge网络
+
+```sh
+docker network create -d bridge nullnull-bridge
+```
+
+上面的命令中-d是指DRIVER的类型，后面的nullnull-bridge是自定义的名称，这个和docker0类似的，下面开始把其他容器连接到nullnull-bridge这个网络上。
+
+```sh
+# 相看本地bridge的网络的相关接口信息
+brctl show
+
+docker network ls
+docker network inspect nullnull-bridge
+
+# 创建容器连接到这个bridge网络
+docker run -itd --name nginx3 --network nullnull-bridge nginx:1.19.3-alpine
+
+brctl show
+docker network inspect nullnull-bridge
+
+# 其他容器连接到nullnull-bridge网络
+docker network connect nullnull-bridge nginx2
+docker network inspect nullnull-bridge
+
+# 测试容器的互ping操作
+docker exec -it nginx2 sh
+ping nginx3
+exit
+
+docker exec -it nginx3 sh
+ping nginx2
+exit
+```
+
+通过此可以发现，此时两个容器之间使用可直接使用域名ping通。
+
+样例：
+
+```sh
+[root@dockeros ~]# docker network create -d bridge nullnull-bridge
+70d7e9e9674fe985057aa12b328aff4ed340dcd924b2b01a33f233144b204d3e
+
+
+[root@dockeros ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br-70d7e9e9674f         8000.02426f6cd67a       no
+docker0         8000.0242aedd5c16       no              veth50d5a03
+                                                        veth9f8a876
+[root@dockeros ~]# docker network ls
+NETWORK ID     NAME              DRIVER    SCOPE
+e64b6ee653c3   bridge            bridge    local
+4fc8da9792df   host              host      local
+f6f389d033fe   none              null      local
+70d7e9e9674f   nullnull-bridge   bridge    local
+[root@dockeros ~]# docker network inspect nullnull-bridge
+[
+    {
+        "Name": "nullnull-bridge",
+        "Id": "70d7e9e9674fe985057aa12b328aff4ed340dcd924b2b01a33f233144b204d3e",
+        "Created": "2023-12-13T12:35:14.991310516+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.18.0.0/16",
+                    "Gateway": "172.18.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker run -itd --name nginx3 --network nullnull-bridge nginx:1.19.3-alpine
+fcec481653ba046b4ba8b8f4fc1fe52bca9314adbf36993de03d730bd240dae3
+[root@dockeros ~]# brctl show
+bridge name     bridge id               STP enabled     interfaces
+br-70d7e9e9674f         8000.02426f6cd67a       no              veth0962e13
+docker0         8000.0242aedd5c16       no              veth50d5a03
+                                                        veth9f8a876
+[root@dockeros ~]# docker network inspect nullnull-bridge
+[
+    {
+        "Name": "nullnull-bridge",
+        "Id": "70d7e9e9674fe985057aa12b328aff4ed340dcd924b2b01a33f233144b204d3e",
+        "Created": "2023-12-13T12:35:14.991310516+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.18.0.0/16",
+                    "Gateway": "172.18.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "fcec481653ba046b4ba8b8f4fc1fe52bca9314adbf36993de03d730bd240dae3": {
+                "Name": "nginx3",
+                "EndpointID": "1397ba389869b8a55994b297845844db91d24403f2496eee14c2f5fdf6b34295",
+                "MacAddress": "02:42:ac:12:00:02",
+                "IPv4Address": "172.18.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {},
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker network connect nullnull-bridge nginx2
+[root@dockeros ~]# docker network inspect nullnull-bridge
+[
+    {
+        "Name": "nullnull-bridge",
+        "Id": "70d7e9e9674fe985057aa12b328aff4ed340dcd924b2b01a33f233144b204d3e",
+        "Created": "2023-12-13T12:35:14.991310516+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "172.18.0.0/16",
+                    "Gateway": "172.18.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "33424ed9987d30347ed509f6de38956c1514e2de742cef96b8dbae6a4e6c6b99": {
+                "Name": "nginx2",
+                "EndpointID": "6afecfb2aeaa945dc2824b6b618a8181595b8baf262e15ad062838c556220a0e",
+                "MacAddress": "02:42:ac:12:00:03",
+                "IPv4Address": "172.18.0.3/16",
+                "IPv6Address": ""
+            },
+            "fcec481653ba046b4ba8b8f4fc1fe52bca9314adbf36993de03d730bd240dae3": {
+                "Name": "nginx3",
+                "EndpointID": "1397ba389869b8a55994b297845844db91d24403f2496eee14c2f5fdf6b34295",
+                "MacAddress": "02:42:ac:12:00:02",
+                "IPv4Address": "172.18.0.2/16",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {},
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker exec -it nginx2 sh
+/ # ping nginx3
+PING nginx3 (172.18.0.2): 56 data bytes
+64 bytes from 172.18.0.2: seq=0 ttl=64 time=0.130 ms
+64 bytes from 172.18.0.2: seq=1 ttl=64 time=0.117 ms
+^C
+--- nginx3 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 0.117/0.123/0.130 ms
+/ # exit
+[root@dockeros ~]# docker exec -it nginx3 sh
+/ # ping nginx2
+PING nginx2 (172.18.0.3): 56 data bytes
+64 bytes from 172.18.0.3: seq=0 ttl=64 time=0.044 ms
+^C
+--- nginx2 ping statistics ---
+1 packets transmitted, 1 packets received, 0% packet loss
+round-trip min/avg/max = 0.044/0.044/0.044 ms
+/ # exit
+[root@dockeros ~]# 
+
+```
 
 
 
 
 
+
+
+### none 网络
+
+ 在开始前，记得清理下容器和网络
+
+```sh
+docker rm -f $(docker ps -aq)
+
+docker network rm nullnull-bridge
+
+docker network ls
+```
+
+执行
+
+```sh
+# 创建一个nginx1，并连接到none网络。
+docker run -itd --name nginx1 --network none nginx:1.19.3-alpine
+docker network inspect none
+
+# 进入容器，检查网络情况
+docker exec -it nginx1 sh
+ip a
+```
+
+容器使用none模式，是没有物理地址和IP地址，从进入容器后就可以发现，只有一个lo回环地址，没有其他网络地址，没有IP，也就是说这个容器不能被其他容器访问到。这种使用场景很少，只有项目安全性很高的功能才能使用到。例如密码加密算法容器。
+
+样例输出：
+
+```sh
+[root@dockeros ~]# docker run -itd --name nginx1 --network none nginx:1.19.3-alpine
+4548b7443897168361b1509ab070479aa9ec17da8a3e341d4ec497976a14ddac
+[root@dockeros ~]# docker network inspect none
+[
+    {
+        "Name": "none",
+        "Id": "f6f389d033fead9237ecdb1da69b1c5234b3b36d892c9e4ac8adf50be5113310",
+        "Created": "2023-12-07T18:49:34.493868727+08:00",
+        "Scope": "local",
+        "Driver": "null",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": []
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {
+            "4548b7443897168361b1509ab070479aa9ec17da8a3e341d4ec497976a14ddac": {
+                "Name": "nginx1",
+                "EndpointID": "c66be3d02da6e2311c61ecc42b25a121f34883604f3fe447fe836c16395917b9",
+                "MacAddress": "",
+                "IPv4Address": "",
+                "IPv6Address": ""
+            }
+        },
+        "Options": {},
+        "Labels": {}
+    }
+]
+[root@dockeros ~]# docker exec -it nginx1 sh
+/ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+/ # 
+```
+
+
+
+
+
+
+
+### host网络
 
 
 
