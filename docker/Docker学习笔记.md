@@ -3589,11 +3589,130 @@ docker pull mysql:5.7.31
 
 创建好的数据卷容器是处于停止运行的状态。因为使用`--volumes-from`参数所挂载数据卷的容器自己并不需要保持在运行状态。
 
+![image-20231214231928569](.\images\image-20231214231928569.png)
+
+
+
+```sh
+# 首先创建数据容器卷
+docker run -d --name nullnull-volume -v /data/nginx:/usr/share/nginx/html -v /data/mysql:/var/lib/mysql centos:7.8.2003
+
+# 创建nginx容器
+docker run -itd --name nginx01 -p 80:80 --volumes-from nullnull-volume nginx:1.19.3-alpine
+echo "this is nullnull data nginx" > /data/nginx/index.html
+http://192.168.5.20
+
+# 创建另外的nginx容器
+docker run -itd --name nginx02 -p 81:80 --volumes-from nullnull-volume nginx:1.19.3-alpine 
+http://192.168.5.20:81
+
+docker ps -a
+
+
+# 运行mysql容器
+docker run -itd --name mysql10 --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin --volumes-from nullnull-volume mysql:5.7.31  --character-set-server=utf8 --collation-server=utf8_general_ci
+# 连接上数据库，在上面执行下建库、建表操作，
+CREATE TABLE `data`.user_data (
+	id integer not null  primary key,
+	name varchar(32)
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8
+COLLATE=utf8_general_ci;
+
+insert into `data`.user_data(id,name)
+values(1,'test');
 
 
 
 
+# 演示MySQL共享的问题，并不是所有容器都可以正常的直接进行共享。
+docker run -itd --name mysql11 --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin --volumes-from nullnull-volume mysql:5.7.31  --character-set-server=utf8 --collation-server=utf8_general_ci
 
+docker run -itd --name mysql11 --restart always --privileged=true -p 3308:3306 -e MYSQL_ROOT_PASSWORD=admin --volumes-from nullnull-volume mysql:5.7.31  --character-set-server=utf8 --collation-server=utf8_general_ci
+
+```
+
+样例：
+
+```sh
+[root@dockeros ~]# docker run -d --name nullnull-volume -v /data/nginx:/usr/share/nginx/html -v /data/mysql:/var/lib/mysql centos:7.8.2003
+d10ca8754416e5cf309a95b08eabe5cacdf7f1c54087fb51f19d0a01f77e6f29
+[root@dockeros ~]# docker run -itd --name nginx01 -p 80:80 --volumes-from nullnull-volume nginx:1.19.3-alpine
+7157de8950f7721559692481974af00ed67e91e42d0ec01fe8f67103e2958441
+[root@dockeros ~]# echo "this is nullnull data nginx" > /data/nginx/index.html
+[root@dockeros ~]# docker run -itd --name nginx02 -p 81:80 --volumes-from nullnull-volume nginx:1.19.3-alpine 
+441c15c8b771ec2deb79c368559366be4ed9e56f5c8363e6340d03a547483be3
+[root@dockeros ~]# docker ps -a
+CONTAINER ID   IMAGE                 COMMAND                  CREATED         STATUS                     PORTS                               NAMES
+441c15c8b771   nginx:1.19.3-alpine   "/docker-entrypoint.…"   2 minutes ago   Up 2 minutes               0.0.0.0:81->80/tcp, :::81->80/tcp   nginx02
+7157de8950f7   nginx:1.19.3-alpine   "/docker-entrypoint.…"   2 minutes ago   Up 2 minutes               0.0.0.0:80->80/tcp, :::80->80/tcp   nginx01
+d10ca8754416   centos:7.8.2003       "/bin/bash"              2 minutes ago   Exited (0) 2 minutes ago                                       nullnull-volume
+
+[root@dockeros ~]# docker run -itd --name mysql10 --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin --volumes-from nullnull-volume mysql:5.7.31  --character-set-server=utf8 --collation-server=utf8_general_ci
+36fdb3c8376f123cd07c0088192df1da261d8aa46159bed433ce28420c649b21
+[root@dockeros ~]# docker run -itd --name mysql11 --restart always --privileged=true -p 3308:3306 -e MYSQL_ROOT_PASSWORD=admin --volumes-from nullnull-volume mysql:5.7.31  --character-set-server=utf8 --collation-server=utf8_general_ci
+
+[root@dockeros ~]# docker logs mysql11
+2023-12-14 15:32:12+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-14 15:32:12+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'
+2023-12-14 15:32:12+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-14T15:32:12.863859Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-14T15:32:12.864531Z 0 [Note] mysqld (mysqld 5.7.31) starting as process 1 ...
+2023-12-14T15:32:12.867757Z 0 [Note] InnoDB: PUNCH HOLE support available
+2023-12-14T15:32:12.867792Z 0 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2023-12-14T15:32:12.867794Z 0 [Note] InnoDB: Uses event mutexes
+2023-12-14T15:32:12.867796Z 0 [Note] InnoDB: GCC builtin __atomic_thread_fence() is used for memory barrier
+2023-12-14T15:32:12.867797Z 0 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2023-12-14T15:32:12.867799Z 0 [Note] InnoDB: Using Linux native AIO
+2023-12-14T15:32:12.868221Z 0 [Note] InnoDB: Number of pools: 1
+2023-12-14T15:32:12.868281Z 0 [Note] InnoDB: Using CPU crc32 instructions
+2023-12-14T15:32:12.869274Z 0 [Note] InnoDB: Initializing buffer pool, total size = 128M, instances = 1, chunk size = 128M
+2023-12-14T15:32:12.873016Z 0 [Note] InnoDB: Completed initialization of buffer pool
+2023-12-14T15:32:12.874658Z 0 [Note] InnoDB: If the mysqld execution user is authorized, page cleaner thread priority can be changed. See the man page of setpriority().
+2023-12-14T15:32:12.884650Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:12.884700Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:12.884704Z 0 [Note] InnoDB: Retrying to lock the first data file
+2023-12-14T15:32:13.885117Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:13.885182Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:14.886303Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:14.886383Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:15.887018Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:15.887084Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:16.888855Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:16.888921Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:17.892928Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:17.892995Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:18.893980Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:18.894051Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:19.894176Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:19.894264Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:20.895230Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:20.895304Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:21.895956Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:21.896041Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:22.896877Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:22.896945Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:23.897773Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:23.897846Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:24.898299Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:24.898373Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:25.899391Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:25.899461Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:26.900166Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:26.900239Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:27.900758Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:27.900847Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+2023-12-14T15:32:28.902276Z 0 [ERROR] InnoDB: Unable to lock ./ibdata1 error: 11
+2023-12-14T15:32:28.902351Z 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+
+```
+
+
+
+![image-20231214231255071](.\images\image-20231214231255071.png)
+
+![image-20231214231319400](.\images\image-20231214231319400.png)
 
 
 
