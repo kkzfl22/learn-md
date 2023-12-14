@@ -3161,11 +3161,433 @@ Started Sonatype Nexus OSS 3.28.1-01
 
 
 
+### 命名的数据卷
+
+操作:
+
+```sh
+# 使用命名的数据卷运行容器
+docker run -itd --name nginx -p 80:80 -v nullnull-nginx:/etc/nginx nginx:1.19.3-alpine
+
+# 查看docker 数据卷
+docker volume ls
+
+# 查看nullnull-nginx宿主机目录 
+docker volume inspect nullnull-nginx
+
+# 进入docker数据卷默认目录 
+cd /var/lib/docker/volumes/nullnull-nginx
+
+# 所有文件docker默认保存在_data目录中
+cd _data
+
+# 删除容器
+docker rm $(docker stop $(docker ps -aq))
+
+# 查看挂载数据是否还存在，通过查看数据后发现，宿主机中的数据还存在
+ls
+```
 
 
 
+样例输出:
+
+```sh
+[root@dockeros ~]# docker run -itd --name nginx -p 80:80 -v nullnull-nginx:/etc/nginx nginx:1.19.3-alpine
+318a5940b00b401f0cc259da510c1aa3b319429961bffc181b4ac92070fe041f
+[root@dockeros ~]# docker volume ls
+DRIVER    VOLUME NAME
+local     1b88613eda206718ade47da8d1cbe2469aa98ec8f6b3b9fd5521faafeb6c65de
+local     4f85b7e7784f042514cbcfb16b1114ba3697e4bfa2369bb7504ee764b857d3d1
+local     87cfbd88a862abe08014f4a8de1da17814b6b707fe42b4a02b9394bbcdf0a7de
+local     94a2903ea00e7dffda8fbc8932ab1b7d024f0af6d52a8443054568b3bdc0905e
+local     417bee3999af1a232206b5ff643dc113c32e20c7253bd048710b96d25c3c7fb0
+local     930a7237f6ea9403cb89b470e6dd30ce076192aa0d61f3a84afe20f52eb1a9c7
+local     a1c5b5eca4b33f53c90b0a273ef6acd677267861905da9b3d8fe9934be038026
+local     ba7ae8a34fe7d5e4636229f2ae6eb14d6658257fabd31ccc29c417d85280933d
+local     bd6af107654680b10e0f7e70c3371c8f7b44f4cf563afc84e1cbb5f0974a37ec
+local     d1d11f5f4344950b15a80bebf9040dba7569f635c8f86c0e6b050f2189bccdb7
+local     fe1d7c17a031d93db56991aaf831b24627e8c84ddfa49f881d9841ce178e5546
+local     nullnull-nginx
+[root@dockeros ~]# docker volume inspect nullnull-nginx
+[
+    {
+        "CreatedAt": "2023-12-14T12:34:21+08:00",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/nullnull-nginx/_data",
+        "Name": "nullnull-nginx",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+[root@dockeros ~]# cd /var/lib/docker/volumes/nullnull-nginx
+[root@dockeros nullnull-nginx]# ls
+_data
+[root@dockeros nullnull-nginx]# cd _data/
+[root@dockeros _data]# ls
+conf.d        fastcgi_params  koi-win     modules     scgi_params   win-utf
+fastcgi.conf  koi-utf         mime.types  nginx.conf  uwsgi_params
+[root@dockeros _data]# docker rm $(docker stop $(docker ps -aq))
+318a5940b00b
+14417d952d4d
+[root@dockeros _data]# ls
+conf.d        fastcgi_params  koi-win     modules     scgi_params   win-utf
+fastcgi.conf  koi-utf         mime.types  nginx.conf  uwsgi_params
+[root@dockeros _data]# 
+```
 
 
+
+### 匿名数据卷
+
+操作
+
+```sh
+# 使用匿名数据卷挂载容器的数据
+docker run -itd --name nginx -p 80:80 -v /etc/nginx nginx:1.19.3-alpine
+
+# 查看docker数据卷
+docker volume ls
+
+cd /var/lib/docker/volumes
+
+# 查看容器所使用匿名目录
+docker inspect nginx
+# 在volume的详细信息中
+
+# 查看宿主机目录
+docker volume inspect 84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961
+
+
+# 进入容器数据目录
+cd /var/lib/docker/volumes/84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961/_data
+ls
+
+# 删除容器
+docker rm $(docker stop $(docker ps -aq))
+
+# 查看挂载数据是否还存在，通过查看数据，发现删除容器后，宿主机中的数据还存在
+ls
+
+```
+
+样例：
+
+```sh
+[root@dockeros _data]# docker run -itd --name nginx -p 80:80 -v /etc/nginx nginx:1.19.3-alpine
+17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b
+[root@dockeros _data]# docker volume ls
+DRIVER    VOLUME NAME
+local     1b88613eda206718ade47da8d1cbe2469aa98ec8f6b3b9fd5521faafeb6c65de
+local     4f85b7e7784f042514cbcfb16b1114ba3697e4bfa2369bb7504ee764b857d3d1
+local     87cfbd88a862abe08014f4a8de1da17814b6b707fe42b4a02b9394bbcdf0a7de
+local     94a2903ea00e7dffda8fbc8932ab1b7d024f0af6d52a8443054568b3bdc0905e
+local     417bee3999af1a232206b5ff643dc113c32e20c7253bd048710b96d25c3c7fb0
+local     930a7237f6ea9403cb89b470e6dd30ce076192aa0d61f3a84afe20f52eb1a9c7
+local     84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961
+local     a1c5b5eca4b33f53c90b0a273ef6acd677267861905da9b3d8fe9934be038026
+local     ba7ae8a34fe7d5e4636229f2ae6eb14d6658257fabd31ccc29c417d85280933d
+local     bd6af107654680b10e0f7e70c3371c8f7b44f4cf563afc84e1cbb5f0974a37ec
+local     d1d11f5f4344950b15a80bebf9040dba7569f635c8f86c0e6b050f2189bccdb7
+local     fe1d7c17a031d93db56991aaf831b24627e8c84ddfa49f881d9841ce178e5546
+local     nullnull-nginx
+[root@dockeros _data]# cd /var/lib/docker/volumes
+[root@dockeros volumes]# pwd
+/var/lib/docker/volumes
+[root@dockeros volumes]# docker inspect nginx
+[
+    {
+        "Id": "17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b",
+        "Created": "2023-12-14T04:41:21.049383195Z",
+        "Path": "/docker-entrypoint.sh",
+        "Args": [
+            "nginx",
+            "-g",
+            "daemon off;"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 2168,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2023-12-14T04:41:22.374869833Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:4efb29ff172a12f4a5ed5bc47eda3596f8b812173cf609cbb489253dad6e737f",
+        "ResolvConfPath": "/var/lib/docker/containers/17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b/hostname",
+        "HostsPath": "/var/lib/docker/containers/17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b/hosts",
+        "LogPath": "/var/lib/docker/containers/17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b/17220d34b95ea872f3b3880df801aa7f57ce9c7048ce544b32fa818d361afa9b-json.log",
+        "Name": "/nginx",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "default",
+            "PortBindings": {
+                "80/tcp": [
+                    {
+                        "HostIp": "",
+                        "HostPort": "80"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                128,
+                120
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "host",
+            "Dns": [],
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": false,
+            "PidsLimit": null,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/asound",
+                "/proc/acpi",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/sys/firmware",
+                "/sys/devices/virtual/powercap"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/0c393fa408836eccc524424eb6b8f1a1d01bdff8eb5a861ba78326b7919ff12d-init/diff:/var/lib/docker/overlay2/17521d4797960134262bba76b12bb97089f23db2ef867983ea63d5a6ca6cfb26/diff:/var/lib/docker/overlay2/75211b624dbc457c25042c1a0967c93a609192877e19737af1a6f1a9ec07003e/diff:/var/lib/docker/overlay2/e28bd1904f8cc52fd3e787a5416333596c4fc655de87f69c78f39c0f55f693fc/diff:/var/lib/docker/overlay2/748c131111006a67844de5567df39d1663bb0930249ceb4c228f2621aae8ca5b/diff:/var/lib/docker/overlay2/883ae049fecb3ba3cb22de2bae558a20f9644ff7c66c86740ab23fa53d79ef08/diff",
+                "MergedDir": "/var/lib/docker/overlay2/0c393fa408836eccc524424eb6b8f1a1d01bdff8eb5a861ba78326b7919ff12d/merged",
+                "UpperDir": "/var/lib/docker/overlay2/0c393fa408836eccc524424eb6b8f1a1d01bdff8eb5a861ba78326b7919ff12d/diff",
+                "WorkDir": "/var/lib/docker/overlay2/0c393fa408836eccc524424eb6b8f1a1d01bdff8eb5a861ba78326b7919ff12d/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961",
+                "Source": "/var/lib/docker/volumes/84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961/_data",
+                "Destination": "/etc/nginx",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "17220d34b95e",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": true,
+            "OpenStdin": true,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.19.3",
+                "NJS_VERSION=0.4.4",
+                "PKG_RELEASE=1"
+            ],
+            "Cmd": [
+                "nginx",
+                "-g",
+                "daemon off;"
+            ],
+            "Image": "nginx:1.19.3-alpine",
+            "Volumes": {
+                "/etc/nginx": {}
+            },
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGTERM"
+        },
+        "NetworkSettings": {
+            "Bridge": "",
+            "SandboxID": "0f71b7359b73af6e9d520454fe34c0111795a95f40a8890a7f8d6bc1cacd9cfb",
+            "HairpinMode": false,
+            "LinkLocalIPv6Address": "",
+            "LinkLocalIPv6PrefixLen": 0,
+            "Ports": {
+                "80/tcp": [
+                    {
+                        "HostIp": "0.0.0.0",
+                        "HostPort": "80"
+                    },
+                    {
+                        "HostIp": "::",
+                        "HostPort": "80"
+                    }
+                ]
+            },
+            "SandboxKey": "/var/run/docker/netns/0f71b7359b73",
+            "SecondaryIPAddresses": null,
+            "SecondaryIPv6Addresses": null,
+            "EndpointID": "bab090b8ec725aac39b7c7c0340f2a5517f529086abc38200908208b5e5b1c92",
+            "Gateway": "172.17.0.1",
+            "GlobalIPv6Address": "",
+            "GlobalIPv6PrefixLen": 0,
+            "IPAddress": "172.17.0.2",
+            "IPPrefixLen": 16,
+            "IPv6Gateway": "",
+            "MacAddress": "02:42:ac:11:00:02",
+            "Networks": {
+                "bridge": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "NetworkID": "636857a5233a67f591483603ee50f10b88ab0ddba6ad8e85bd419319b49376ac",
+                    "EndpointID": "bab090b8ec725aac39b7c7c0340f2a5517f529086abc38200908208b5e5b1c92",
+                    "Gateway": "172.17.0.1",
+                    "IPAddress": "172.17.0.2",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "MacAddress": "02:42:ac:11:00:02",
+                    "DriverOpts": null
+                }
+            }
+        }
+    }
+]
+[root@dockeros volumes]# docker volume inspect 84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961
+[
+    {
+        "CreatedAt": "2023-12-14T12:41:21+08:00",
+        "Driver": "local",
+        "Labels": {
+            "com.docker.volume.anonymous": ""
+        },
+        "Mountpoint": "/var/lib/docker/volumes/84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961/_data",
+        "Name": "84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+[root@dockeros volumes]# cd /var/lib/docker/volumes/84496c80ad58ad605714f4c1c73385209ab718734ad244eb406d8af637ec6961/_data
+[root@dockeros _data]# ls
+conf.d        fastcgi_params  koi-win     modules     scgi_params   win-utf
+fastcgi.conf  koi-utf         mime.types  nginx.conf  uwsgi_params
+[root@dockeros _data]# docker rm $(docker stop $(docker ps -aq))
+17220d34b95e
+[root@dockeros _data]# ls
+conf.d        fastcgi_params  koi-win     modules     scgi_params   win-utf
+fastcgi.conf  koi-utf         mime.types  nginx.conf  uwsgi_params
+[root@dockeros _data]# docker ps
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros _data]# docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros _data]# 
+
+```
+
+
+
+### 数据卷容器
+
+操作
+
+```sh
+# 基础镜像
+docker pull centos:7.8.2003
+docker pull nginx:1.19.3-alpine
+docker pull mysql:5.7.31
+```
+
+--volumes-from:
+
+如果用户需要在多个容器之间共享一些持续更新的数据，最简单的方式是使用数据卷容器。数据卷容器也是一个容器，但是它的目的是专门用来提供数据卷供其他容器挂载。
+
+创建好的数据卷容器是处于停止运行的状态。因为使用`--volumes-from`参数所挂载数据卷的容器自己并不需要保持在运行状态。
 
 
 
