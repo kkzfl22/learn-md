@@ -1,0 +1,30 @@
+version: '3'
+services:
+  nullnull-nginx:
+    restart: always
+    container_name: nullnull-nginx
+    volumes:
+      - /data/nginx:/etc/nginx/
+    image: nginx:1.19.3-alpine
+    ports:
+      - 80:80
+  nullnull-tomcat1:
+    restart: always
+    container_name: nullnull-tomcat1
+    volumes:
+      - /data/tomcat1/webapps:/usr/local/tomcat/webapps
+    image: tomcat:9.0.20-jre8-alpine
+    ports:
+      - 8081:8080
+    depends_on:
+      - nullnull-nginx
+  nullnull-tomcat2:
+    restart: always
+    container_name: nullnull-tomcat2
+    volumes:
+      - /data/tomcat2/webapps:/usr/local/tomcat/webapps
+    image: tomcat:9.0.20-jre8-alpine
+    ports:
+      - 8082:8080
+    depends_on:
+      - nullnull-nginx

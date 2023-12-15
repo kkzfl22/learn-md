@@ -3765,7 +3765,17 @@ docker-compose version
 样例操作:
 
 ```sh
-
+[root@dockeros data]# cp /data/docker-compose-Linux-x86_64 /usr/local/bin/docker-compose
+[root@dockeros data]# chmod +x /usr/local/bin/docker-compose
+[root@dockeros data]# chmod 777  /usr/local/bin/docker-compose
+[root@dockeros data]# docker-compose -v
+docker-compose version 1.27.4, build 40524192
+[root@dockeros data]# docker-compose version
+docker-compose version 1.27.4, build 40524192
+docker-py version: 4.3.1
+CPython version: 3.7.7
+OpenSSL version: OpenSSL 1.1.0l  10 Sep 2019
+[root@dockeros data]# 
 ```
 
 
@@ -3793,5 +3803,222 @@ Docker Compose的YML文件包含4个一级key: version, services, networks, volu
 - services用于定义不同的应用服务。Docker Compose会将此定义的的服务部署在各自的容器中。
 - network用于指引Docker创建新的网络。默认情况下 Docker Compose会创建birdge网络。这是一种单主机网络，只能够实现同一主机上容器的连接。当然也可以使用docker属性指定不同类型的网络。
 - volumes用于指引Docker来创建新的卷。
+
+
+
+### 反向代理案例
+
+**准备工作**
+
+- 清理宿主机相关的容器。
+- 安装dockerr-compose
+
+**检查IDEA中的docker插件**
+
+在最新版本的IDEA中，已经默认带了docker插件。老版本，需要手动安装下docker插件
+
+```sh
+# 插件地址
+https://plugins.jetbrains.com/plugin/7724-docker/versions
+```
+
+**操作**
+
+```sh
+# 基础镜像
+docker pull nginx:1.19.3-alpine
+docker pull tomcat:9.0.20-jre8-alpine
+
+
+# 试运行镜像容器
+docker run -itd --name nginx -p 80:80 nginx:1.19.3-alpine
+docker run -itd --name tomcat -p 8080:8080 tomcat:9.0.20-jre8-alpine
+
+mkdir -p /data/tomcat1 /data/tomcat2
+
+docker cp nginx:/etc/nginx /data
+docker cp tomcat:/usr/local/tomcat/webapps /data/tomcat1/webapps
+docker cp tomcat:/usr/local/tomcat/webapps /data/tomcat2/webapps
+
+# 编辑首页文件,样例中就是Title中添加一个标识
+vi /data/tomcat1/webapps/ROOT/index.jsp
+vi /data/tomcat1/webapps/ROOT/index.jsp
+
+docker stop nginx tomcat &&  docker rm nginx tomcat
+
+
+# nginx反向代理配制，增加导入一个文件
+vi /data/nginx/nginx.cfg
+include vhost/*.conf;
+
+# 反向代理配制
+mkdir -p /data/nginx/vhost
+cd vhost
+vi nullnull.conf
+upstream nginx-tomcat{
+     server 192.168.5.20:8081;
+     server 192.168.5.20:8082;
+}
+server{
+     listen 80;
+     server_name 192.168.5.20;
+     autoindex on;
+     index index.html index.htm index.jsp;
+     location / {
+         proxy_pass http://nginx-tomcat;
+         add_header Access-Control-Allow-Origin *;
+     }
+ }
+```
+
+docker-compose.yml的配制
+
+```sh
+version: '3'
+services:
+  nullnull-nginx:
+    restart: always
+    container_name: nullnull-nginx
+    volumes:
+      - /data/nginx:/etc/nginx/
+    image: nginx:1.19.3-alpine
+    ports:
+      - 80:80
+  nullnull-tomcat1:
+    restart: always
+    container_name: nullnull-tomcat1
+    volumes:
+      - /data/tomcat1/webapps:/usr/local/tomcat/webapps
+    image: tomcat:9.0.20-jre8-alpine
+    ports:
+      - 8081:8080
+    depends_on:
+      - nullnull-nginx
+  nullnull-tomcat2:
+    restart: always
+    container_name: nullnull-tomcat2
+    volumes:
+      - /data/tomcat2/webapps:/usr/local/tomcat/webapps
+    image: tomcat:9.0.20-jre8-alpine
+    ports:
+      - 8082:8080
+    depends_on:
+      - nullnull-nginx
+```
+
+执行
+
+```sh
+# 将docker-compose.yml文件上传服务器。
+# 启动服务
+docker-compose up
+# 后台启动
+docker-compose up -d
+
+```
+
+
+
+
+
+样例：
+
+```sh
+[root@dockeros ~]# docker run -itd --name nginx -p 80:80 nginx:1.19.3-alpine
+
+2530e6be67b47c3ee6908c08274da4f758ea660ec79dffc32e6e2c397ddc6641
+[root@dockeros ~]# docker run -itd --name tomcat -p 8080:8080 tomcat:9.0.20-jre8-alpine
+c4011e6095319182d1cf23b4e57ab4e65038b3a8deefeee4bc33b84fa78b7931
+[root@dockeros ~]# mkdir -p /data/tomcat1 /data/tomcat2
+[root@dockeros ~]# docker cp nginx:/etc/nginx /data
+Successfully copied 30.2kB to /data
+[root@dockeros ~]# docker cp tomcat:/usr/local/tomcat/webapps /data/tomcat1/webapps
+Successfully copied 5.28MB to /data/tomcat1/webapps
+[root@dockeros ~]# docker cp tomcat:/usr/local/tomcat/webapps /data/tomcat2/webapps
+Successfully copied 5.28MB to /data/tomcat2/webapps
+[root@dockeros ~]# vi /data/tomcat1/webapps/ROOT/index.jsp
+[root@dockeros ~]# vi /data/tomcat1/webapps/ROOT/index.jsp
+[root@dockeros compose]# cd /data/compose/
+[root@dockeros compose]# ls
+docker-compose.yml
+[root@dockeros compose]# docker-compose up
+Starting nullnull-nginx ... done
+Starting nullnull-tomcat2 ... done
+Starting nullnull-tomcat1 ... done
+Attaching to nullnull-nginx, nullnull-tomcat2, nullnull-tomcat1
+nullnull-nginx      | /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+nullnull-nginx      | /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+nullnull-nginx      | /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+nullnull-nginx      | 10-listen-on-ipv6-by-default.sh: error: IPv6 listen already enabled
+nullnull-nginx      | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+nullnull-nginx      | /docker-entrypoint.sh: Configuration complete; ready for start up
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.967 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version name:   Apache Tomcat/9.0.20
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.969 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server built:          May 3 2019 22:26:00 UTC
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.969 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version number: 9.0.20.0
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.969 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log OS Name:               Linux
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.969 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log OS Version:            5.4.262-1.el7.elrepo.x86_64
+nullnull-tomcat1    | 15-Dec-2023 10:54:35.969 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Architecture:          amd64
+......
+nullnull-tomcat2    | 15-Dec-2023 10:54:36.682 INFO [main] org.apache.catalina.startup.HostConfig.deployDirectory Deployment of web application directory [/usr/local/tomcat/webapps/manager] has finished in [12] ms
+nullnull-tomcat2    | 15-Dec-2023 10:54:36.684 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["http-nio-8080"]
+nullnull-tomcat1    | 15-Dec-2023 10:54:36.688 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["ajp-nio-8009"]
+nullnull-tomcat1    | 15-Dec-2023 10:54:36.691 INFO [main] org.apache.catalina.startup.Catalina.start Server startup in [458] milliseconds
+nullnull-tomcat2    | 15-Dec-2023 10:54:36.692 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["ajp-nio-8009"]
+nullnull-tomcat2    | 15-Dec-2023 10:54:36.695 INFO [main] org.apache.catalina.startup.Catalina.start Server startup in [460] milliseconds
+
+```
+
+
+
+再通过浏览器访问
+
+```http
+http://192.168.5.20/
+
+http://192.168.5.20:8081/
+http://192.168.5.20:8082/
+
+```
+
+验证访问
+
+![image-20231215185623194](.\images\image-20231215185623194.png)
+
+![image-20231215185718539](.\images\image-20231215185718539.png)
+
+
+
+至此docker-compose的反向代理验证成功。
+
+### docker-compose常用命令
+
+```sh
+# 官网地址
+https://docs.docker.com/compose/reference/build/
+
+# 列出所有运行容器
+docker-compose ps
+
+# 查看服务日志
+docker-compose logs
+
+# 构建或者重新构建服务
+docker-compose build
+
+# 启动服务
+docker-compose start
+
+# 停止服务
+docker-compose stop
+
+# 重启服务
+docker-compose restart
+
+
+```
+
+
+
+
 
 ## 结束
