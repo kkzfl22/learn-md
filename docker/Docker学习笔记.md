@@ -3589,6 +3589,8 @@ docker pull mysql:5.7.31
 
 创建好的数据卷容器是处于停止运行的状态。因为使用`--volumes-from`参数所挂载数据卷的容器自己并不需要保持在运行状态。
 
+注意：并不是所有的容器都可以共享数据的。这个得做好验证。
+
 ![image-20231214231928569](.\images\image-20231214231928569.png)
 
 
@@ -3715,5 +3717,81 @@ d10ca8754416   centos:7.8.2003       "/bin/bash"              2 minutes ago   Ex
 ![image-20231214231319400](.\images\image-20231214231319400.png)
 
 
+
+## Docker compose
+
+ Docker Compose能够在Docker节点上，以单引擎(Single-Engine Mode)进行多容器应用的部署和管理。多数现代应用通过更小的微服务互相协同起来组成一个完整可用的应用。
+
+部署和管理繁多的服务是困难的，而这正是Docker Compose要解决的问题。Docker Comose并不是通过脚本和各种冗长的Docker命令将应用组件组织起来，而是通过一个声明式的配制文件描述整个应用，从而使一条命令完成整个部署。应用部署成功后，还可以通过一系列简单的命令实现对其完整生命周期的管理。甚至、配制文件还可以置于版本控制系统中进行存储和管理。
+
+Docker Compose是一个以基于Python工具，允许用户基于一个YAML文件定义多容器应用。从而使用命令行工虎进行应用的部署。
+
+### Docker Compose安装
+
+在Linux上安装Docker Compose分为两步
+
+- 下载
+- 授权
+
+操作：
+
+```sh
+# 下载  版本 1.27.4
+https://github.com/docker/compose
+
+# 详细地址：
+https://github.com/docker/compose/releases/tag/1.27.4
+https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-x86_64
+
+
+
+# 将文件放到可以加载的环境中
+mv /data/docker-compose-Linux-x86_64 /usr/local/bin/docker-compose
+cp /data/docker-compose-Linux-x86_64 /usr/local/bin/docker-compose
+
+# 授权
+chmod +x /usr/local/bin/docker-compose
+
+#开发环境可以授权最高权限
+chmod 777 /usr/local/bin/docker-compose
+
+
+# 检查安装情况以及版本 
+docker-compose -v
+docker-compose --version
+docker-compose version
+```
+
+样例操作:
+
+```sh
+
+```
+
+
+
+### 卸载Docker-compose
+
+docker-compose卸载只需要删除二进制文件就可以了
+
+```sh
+rm -rf /usr/local/bin/docker-compose
+reboot
+```
+
+
+
+### yml配制文件及常用指令
+
+Docker Compose 使用Yaml文件来定义多服务应用，YAML是JSON的一个子集，因此也可以使用JSON。
+
+Docker Compose默认使用文件名docker-compose.yml。当然也可用使用-f参数指定具体文件。
+
+Docker Compose的YML文件包含4个一级key: version, services, networks, volumes
+
+- version是必须指定的，而且总是位于文件的第一排，它定义Compose文件格式（主要是API）的版本。注意，version并非定义docker Compose或者Docker引擎的版本号。
+- services用于定义不同的应用服务。Docker Compose会将此定义的的服务部署在各自的容器中。
+- network用于指引Docker创建新的网络。默认情况下 Docker Compose会创建birdge网络。这是一种单主机网络，只能够实现同一主机上容器的连接。当然也可以使用docker属性指定不同类型的网络。
+- volumes用于指引Docker来创建新的卷。
 
 ## 结束
