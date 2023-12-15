@@ -4019,6 +4019,495 @@ docker-compose restart
 
 
 
+## 安装Docker私服
+
+docker镜像仓库就类型maven中的nexus, maven管理java中的jar包，为避免每次都从中央仓库摘取依赖包，使用nexus做了代理仓库，docker镜像仓库与nexus私服仓库作用类似，用于将打包好的镜像保存在仓库中方便开发、测试、生产环境拉取，减轻环境部署需要相应操作。
+
+### 节点信息
+
+|    主机名    |    IP地址    |    说明    |
+| :----------: | :----------: | :--------: |
+| docker-os20  | 192.168.5.20 | docker主机 |
+| docker-os221 | 192.168.5.21 | harbor主机 |
+
+
+
+### 官方私服
+
+harbor主机上操作
+
+```sh
+# 官网地址
+https://hub.docker.com/_/registry
+
+
+# 基础镜像
+docker pull registry:2.7.1
+
+# 运行容器
+docker run -itd -p 5000:5000 --name registry --restart=always registry:2.7.1
+
+
+# 浏览器中访问
+http://192.168.5.21:5000/v2/_catalog
+
+```
+
+docker主机上操作
+
+```sh
+# 编辑配制文件
+vi /etc/docker/daemon.json
+
+# 添加仓库配制信息
+{"insecure-registries": ["192.168.5.21:5000"]}
+
+# 重启docker
+systemctl daemon-reload
+systemctl restart docker
+
+# 查看docker信息确认仓库是否添加
+docker info
+
+
+# 上传镜像测试
+docker tag nginx:1.19.3-alpine 192.168.5.21:5000/nginx:v1
+docker push 192.168.5.21:5000/nginx:v1
+
+# 浏览器检查是否上传成功
+http://192.168.5.21:5000/v2/nginx/tags/list
+# 响应： {"name":"nginx","tags":["v1"]}
+
+```
+
+样例输出 ：
+
+```sh
+[root@dockeros ~]# vi /etc/docker/daemon.json
+[root@dockeros ~]# systemctl daemon-reload
+[root@dockeros ~]# systemctl restart docker
+[root@dockeros ~]# docker info
+Client: Docker Engine - Community
+ Version:    24.0.7
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.11.2
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.21.0
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ Containers: 3
+  Running: 0
+  Paused: 0
+  Stopped: 3
+ Images: 14
+ Server Version: 24.0.7
+ Storage Driver: overlay2
+  Backing Filesystem: xfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: inactive
+ Runtimes: runc io.containerd.runc.v2
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: d8f198a4ed8892c764191ef7b3b06d8a2eeb5c7f
+ runc version: v1.1.10-0-g18a0cb0
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+ Kernel Version: 5.4.262-1.el7.elrepo.x86_64
+ Operating System: CentOS Linux 7 (Core)
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 4
+ Total Memory: 15.63GiB
+ Name: dockeros
+ ID: c185e0e5-64d8-44ba-b405-02b4344cbaf1
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Experimental: false
+ Insecure Registries:
+  192.168.5.21:5000
+  127.0.0.0/8
+ Registry Mirrors:
+  https://ys2mfbsh.mirror.aliyuncs.com/
+ Live Restore Enabled: false
+
+[root@dockeros ~]# docker tag nginx:1.19.3-alpine 192.168.5.21:5000/nginx:v1
+[root@dockeros ~]# docker push 192.168.5.21:5000/nginx:v1
+The push refers to repository [192.168.5.21:5000/nginx]
+8d6d1951ab0a: Pushed 
+d0e26daf1f58: Pushed 
+835f5b67679c: Pushed 
+4daeb7840e4d: Pushed 
+ace0eda3e3be: Pushed 
+v1: digest: sha256:a411d06ab4f5347ac9652357ac35600555aeff0b910326cc7adc36d471e0b36f size: 1360
+[root@dockeros ~]# 
+```
+
+
+
+### 企业私服
+
+harbor官网地址：
+
+```sh
+# harbor官网地址：
+https://goharbor.io/
+
+# github地址
+https://github.com/goharbor/harbor
+
+# 官方帮助文档
+https://github.com/goharbor/harbor/blob/v1.9.4/docs/installation_guide.md
+
+
+#须安装docker-compose
+docker-compose -v
+```
+
+硬件要求:
+
+| 硬件资源 | 最小配制 | 推荐配制 |
+| -------- | -------- | -------- |
+| CPU      | 2C       | 4C       |
+| 内存     | 4G       | 8G       |
+| 硬盘     | 40G      | 160G     |
+
+**安装harbor**
+
+开发环境大部分采用http方式进行安装，生产环境必须采用HTTPS方式安装。此处使用http的方式来安装
+
+```sh
+# 1. 将软件包上传解压
+cd /data
+tar zxf harbor-offline-installer-v1.9.4.tgz
+ 
+# 2. 进入安装目录 
+cd harbor
+
+# 3. 修改配制文件
+vi harbor.yml
+# 3.1 修改私服镜像地址
+hostname: 192.168.5.21
+# 3.2 修改镜像地址访问端口号
+port: 5000
+# 3.3 harbor管理员登录系统密码
+harbor_admin_password: Harbor12345
+# 3.4 修改harbor映射卷目录
+data_volume: /data/harbor
+
+
+# 4. 安装harbor
+# 4.1 执行启动脚本，经过以下3个步骤，成功安装harbor私服
+./install.sh
+# 4.2 准备安装环境，检查docker版本和docker-compose版本
+# 4.3 加载harbor需要的镜像
+# 4.4 准备编译环境
+# 4.5 启动harbor,通过docker-compose方式启动服务
+# 4.6 google浏览器访问harbor私服
+http://192.168.5.21:5000
+```
+
+操作:
+
+```sh
+[root@dockeros21 harbor]# tar zxf harbor-offline-installer-v1.9.4.tgz 
+[root@dockeros21 harbor]# cd harbor
+[root@dockeros21 harbor]# ls
+harbor.v1.9.4.tar.gz  harbor.yml  install.sh  LICENSE  prepare
+[root@dockeros21 harbor]# vi harbor.yml
+[root@dockeros21 harbor]# ./install.sh
+
+[Step 0]: checking installation environment ...
+
+Note: docker version: 24.0.7
+
+Note: docker-compose version: 1.27.4
+
+[Step 1]: loading Harbor images ...
+62b223a46a15: Loading layer [==================================================>]  34.29MB/34.29MB
+40f95e7c4d8c: Loading layer [==================================================>]  12.77MB/12.77MB
+87bc69f1a650: Loading layer [==================================================>]  55.42MB/55.42MB
+2d7b6446b66d: Loading layer [==================================================>]  5.632kB/5.632kB
+4fff34e50f40: Loading layer [==================================================>]  37.38kB/37.38kB
+5e79cfafc57c: Loading layer [==================================================>]  55.42MB/55.42MB
+Loaded image: goharbor/harbor-core:v1.9.4
+57c193635092: Loading layer [==================================================>]  115.8MB/115.8MB
+48c741dd71e6: Loading layer [==================================================>]  12.23MB/12.23MB
+bca1df60136e: Loading layer [==================================================>]  2.048kB/2.048kB
+3ded12c0b4d9: Loading layer [==================================================>]  48.13kB/48.13kB
+1ab30734b178: Loading layer [==================================================>]  3.072kB/3.072kB
+09dcb0a00864: Loading layer [==================================================>]  12.28MB/12.28MB
+Loaded image: goharbor/clair-photon:v2.1.0-v1.9.4
+b3a6b161a0f0: Loading layer [==================================================>]  7.039MB/7.039MB
+1ed6312f133c: Loading layer [==================================================>]  196.6kB/196.6kB
+fee283579213: Loading layer [==================================================>]    172kB/172kB
+1946b2964bfc: Loading layer [==================================================>]  15.36kB/15.36kB
+026952c4573d: Loading layer [==================================================>]  3.584kB/3.584kB
+37bd829992ae: Loading layer [==================================================>]  10.84MB/10.84MB
+Loaded image: goharbor/harbor-portal:v1.9.4
+0fa4e197a1e0: Loading layer [==================================================>]  10.84MB/10.84MB
+Loaded image: goharbor/nginx-photon:v1.9.4
+9f4e1ee20fe3: Loading layer [==================================================>]  9.009MB/9.009MB
+eb044190906a: Loading layer [==================================================>]  42.31MB/42.31MB
+04e55b2b95d5: Loading layer [==================================================>]  2.048kB/2.048kB
+41efcb18a521: Loading layer [==================================================>]  3.072kB/3.072kB
+16903b9eaf51: Loading layer [==================================================>]  42.31MB/42.31MB
+Loaded image: goharbor/chartmuseum-photon:v0.9.0-v1.9.4
+19ccaba72e02: Loading layer [==================================================>]   2.56kB/2.56kB
+bf35853b2d08: Loading layer [==================================================>]  1.536kB/1.536kB
+facfe762a35b: Loading layer [==================================================>]  75.33MB/75.33MB
+cfcf6d4e7653: Loading layer [==================================================>]  42.65MB/42.65MB
+c497e06e4e96: Loading layer [==================================================>]  157.2kB/157.2kB
+f444f52f4af6: Loading layer [==================================================>]   3.01MB/3.01MB
+Loaded image: goharbor/prepare:v1.9.4
+12f86854bc80: Loading layer [==================================================>]   80.2MB/80.2MB
+5e76c79bec2e: Loading layer [==================================================>]  3.072kB/3.072kB
+694b3e7869d5: Loading layer [==================================================>]   59.9kB/59.9kB
+27609e3dd221: Loading layer [==================================================>]  61.95kB/61.95kB
+Loaded image: goharbor/redis-photon:v1.9.4
+01c4d294000a: Loading layer [==================================================>]  9.005MB/9.005MB
+e836fee5658c: Loading layer [==================================================>]  3.072kB/3.072kB
+ac9add5e34a0: Loading layer [==================================================>]   2.56kB/2.56kB
+1af6a0c8f2bb: Loading layer [==================================================>]  21.76MB/21.76MB
+692f3a6593bb: Loading layer [==================================================>]  21.76MB/21.76MB
+Loaded image: goharbor/registry-photon:v2.7.1-patch-2819-2553-v1.9.4
+50d697c7c241: Loading layer [==================================================>]  9.004MB/9.004MB
+ccc72da8223b: Loading layer [==================================================>]  6.239MB/6.239MB
+d8f9724c0195: Loading layer [==================================================>]  16.04MB/16.04MB
+813deff8bdee: Loading layer [==================================================>]  28.24MB/28.24MB
+27eeaef358bd: Loading layer [==================================================>]  22.02kB/22.02kB
+52a7091247e7: Loading layer [==================================================>]  50.52MB/50.52MB
+Loaded image: goharbor/notary-server-photon:v0.6.1-v1.9.4
+391081d598f3: Loading layer [==================================================>]  50.36MB/50.36MB
+6e82a6bf9097: Loading layer [==================================================>]  3.584kB/3.584kB
+f44a631c4f72: Loading layer [==================================================>]  3.072kB/3.072kB
+c841d5236832: Loading layer [==================================================>]   2.56kB/2.56kB
+253571258f05: Loading layer [==================================================>]  3.072kB/3.072kB
+88d0f16c60e6: Loading layer [==================================================>]  3.584kB/3.584kB
+a4499b4f52d1: Loading layer [==================================================>]  12.29kB/12.29kB
+Loaded image: goharbor/harbor-log:v1.9.4
+b94d1cd23704: Loading layer [==================================================>]  63.49MB/63.49MB
+7108c9c351ce: Loading layer [==================================================>]  56.37MB/56.37MB
+013a04104e87: Loading layer [==================================================>]  5.632kB/5.632kB
+c91b8f37358e: Loading layer [==================================================>]  2.048kB/2.048kB
+aa04ed1247cb: Loading layer [==================================================>]   2.56kB/2.56kB
+ea3d1b630734: Loading layer [==================================================>]   2.56kB/2.56kB
+9dd11aa8e16a: Loading layer [==================================================>]   2.56kB/2.56kB
+69fab71b0bc5: Loading layer [==================================================>]  10.24kB/10.24kB
+Loaded image: goharbor/harbor-db:v1.9.4
+573233339cd8: Loading layer [==================================================>]  12.77MB/12.77MB
+1c4fa76d32f8: Loading layer [==================================================>]  48.14MB/48.14MB
+Loaded image: goharbor/harbor-jobservice:v1.9.4
+401a522fd2d5: Loading layer [==================================================>]  9.005MB/9.005MB
+93bfd55aee1a: Loading layer [==================================================>]  3.072kB/3.072kB
+41bc5eeff535: Loading layer [==================================================>]  21.76MB/21.76MB
+768368529512: Loading layer [==================================================>]  3.072kB/3.072kB
+d0f0f102247d: Loading layer [==================================================>]  8.661MB/8.661MB
+32b9c7908fb4: Loading layer [==================================================>]  30.42MB/30.42MB
+Loaded image: goharbor/harbor-registryctl:v1.9.4
+f8bf76e63a50: Loading layer [==================================================>]  14.61MB/14.61MB
+9cc53a4748a9: Loading layer [==================================================>]  28.24MB/28.24MB
+ae2e3edc6219: Loading layer [==================================================>]  22.02kB/22.02kB
+43599ec252a3: Loading layer [==================================================>]  49.09MB/49.09MB
+Loaded image: goharbor/notary-signer-photon:v0.6.1-v1.9.4
+713f7d39cadb: Loading layer [==================================================>]  338.3MB/338.3MB
+dc092fe63769: Loading layer [==================================================>]  119.8kB/119.8kB
+Loaded image: goharbor/harbor-migrator:v1.9.4
+
+
+[Step 2]: preparing environment ...
+prepare base dir is set to /data/harbor/harbor
+Generated configuration file: /config/log/logrotate.conf
+Generated configuration file: /config/log/rsyslog_docker.conf
+Generated configuration file: /config/nginx/nginx.conf
+Generated configuration file: /config/core/env
+Generated configuration file: /config/core/app.conf
+Generated configuration file: /config/registry/config.yml
+Generated configuration file: /config/registryctl/env
+Generated configuration file: /config/db/env
+Generated configuration file: /config/jobservice/env
+Generated configuration file: /config/jobservice/config.yml
+Generated and saved secret to file: /secret/keys/secretkey
+Generated certificate, key file: /secret/core/private_key.pem, cert file: /secret/registry/root.crt
+Generated configuration file: /compose_location/docker-compose.yml
+Clean up the input dir
+
+
+Note: stopping existing Harbor instance ...
+Stopping harbor-db     ... done
+Stopping registryctl   ... done
+Stopping harbor-portal ... done
+Stopping redis         ... done
+Stopping harbor-log    ... done
+Removing harbor-db     ... done
+Removing registryctl   ... done
+Removing harbor-portal ... done
+Removing redis         ... done
+Removing harbor-log    ... done
+Removing network harbor_harbor
+
+
+[Step 3]: starting Harbor ...
+Creating network "harbor_harbor" with the default driver
+Creating harbor-log ... done
+Creating redis         ... done
+Creating registry      ... done
+Creating harbor-portal ... done
+Creating registryctl   ... done
+Creating harbor-db     ... done
+Creating harbor-core   ... done
+Creating harbor-jobservice ... done
+Creating nginx             ... done
+
+✔ ----Harbor has been installed and started successfully.----
+
+Now you should be able to visit the admin portal at http://192.168.5.21. 
+For more details, please visit https://github.com/goharbor/harbor .
+
+
+```
+
+
+
+浏览器访问：
+
+http://192.168.5.21:5000/
+
+输入: admin/Harbor12345
+
+![image-20231215232602871](.\images\image-20231215232602871.png)
+
+
+
+**在docker主机上配制私服**
+
+```sh
+ vi /etc/docker/daemon.json 
+# 添加
+"insecure-registries": ["192.168.5.21:5000"]
+
+
+# 重启docker服务
+systemctl daemon-reload
+systemctl restart docker
+```
+
+
+
+**在harbor上新建项目**
+
+```sh
+# 新建公共项目,先创建一个私有的nullnull-edu
+```
+
+**在docker主机上登录私服上传镜像**
+
+```sh
+# 登录私服
+docker login -u admin -p Harbor12345 192.168.5.21:5000
+
+# 上传镜像
+docker tag nginx:1.19.3-alpine 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+
+docker push  192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+
+# 退出 
+docker logout 192.168.5.21:5000
+```
+
+操作：
+
+```sh
+[root@dockeros ~]# docker login -u admin -p Harbor12345 192.168.5.21:5000
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+[root@dockeros ~]# docker tag nginx:1.19.3-alpine 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+[root@dockeros ~]# docker push  192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+The push refers to repository [192.168.5.21:5000/nullnull-edu/nginx]
+8d6d1951ab0a: Pushed 
+d0e26daf1f58: Pushed 
+835f5b67679c: Pushed 
+4daeb7840e4d: Pushed 
+ace0eda3e3be: Pushed 
+1.19.3-alpine: digest: sha256:a411d06ab4f5347ac9652357ac35600555aeff0b910326cc7adc36d471e0b36f size: 1360
+[root@dockeros ~]# docker images
+REPOSITORY                             TAG                  IMAGE ID       CREATED       SIZE
+ubuntu                                 20.04                ba6acccedd29   2 years ago   72.8MB
+centos                                 centos7.9.2009       eeb6ee3f44bd   2 years ago   204MB
+zookeeper                              3.6.2                a72350516291   2 years ago   268MB
+debian                                 10.6-slim            79fa6b1da13a   3 years ago   69.2MB
+debian                                 10.6                 ef05c61d5112   3 years ago   114MB
+192.168.5.21:5000/nginx                v1                   4efb29ff172a   3 years ago   21.8MB
+192.168.5.21:5000/nullnull-edu/nginx   1.19.3-alpine        4efb29ff172a   3 years ago   21.8MB
+nginx                                  1.19.3-alpine        4efb29ff172a   3 years ago   21.8MB
+alpine                                 3.12.1               d6e46aa2470d   3 years ago   5.57MB
+sonatype/nexus3                        3.28.1               d4fbb85e8101   3 years ago   634MB
+mysql                                  5.7.31               42cdba9f1b08   3 years ago   448MB
+centos                                 7.8.2003             afb6fca791e0   3 years ago   203MB
+centos                                 centos7.8.2003       afb6fca791e0   3 years ago   203MB
+tomcat                                 9.0.20-jre8-alpine   387f9d021d3a   4 years ago   108MB
+tomcat                                 9.0.20-jre8-slim     66140ac62adb   4 years ago   225MB
+tomcat                                 9.0.20-jre8          e24825d32965   4 years ago   464MB
+webcenter/activemq                     5.14.3               ab2a33f6de2b   6 years ago   422MB
+[root@dockeros ~]# docker rmi 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+Untagged: 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+Untagged: 192.168.5.21:5000/nullnull-edu/nginx@sha256:a411d06ab4f5347ac9652357ac35600555aeff0b910326cc7adc36d471e0b36f
+[root@dockeros ~]# docker pull  192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+1.19.3-alpine: Pulling from nullnull-edu/nginx
+Digest: sha256:a411d06ab4f5347ac9652357ac35600555aeff0b910326cc7adc36d471e0b36f
+Status: Downloaded newer image for 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+[root@dockeros ~]# docker images
+REPOSITORY                             TAG                  IMAGE ID       CREATED       SIZE
+ubuntu                                 20.04                ba6acccedd29   2 years ago   72.8MB
+centos                                 centos7.9.2009       eeb6ee3f44bd   2 years ago   204MB
+zookeeper                              3.6.2                a72350516291   2 years ago   268MB
+debian                                 10.6-slim            79fa6b1da13a   3 years ago   69.2MB
+debian                                 10.6                 ef05c61d5112   3 years ago   114MB
+192.168.5.21:5000/nginx                v1                   4efb29ff172a   3 years ago   21.8MB
+192.168.5.21:5000/nullnull-edu/nginx   1.19.3-alpine        4efb29ff172a   3 years ago   21.8MB
+nginx                                  1.19.3-alpine        4efb29ff172a   3 years ago   21.8MB
+alpine                                 3.12.1               d6e46aa2470d   3 years ago   5.57MB
+sonatype/nexus3                        3.28.1               d4fbb85e8101   3 years ago   634MB
+mysql                                  5.7.31               42cdba9f1b08   3 years ago   448MB
+centos                                 7.8.2003             afb6fca791e0   3 years ago   203MB
+centos                                 centos7.8.2003       afb6fca791e0   3 years ago   203MB
+tomcat                                 9.0.20-jre8-alpine   387f9d021d3a   4 years ago   108MB
+tomcat                                 9.0.20-jre8-slim     66140ac62adb   4 years ago   225MB
+tomcat                                 9.0.20-jre8          e24825d32965   4 years ago   464MB
+webcenter/activemq                     5.14.3               ab2a33f6de2b   6 years ago   422MB
+[root@dockeros ~]# docker logout 192.168.5.21:5000
+Removing login credentials for 192.168.5.21:5000 
+```
+
+查看私服
+
+![image-20231215233934101](.\images\image-20231215233934101.png)
+
+
+
+
+
 
 
 ## 结束
