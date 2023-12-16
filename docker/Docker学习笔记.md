@@ -4506,6 +4506,247 @@ Removing login credentials for 192.168.5.21:5000
 
 
 
+## 构建Docker镜像
+
+构建Docker镜像主要有3种方式：
+
+1. 基于已有的镜像创建。
+2. 基于Dockerfile来创建。
+3. 基于本地模板来导入。
+
+### 基于已有的镜像创建
+
+commit命令
+
+docker commit ： 从容器创建一个新的镜像。
+
+语法：
+
+```sh
+docker commit [OPTIONS] CONTAINER [REPOSITORY[:TAG]]
+```
+
+常用参数：
+
+- -a ： 提交镜像的作者。
+- -c ：使用Dockerfil指令来创建镜像。
+- -m ：提交时的说明文字。
+- -p ： 在commit时，将容器暂停。
+
+**案例**
+
+结合docker cp命令自定义nginx的index页面。
+
+操作：
+
+```sh
+# 启动容器
+docker run -itd --name nginx -p 80:80 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+
+# 定制首页
+docker cp nginx:/usr/share/nginx/html/index.html /data/nginx/index.html
+vi /data/nginx/index.html
+# 将首页的中添加自定义标识信息.比如标题添加nullnull
+
+#将首页重新拷贝至容器中
+docker cp  /data/nginx/index.html nginx:/usr/share/nginx/html/index.html
+
+# 查看页面信息
+curl http://127.0.0.1
+
+# 以现在nginx容器制作新容器
+docker container commit -m "update index.html file" -a "nullnull" nginx 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+
+# 查看镜像
+docker images
+
+# 停止正在运行容器
+docker stop nginx && docker rm nginx
+
+
+# 运行新制作的容器
+docker run -itd --name nginx -p 80:80 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+
+# 查看页面信息
+curl http://127.0.0.1
+
+
+# 如果需要登录
+# docker login -u admin -p Harbor12345 192.168.5.21:5000
+docker push 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+```
+
+操作样例:
+
+```sh
+[root@dockeros nginx]# docker run -itd --name nginx -p 80:80 192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine
+2d4cd9089f203ee549c4af2f6bd6e04f5948c8983c5ab871cd4a1e1369d8f7ed
+[root@dockeros nginx]# docker ps
+CONTAINER ID   IMAGE                                                COMMAND                  CREATED         STATUS         PORTS                               NAMES
+2d4cd9089f20   192.168.5.21:5000/nullnull-edu/nginx:1.19.3-alpine   "/docker-entrypoint.…"   3 seconds ago   Up 2 seconds   0.0.0.0:80->80/tcp, :::80->80/tcp   nginx
+[root@dockeros nginx]# docker cp nginx:/usr/share/nginx/html/index.html /data/nginx/index.html
+Successfully copied 2.56kB to /data/nginx/index.html
+[root@dockeros nginx]# cd /data/nginx
+[root@dockeros nginx]# ls
+index.html
+[root@dockeros nginx]# vi index.html 
+[root@dockeros nginx]# docker cp  /data/nginx/index.html nginx:/usr/share/nginx/html/index.html
+Successfully copied 2.56kB to nginx:/usr/share/nginx/html/index.html
+[root@dockeros nginx]# curl http://127.0.0.1
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nullnull  nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nullnull  nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx. - nullnull  </em></p>
+</body>
+</html>
+[root@dockeros nginx]# docker container commit -m "update index.html file" -a "nullnull" nginx 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+sha256:67422fe393e07744d1b7dd02fca3dd3ab9a8ef0c6c424999f5d81363e923589e
+[root@dockeros nginx]# docker images
+REPOSITORY                             TAG                  IMAGE ID       CREATED          SIZE
+192.168.5.21:5000/nullnull-edu/nginx   v1.0                 67422fe393e0   25 seconds ago   21.8MB
+ubuntu                                 20.04                ba6acccedd29   2 years ago      72.8MB
+centos                                 centos7.9.2009       eeb6ee3f44bd   2 years ago      204MB
+zookeeper                              3.6.2                a72350516291   2 years ago      268MB
+debian                                 10.6-slim            79fa6b1da13a   3 years ago      69.2MB
+debian                                 10.6                 ef05c61d5112   3 years ago      114MB
+192.168.5.21:5000/nginx                v1                   4efb29ff172a   3 years ago      21.8MB
+192.168.5.21:5000/nullnull-edu/nginx   1.19.3-alpine        4efb29ff172a   3 years ago      21.8MB
+nginx                                  1.19.3-alpine        4efb29ff172a   3 years ago      21.8MB
+alpine                                 3.12.1               d6e46aa2470d   3 years ago      5.57MB
+sonatype/nexus3                        3.28.1               d4fbb85e8101   3 years ago      634MB
+mysql                                  5.7.31               42cdba9f1b08   3 years ago      448MB
+centos                                 7.8.2003             afb6fca791e0   3 years ago      203MB
+centos                                 centos7.8.2003       afb6fca791e0   3 years ago      203MB
+tomcat                                 9.0.20-jre8-alpine   387f9d021d3a   4 years ago      108MB
+tomcat                                 9.0.20-jre8-slim     66140ac62adb   4 years ago      225MB
+tomcat                                 9.0.20-jre8          e24825d32965   4 years ago      464MB
+webcenter/activemq                     5.14.3               ab2a33f6de2b   6 years ago      422MB
+[root@dockeros nginx]# docker stop nginx && docker rm nginx
+nginx
+nginx
+[root@dockeros nginx]# docker stop nginx && docker rm nginx
+nginx
+nginx
+[root@dockeros nginx]# docker run -itd --name nginx -p 80:80 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+12700d47a2620c9ccde672f7e8d97d3a6633ec7040a10f1f6cdfc29d20aaf564
+[root@dockeros nginx]# curl http://127.0.0.1
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nullnull  nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nullnull  nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx. - nullnull  </em></p>
+</body>
+</html>
+[root@dockeros nginx]# docker push 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+The push refers to repository [192.168.5.21:5000/nullnull-edu/nginx]
+19b16b03844a: Preparing 
+8d6d1951ab0a: Preparing 
+d0e26daf1f58: Preparing 
+835f5b67679c: Preparing 
+4daeb7840e4d: Preparing 
+ace0eda3e3be: Waiting 
+denied: requested access to the resource is denied
+[root@dockeros nginx]# docker login -u admin -p Harbor12345 192.168.5.21:5000
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+[root@dockeros nginx]# 
+[root@dockeros nginx]# docker push 192.168.5.21:5000/nullnull-edu/nginx:v1.0
+The push refers to repository [192.168.5.21:5000/nullnull-edu/nginx]
+19b16b03844a: Pushed 
+8d6d1951ab0a: Layer already exists 
+d0e26daf1f58: Layer already exists 
+835f5b67679c: Layer already exists 
+4daeb7840e4d: Layer already exists 
+ace0eda3e3be: Layer already exists 
+v1.0: digest: sha256:7cdbe6a1b2990717b9b0cf0468e472c3b377a242acbb5c2f416a224156882fff size: 1568
+[root@dockeros nginx]# 
+```
+
+
+
+### 使用DOckerFile构建镜像
+
+参考官网地址:
+
+```http
+https://docs.docker.com/engine/reference/builder/
+```
+
+>Dockerfile 其实就是我们用来构建Docker镜像的源码，当然这个不是所谓编程源码，而是一些命令集合，只要理解它的逻辑和语法格式，就可以很容器编写Dockerfile。简单点说，Dockerfile可以让用户个性化定制Docker镜像。因为工作环境中需求各式各样，网络上的镜像很难满足实际的需求。
+
+**Dockerfile的基本结构**
+
+Dockerfile是一个包含用于组合映射的命令的文本文档。可以使用命令行调用任何命令。Docker通过读取Dockerfile中的指令自动生成映射。
+
+Docker build命令用于从Dockerfile构建镜像。可以在docker build命令中使用`-f`标识指向文件系统中的任何位置的Dockerfile。
+
+Dockerfile由一行行命令语句组成，并且支持以#开头的注释行。
+
+DOckerfile分为四部分：基础镜像信息、维护者信息、镜像操作指令和容器启动时执行指令。
+
+**Dockerfile文件说明**
+
+Docker以从上到下的顺序运行Dockerfile的指令。为了指定基本镜像，第一指令必须是FROM。一个声明以`#`字符开头则被视为注释。可以Docker文件中使用`RUN`,`CMD`,`FROM`,`EXPOSE`,`ENV`等指令。
+
+Dockerfile常用命令
+
+| 命令       | 说明                                                         |
+| ---------- | ------------------------------------------------------------ |
+| FROM       | 指定基础镜像，必须为第一个命令                               |
+| MAINTAINER | 维护者（作者）信息                                           |
+| ENV        | 设置环境变量                                                 |
+| RUN        | 构建镜像时执行的命令                                         |
+| CMD        | 构建容器后调用，也就是在容器启动时才进行调用。               |
+| ENTRYPOINT | 指定运行容器启动过程时执行的命令，覆盖CMD参数<br/>ENTRYPOINT与CMD非常类似，不同的是通过docker run执行的命令不会覆盖ENTRYPOINT，而docker run指定的任何参数，都会被当做参数两次传递给ENTRYPOINT。Dockerfile只允许有一个ENTRYPOINT命令，多次指定时会覆盖着面的设置，而只执行最后的ENTRYPOINT指令。 |
+| ADD        | 将本地文件添加到容器中，tar类型会自动解压（网络压缩资源不会被解压），可以访问网络资源，类似wget。 |
+| COPY       | 功能类似ADD，但是不会自动解压文件。也不能访问网络资源。      |
+| WORKDIR    | 工作目录，类似于cd命令                                       |
+| ARG        | 用于指定传递给构建运行时的变量                               |
+| VOLUMN     | 用于指定持久化目录                                           |
+| EXPOSE     | 指定于外界交互的端口。                                       |
+| USER       | 指定运行容器时的用户名或UID，后续的RUN也会使用指定用户。使用USER指定用户时，可以使用用户名、UID或者GID，或者两者组合。当服务不需要管理员权限时，可以通过该命令指定运行用户。并且可以在之前创建所需要的用户。 |
+
 
 
 
