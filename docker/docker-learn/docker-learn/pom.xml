@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>docker-compose-lean</module>
+        <module>docker-build</module>
     </modules>
 
     <properties>
