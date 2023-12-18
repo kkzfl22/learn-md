@@ -5079,6 +5079,642 @@ mysql>
 
 
 
+## 部署微服务
+
+### 部署数据库
+
+user.sql
+
+```sh
+# 创建数据库并
+CREATE DATABASE nullnulldb CHARACTER SET utf8 COLLATE utf8_bin;
+
+# 切换数据库
+use nullnulldb;
+
+# 创建表语句
+CREATE TABLE data_user (
+ userid int(11) NOT NULL AUTO_INCREMENT,
+ username varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ password varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ userroles varchar(2) COLLATE utf8_bin DEFAULT NULL,
+ nickname varchar(50) COLLATE utf8_bin DEFAULT NULL,
+ PRIMARY KEY (userid)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+# 插入数据
+INSERT INTO data_user (username,PASSWORD,userroles,nickname) VALUES 
+('admin','1234','04','超级管理员'),
+('nullnull','1234','03','管理员');
+```
+
+
+
+
+
+### 项目介绍
+
+1. 使用SpringBoot技术
+2. 数据库使用Mysql
+3. springboot项目Docker容器化部署
+4. MySQL数据库容器化部署
+
+pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.3.4.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    
+	<groupId>com.nullnull.learn</groupId>
+    <artifactId>docker-spring-boot</artifactId>
+    <version>1.0-SNAPSHOT</version>
+   
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.version>1.8</java.version>
+        <mybatispluins.version>3.3.2</mybatispluins.version>
+        <mysql.version>5.1.47</mysql.version>
+
+    </properties>
+
+
+    <dependencies>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatispluins.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.49</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.30</version>
+        </dependency>
+    </dependencies>
+    <build>
+        <finalName>${project.name}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!--跳过单元测试-->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+```
+
+**实体信息**
+
+```java
+package com.nullnull.learn.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+@Setter
+@Getter
+@ToString
+@TableName("data_user")
+public class DataUserPO {
+
+    @TableId("userid")
+    private Integer userId;
+
+    @TableField("username")
+    private String userName;
+
+    @TableField("password")
+    private String password;
+
+    @TableField("userroles")
+    private String userRoles;
+
+    @TableField("nickname")
+    private String nickName;
+
+}
+
+```
+
+
+
+**mapper接口**
+
+```java
+package com.nullnull.learn.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.nullnull.learn.entity.DataUserPO;
+import org.apache.ibatis.annotations.Mapper;
+
+/**
+ * 数据库操作
+ *
+ */
+@Mapper
+public interface DataUserMapper extends BaseMapper<DataUserPO> {
+}
+
+```
+
+**Service接口**
+
+```java
+package com.nullnull.learn.service;
+
+import com.nullnull.learn.entity.DataUserPO;
+import java.util.List;
+
+
+public interface DataUserService {
+
+    /**
+     * 查询所有用户信息
+     *
+     * @return
+     */
+    public List<DataUserPO> queryUsers();
+
+}
+
+```
+
+**ServiceImpl**
+
+```java
+package com.nullnull.learn.service;
+
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.nullnull.learn.entity.DataUserPO;
+import com.nullnull.learn.mapper.DataUserMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+
+@Service
+public class DataUserServiceImpl implements DataUserService {
+
+    @Autowired
+    private DataUserMapper userMapper;
+
+    @Override
+    public List<DataUserPO> queryUsers() {
+        return userMapper.selectList(Wrappers.emptyWrapper());
+    }
+}
+
+```
+
+**Controller**
+
+```java
+package com.nullnull.learn.controller;
+
+import com.nullnull.learn.entity.DataUserPO;
+import com.nullnull.learn.service.DataUserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@RestController
+public class UserController {
+
+
+    @Autowired
+    private DataUserService userService;
+
+    @GetMapping("/users")
+    @ResponseBody
+    public List<DataUserPO> dataList() {
+        List<DataUserPO> dataUserList = userService.queryUsers();
+        return dataUserList;
+    }
+}
+```
+
+
+
+**启动类**
+
+```java
+package com.nullnull.learn;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+
+@SpringBootApplication
+public class BootApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(BootApplication.class, args);
+    }
+
+}
+
+```
+
+
+
+**application.yaml**
+
+```
+server:
+  port: 8822
+spring:
+  datasource:
+   driver-class-name: com.mysql.jdbc.Driver
+   username: root
+   password: admin
+   url: jdbc:mysql://192.168.5.20:3306/nullnulldb?characterEncoding=utf8&useSSL=false&useTimezone=true&serverTimezone=GMT%2B8
+   mybatis-plus:
+     type-aliases-package: com.nullnull.learn.entity
+     mapper-locations: mapper/*.xml
+     configuration:
+     #配置日志打印方式。不使用mybatis的日志信息。使用mp的日志配置
+     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+```
+
+
+
+本地可访问：
+
+```http
+http://127.0.0.1:8822/users
+```
+
+可看到响应:
+
+```json
+[
+	{
+		"userId": 3,
+		"userName": "admin",
+		"password": "1234",
+		"userRoles": "04",
+		"nickName": "超级管理员"
+	},
+	{
+		"userId": 4,
+		"userName": "nullnull",
+		"password": "1234",
+		"userRoles": "03",
+		"nickName": "管理员"
+	}
+]
+```
+
+
+
+### 部署Mysql
+
+主要步骤：
+
+1. 清理20主机上的内容
+2. 安装docker-compose
+3. 脱离开发环境部署测试项目。
+4. 部署MySQL容器
+5. 制作MySQL自定义镜像。
+
+```sh
+# 1 清理容器
+docker rm $(docker stop $(docker ps -qa))
+
+# 2. 已经安装了docker-compose不再重复
+
+# 运行MySQL镜像
+docker run -itd --name mysql --restart always -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin mysql:5.7.31
+
+# 使用工具将SQL在MySQL中执行
+
+```
+
+
+
+
+
+日志：
+
+```sh
+[root@dockeros ~]# docker rm $(docker stop $(docker ps -qa))
+ca73b705a8d0
+12700d47a262
+441c15c8b771
+7157de8950f7
+d10ca8754416
+[root@dockeros ~]# docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+[root@dockeros ~]# docker-compose -v
+docker-compose version 1.27.4, build 40524192
+[root@dockeros ~]# docker-compose version
+docker-compose version 1.27.4, build 40524192
+docker-py version: 4.3.1
+CPython version: 3.7.7
+OpenSSL version: OpenSSL 1.1.0l  10 Sep 2019
+[root@dockeros ~]# docker run -itd --name mysql -p 3306:3306 --restart always -e MYSQL_ROOT_PASSWORD=admin mysql:5.7.31
+fd3ded59aa2903036326dcfdc021222e255e6733c61915f8cc62d78d8995de3a
+[root@dockeros ~]# 
+```
+
+
+
+本地执行：
+
+```sh
+# 本地使用maven打包，并启动
+mvn clean package -DskipTests
+
+java -jar docker-spring-boot.jar
+```
+
+通过浏览器访问：
+
+http://127.0.0.1:8822/users
+
+如果成功将得到正确的响应：
+
+```sh
+[
+	{
+		"userId": 3,
+		"userName": "admin",
+		"password": "1234",
+		"userRoles": "04",
+		"nickName": "超级管理员"
+	},
+	{
+		"userId": 4,
+		"userName": "nullnull",
+		"password": "1234",
+		"userRoles": "03",
+		"nickName": "管理员"
+	}
+]
+```
+
+
+
+### Dockerfile构建mysql镜像
+
+主要分为两个步骤：
+
+- 在容器启动时，设置时区。
+- 在容器启动时，直接导入数据。
+
+Dockerfile
+
+```sh
+FROM mysql:5.7.31
+
+# 作者信息
+MAINTAINER mysql from date UTC by Asia/Shanghai "nullnull"
+
+ENV TZ Asia/Shanghai
+# 加载SQL文件至初始化数据的目录
+COPY user.sql /docker-entrypoint-initdb.d
+```
+
+执行构建,注意user.sql文件与Dockerfile文件同级目录
+
+```
+# 注意清理旧容器
+docker rm $(docker stop $(docker ps -qa))
+
+
+docker build --rm -t 192.168.5.21:5000/nullnull-edu/mysql:5.7.1 .
+docker images
+
+# 运行命令
+docker run -itd --name mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin -v /data/mysql:/var/lib/mysql 192.168.5.21:5000/nullnull-edu/mysql:5.7.1 --character-set-server=utf8 --collation-server=utf8_general_ci
+
+# 推送到仓库中
+docker push 192.168.5.21:5000/nullnull-edu/mysql:5.7.1
+```
+
+
+
+输出:
+
+```sh
+[root@dockeros build]# docker rm $(docker stop $(docker ps -qa))
+3b8bd9866f45
+[root@dockeros build]# docker build --rm -t 192.168.5.21:5000/nullnull-edu/mysql:5.7.1 .
+[+] Building 0.1s (7/7) FINISHED                                                                        docker:default
+ => [internal] load .dockerignore                                                                                 0.0s
+ => => transferring context: 2B                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                              0.0s
+ => => transferring dockerfile: 254B                                                                              0.0s
+ => [internal] load metadata for docker.io/library/mysql:5.7.31                                                   0.0s
+ => [internal] load build context                                                                                 0.0s
+ => => transferring context: 769B                                                                                 0.0s
+ => CACHED [1/2] FROM docker.io/library/mysql:5.7.31                                                              0.0s
+ => [2/2] COPY user.sql /docker-entrypoint-initdb.d                                                               0.0s
+ => exporting to image                                                                                            0.0s
+ => => exporting layers                                                                                           0.0s
+ => => writing image sha256:faaced0d71f2add2addd241dd4827d98f4cb0384507feee68afd7e59340cbf52                      0.0s
+ => => naming to 192.168.5.21:5000/nullnull-edu/mysql:5.7.1     
+ [root@dockeros build]# docker images
+REPOSITORY                             TAG                  IMAGE ID       CREATED              SIZE
+192.168.5.21:5000/nullnull-edu/mysql   5.7.1                faaced0d71f2   About a minute ago   448MB
+192.168.5.21:5000/nullnull-edu/nginx   v1.0                 67422fe393e0   44 hours ago         21.8MB
+ubuntu                                 20.04                ba6acccedd29   2 years ago          72.8MB
+centos                                 centos7.9.2009       eeb6ee3f44bd   2 years ago          204MB
+zookeeper                              3.6.2                a72350516291   2 years ago          268MB
+debian                                 10.6-slim            79fa6b1da13a   3 years ago          69.2MB
+debian                                 10.6                 ef05c61d5112   3 years ago          114MB
+192.168.5.21:5000/nullnull-edu/nginx   1.19.3-alpine        4efb29ff172a   3 years ago          21.8MB
+nginx                                  1.19.3-alpine        4efb29ff172a   3 years ago          21.8MB
+192.168.5.21:5000/nginx                v1                   4efb29ff172a   3 years ago          21.8MB
+alpine                                 3.12.1               d6e46aa2470d   3 years ago          5.57MB
+sonatype/nexus3                        3.28.1               d4fbb85e8101   3 years ago          634MB
+mysql                                  5.7.31               42cdba9f1b08   3 years ago          448MB
+192.168.5.21:5000/nullnull-edu/mysql   v5.7.31              e663c6c969df   3 years ago          448MB
+centos                                 7.8.2003             afb6fca791e0   3 years ago          203MB
+centos                                 centos7.8.2003       afb6fca791e0   3 years ago          203MB
+tomcat                                 9.0.20-jre8-alpine   387f9d021d3a   4 years ago          108MB
+tomcat                                 9.0.20-jre8-slim     66140ac62adb   4 years ago          225MB
+tomcat                                 9.0.20-jre8          e24825d32965   4 years ago          464MB
+webcenter/activemq                     5.14.3               ab2a33f6de2b   6 years ago          422MB
+[root@dockeros build]# docker run -itd --name mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin -v /data/mysql:/var/lib/mysql 192.168.5.21:5000/nullnull-edu/mysql:5.7.1 --character-set-server=utf8 --collation-server=utf8_general_ci
+df6076bc5fe40296b110d55012977ba752be21b3de04fdf33925f685f4f61f65
+[root@dockeros mysql]# docker push 192.168.5.21:5000/nullnull-edu/mysql:5.7.1
+The push refers to repository [192.168.5.21:5000/nullnull-edu/mysql]
+650f81b23e85: Pushed 
+bdda49371b83: Pushed 
+78a9edf56b5f: Pushed 
+2e19acd09cf6: Pushed 
+30f9c7764a3f: Pushed 
+15b463db445c: Pushed 
+c21e35e55228: Pushed 
+36b89ee4c647: Pushed 
+9dae2565e824: Pushed 
+ec8c80284c72: Pushed 
+329fe06a30f0: Pushed 
+d0fe97fa8b8c: Pushed 
+5.7.1: digest: sha256:ad927c0e00826fddec86bcbedc7709bc44307e76e358fd2a7a48c1a6ea5baaad size: 2828
+[root@dockeros mysql]# 
+
+```
+
+
+
+### Dockerfile构建项目
+
+Dockerfile
+
+```sh
+FROM openjdk:8-alpine3.9
+
+# 作者信息
+MAINTAINER nullnull docker springboot "nullnull"
+
+# 修改源
+RUN echo "http://mirrors.aliyun.com/alpine/latest-stable/main/" >> /etc/apk/repositories && \
+  echo "http://mirrors.aliyun.com/alpine/latest-stable/community/" >> /etc/apk/repositories
+# 安装需要的软件，解决时区问题
+RUN apk --update add curl bash tzdata && \
+  rm -rf /var/cache/apk/*
+
+# 修改镜像为东八区时间
+ENV TZ Asia/Shanghai
+ARG JAR_FILE
+COPY ${JAR_FILE} app.jar
+
+EXPOSE 8822
+ENTRYPOINT ["java","-jar","/app.jar"]
+```
+
+上传Dockerfile文件和sprintboot的jar包,这两上文件需要在同一个目录下
+
+```
+# 构建镜像
+docker build --rm -t nullnull/docker-spring-boot:v1 --build-arg JAR_FILE=docker-spring-boot.jar .
+
+# 运行镜像
+docker run -itd --name docker-spring-boot -p 8822:8822 nullnull/docker-spring-boot:v1
+
+# 查看日志
+docker logs -f docker-spring-boot
+
+
+# 停止
+docker stop docker-spring-boot
+
+docker rm docker-spring-boot
+```
+
+样例
+
+```sh
+[root@dockeros springboot]# ls
+Dockerfile  docker-spring-boot.jar
+
+[root@dockeros springboot]# docker build --rm -t nullnull/docker-spring-boot:v1 --build-arg JAR_FILE=docker-spring-boot.jar .
+[+] Building 192.4s (9/9) FINISHED                                                                      docker:default
+ => [internal] load build definition from Dockerfile                                                              0.2s
+ => => transferring dockerfile: 643B                                                                              0.0s
+ => [internal] load .dockerignore                                                                                 0.2s
+ => => transferring context: 2B                                                                                   0.0s
+ => [internal] load metadata for docker.io/library/openjdk:8-alpine3.9                                            0.0s
+ => [1/4] FROM docker.io/library/openjdk:8-alpine3.9                                                              0.0s
+ => [internal] load build context                                                                                 0.0s
+ => => transferring context: 103B                                                                                 0.0s
+ => CACHED [2/4] RUN echo "http://mirrors.aliyun.com/alpine/latest-stable/main/" >> /etc/apk/repositories &&   e  0.0s
+ => [3/4] RUN apk --update add curl bash tzdata &&   rm -rf /var/cache/apk/*                                    190.2s
+ => [4/4] COPY docker-spring-boot.jar app.jar                                                                     0.3s
+ => exporting to image                                                                                            1.2s 
+ => => exporting layers                                                                                           0.8s 
+ => => writing image sha256:51dd3b84a450e62c6c6910598593634af5bdd79c2e4dd754f52ca92c8a3f18e1                      0.0s 
+ => => naming to docker.io/nullnull/docker-spring-boot:v1     
+ 
+ [root@dockeros springboot]# docker run -itd --name docker-spring-boot -p 8822:8822 nullnull/docker-spring-boot:v1
+227cf70762320eeee3b4cab72e6ac0f7bf53189c630f1b257d8f0ee788c8be06
+[root@dockeros springboot]# docker logs -f docker-spring-boot
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::        (v2.3.4.RELEASE)
+
+2023-12-18 20:33:26.399  INFO 1 --- [           main] com.nullnull.learn.BootApplication       : Starting BootApplication v1.0-SNAPSHOT on 227cf7076232 with PID 1 (/app.jar started by root in /)
+2023-12-18 20:33:26.401  INFO 1 --- [           main] com.nullnull.learn.BootApplication       : No active profile set, falling back to default profiles: default
+2023-12-18 20:33:27.477  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8822 (http)
+2023-12-18 20:33:27.488  INFO 1 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2023-12-18 20:33:27.488  INFO 1 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.38]
+2023-12-18 20:33:27.553  INFO 1 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2023-12-18 20:33:27.553  INFO 1 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1086 ms
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.3.2 
+2023-12-18 20:33:27.981  INFO 1 --- [           main] o.s.s.concurrent.ThreadPoolTaskExecutor  : Initializing ExecutorService 'applicationTaskExecutor'
+2023-12-18 20:33:28.231  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8822 (http) with context path ''
+2023-12-18 20:33:28.239  INFO 1 --- [           main] com.nullnull.learn.BootApplication       : Started BootApplication in 2.296 seconds (JVM running for 2.638)
+2023-12-18 20:33:50.758  INFO 1 --- [nio-8822-exec-3] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2023-12-18 20:33:50.758  INFO 1 --- [nio-8822-exec-3] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2023-12-18 20:33:50.762  INFO 1 --- [nio-8822-exec-3] o.s.web.servlet.DispatcherServlet        : Completed initialization in 4 ms
+2023-12-18 20:33:50.806  INFO 1 --- [nio-8822-exec-3] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2023-12-18 20:33:50.962  INFO 1 --- [nio-8822-exec-3] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+^C
+[root@dockeros springboot]# 
+```
+
+
+
 
 
 ## 结束

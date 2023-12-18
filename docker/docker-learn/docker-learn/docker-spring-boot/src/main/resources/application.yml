@@ -1,0 +1,15 @@
+server:
+  port: 8822
+spring:
+  datasource:
+   driver-class-name: com.mysql.jdbc.Driver
+   username: root
+   password: admin
+   url: jdbc:mysql://192.168.5.20:3306/nullnulldb?characterEncoding=utf8&useSSL=false&useTimezone=true&serverTimezone=GMT%2B8
+   mybatis-plus:
+     type-aliases-package: com.nullnull.learn.entity
+     mapper-locations: mapper/*.xml
+     configuration:
+     #配置日志打印方式。不使用mybatis的日志信息。使用mp的日志配置
+     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
