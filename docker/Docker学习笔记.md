@@ -5637,7 +5637,7 @@ ENTRYPOINT ["java","-jar","/app.jar"]
 
 上传Dockerfile文件和sprintboot的jar包,这两上文件需要在同一个目录下
 
-```
+```sh
 # 构建镜像
 docker build --rm -t nullnull/docker-spring-boot:v1 --build-arg JAR_FILE=docker-spring-boot.jar .
 
@@ -5646,6 +5646,9 @@ docker run -itd --name docker-spring-boot -p 8822:8822 nullnull/docker-spring-bo
 
 # 查看日志
 docker logs -f docker-spring-boot
+
+# 便可以通过浏览器访问
+http://192.168.5.20:8822/users
 
 
 # 停止
@@ -5714,6 +5717,39 @@ Dockerfile  docker-spring-boot.jar
 ```
 
 
+
+
+
+## Docker安装Mysql主从复制
+
+使用MySQL官方提供的镜像制作主从复制服务器集群。
+
+**概念**
+
+将主数据库的增删改查等操作记录到二进制日志文件中，从数据库接收主库日志文件，根据最后一次更新的起始位置，同步复制到从数据库，使得主从数据库保持一致。
+
+**作用**
+
+- 高可用性：主数据异常可切换到从数据库
+- 负载均衡：实现读写分离。
+- 备份：进行日常备份。
+
+![image-20231219091913181](.\images\image-20231219091913181.png)
+
+
+
+Binary Log: 主数据库的二进制日志；Relay log: 从服务器的中继日志：
+
+过程：
+
+1. 主数据库在每次事务完成前，将操作记录到Binlog日志文件中；
+2. 从数据库中有一个I/O线程，负责连接主数据库服务，并读取binlog日志变化，如果发现有新的变动，则将变动写入到relay log,否则进入休眠状态；
+3. 从数据中的SQL Thread读取中继日志，将串行执行SQL事件，使用从数据库与主数据库始终保持一致。
+
+注意事项：
+
+1. 涉及时间函数时，会出现数据不一致。原因是，复制过程的两次IO操作和网络、磁盘效率等问题势必导致时间戳不一致。
+2. 涉及系统函数时，会出现不一致。
 
 
 
