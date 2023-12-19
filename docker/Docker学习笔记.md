@@ -5527,7 +5527,7 @@ COPY user.sql /docker-entrypoint-initdb.d
 
 执行构建,注意user.sql文件与Dockerfile文件同级目录
 
-```
+```sh
 # 注意清理旧容器
 docker rm $(docker stop $(docker ps -qa))
 
@@ -5749,8 +5749,624 @@ Binary Log: 主数据库的二进制日志；Relay log: 从服务器的中继日
 注意事项：
 
 1. 涉及时间函数时，会出现数据不一致。原因是，复制过程的两次IO操作和网络、磁盘效率等问题势必导致时间戳不一致。
-2. 涉及系统函数时，会出现不一致。
+2. pd涉及系统函数时，会出现不一致。
+
+**节点信息**
+
+| 主机名          | IP           |
+| --------------- | ------------ |
+| mysql-master-20 | 192.168.5.20 |
+| mysql-slave-21  | 192.168.5.21 |
+
+基础镜像
+
+```sh
+docker pull mysql:5.7.31
+```
+
+### **master节点操作**
+
+mysql-master-20
+
+my.cnf
+
+```
+mkdir -p /data/mysql/master
+
+cd /data/mysql/master
+
+vi my.cnf
+[mysqld]
+# [必须]启用二进制日志
+log-bin=mysql-bin
+# 必须 服务器唯一的ID，默认是20，一般取IP段最后一段，
+server-id=20
+
+```
+
+Dockerfile
+
+```sh
+FROM mysql:5.7.31
+# 作者信息
+MAINTAINER mysql from date UTC by Asia/Shanghai "nullnull"
+ENV TZ Asia/Shanghai
+COPY my.cnf /etc/mysql/
+
+```
+
+制作镜像
+
+Dockerfile和my.cnf需要在同一个目录下
+
+```
+docker build --rm -t nullnull/mysqlmaster:5.7.31 .
+```
+
+操作日志:
+
+```sh
+[root@dockeros master]# docker build --rm -t nullnull/mysqlmaster:5.7.31 .
+[+] Building 0.3s (7/7) FINISHED                                                                        docker:default
+ => [internal] load build definition from Dockerfile                                                              0.2s
+ => => transferring dockerfile: 233B                                                                              0.0s
+ => [internal] load .dockerignore                                                                                 0.2s
+ => => transferring context: 2B                                                                                   0.0s
+ => [internal] load metadata for docker.io/library/mysql:5.7.31                                                   0.0s
+ => [internal] load build context                                                                                 0.0s
+ => => transferring context: 241B                                                                                 0.0s
+ => CACHED [1/2] FROM docker.io/library/mysql:5.7.31                                                              0.0s
+ => [2/2] COPY my.cnf /etc/mysql/                                                                                 0.0s
+ => exporting to image                                                                                            0.0s
+ => => exporting layers                                                                                           0.0s
+ => => writing image sha256:3ed9e9829207da951a805062df79f8c1a40bcc27270f0d17d26b4cc390968834                      0.0s
+ => => naming to docker.io/nullnull/mysqlmaster:5.7.31                                                            0.0s
+[root@dockeros master]# 
+```
+
+运行镜像
+
+```sh
+# 运行镜像
+docker run -itd --name mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin nullnull/mysqlmaster:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+
+# 查看日志
+docker logs -f mysql
+
+# 进入mysql容器
+docker exec -it mysql bash
+
+# 查看时间
+date
+
+# 查看linux版本
+cat /etc/issue
+
+# 登录mysql
+mysql -uroot -padmin
+
+show databases;
+
+# 退出mysql
+exit
+
+# 退出容器
+exit
+
+```
+
+日志
+
+```sh
+[root@dockeros master]# docker run -itd --name mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin nullnull/mysqlmaster:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+bfb7584c95c4ef616ed390d2161c1c5c06929dd6912288b07f6979398add190c
+[root@dockeros master]# docker logs mysql
+2023-12-19 12:36:00+08:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-19 12:36:00+08:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'
+2023-12-19 12:36:00+08:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-19 12:36:00+08:00 [Note] [Entrypoint]: Initializing database files
+2023-12-19T04:36:00.148124Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:36:00.261174Z 0 [Warning] InnoDB: New log files created, LSN=45790
+2023-12-19T04:36:00.289403Z 0 [Warning] InnoDB: Creating foreign key constraint system tables.
+2023-12-19T04:36:00.359635Z 0 [Warning] No existing UUID has been found, so we assume that this is the first time that this server has been started. Generating a new UUID: 1c2c181b-9e28-11ee-806c-0242ac110002.
+2023-12-19T04:36:00.361569Z 0 [Warning] Gtid table is not ready to be used. Table 'mysql.gtid_executed' cannot be opened.
+2023-12-19T04:36:00.799955Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:36:00.882868Z 1 [Warning] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+2023-12-19 12:36:05+08:00 [Note] [Entrypoint]: Database files initialized
+2023-12-19 12:36:05+08:00 [Note] [Entrypoint]: Starting temporary server
+2023-12-19 12:36:05+08:00 [Note] [Entrypoint]: Waiting for server startup
+2023-12-19T04:36:05.249177Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:36:05.254723Z 0 [Note] mysqld (mysqld 5.7.31-log) starting as process 78 ...
+2023-12-19T04:36:05.260421Z 0 [Note] InnoDB: PUNCH HOLE support available
+2023-12-19T04:36:05.260541Z 0 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2023-12-19T04:36:05.260545Z 0 [Note] InnoDB: Uses event mutexes
+2023-12-19T04:36:05.260547Z 0 [Note] InnoDB: GCC builtin __atomic_thread_fence() is used for memory barrier
+2023-12-19T04:36:05.260548Z 0 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2023-12-19T04:36:05.260550Z 0 [Note] InnoDB: Using Linux native AIO
+2023-12-19T04:36:05.261215Z 0 [Note] InnoDB: Number of pools: 1
+2023-12-19T04:36:05.261490Z 0 [Note] InnoDB: Using CPU crc32 instructions
+2023-12-19T04:36:05.265948Z 0 [Note] InnoDB: Initializing buffer pool, total size = 128M, instances = 1, chunk size = 128M
+2023-12-19T04:36:05.286760Z 0 [Note] InnoDB: Completed initialization of buffer pool
+2023-12-19T04:36:05.293418Z 0 [Note] InnoDB: If the mysqld execution user is authorized, page cleaner thread priority can be changed. See the man page of setpriority().
+2023-12-19T04:36:05.313633Z 0 [Note] InnoDB: Highest supported file format is Barracuda.
+2023-12-19T04:36:05.324557Z 0 [Note] InnoDB: Creating shared tablespace for temporary tables
+2023-12-19T04:36:05.324602Z 0 [Note] InnoDB: Setting file './ibtmp1' size to 12 MB. Physically writing the file full; Please wait ...
+2023-12-19T04:36:05.355855Z 0 [Note] InnoDB: File './ibtmp1' size is now 12 MB.
+2023-12-19T04:36:05.356150Z 0 [Note] InnoDB: 96 redo rollback segment(s) found. 96 redo rollback segment(s) are active.
+2023-12-19T04:36:05.356157Z 0 [Note] InnoDB: 32 non-redo rollback segment(s) are active.
+2023-12-19T04:36:05.359585Z 0 [Note] InnoDB: 5.7.31 started; log sequence number 2719885
+2023-12-19T04:36:05.359763Z 0 [Note] Plugin 'FEDERATED' is disabled.
+2023-12-19T04:36:05.364281Z 0 [Note] InnoDB: Loading buffer pool(s) from /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:36:05.368088Z 0 [Note] InnoDB: Buffer pool(s) load completed at 231219 12:36:05
+2023-12-19T04:36:05.383444Z 0 [Note] Found ca.pem, server-cert.pem and server-key.pem in data directory. Trying to enable SSL support using them.
+2023-12-19T04:36:05.383502Z 0 [Note] Skipping generation of SSL certificates as certificate files are present in data directory.
+2023-12-19T04:36:05.383876Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:36:05.383921Z 0 [Note] Skipping generation of RSA key pair as key files are present in data directory.
+2023-12-19T04:36:05.386193Z 0 [Warning] Insecure configuration for --pid-file: Location '/var/lib/mysql' in the path is accessible to all OS users. Consider choosing a different directory.
+2023-12-19T04:36:05.388313Z 0 [Note] Failed to start slave threads for channel ''
+2023-12-19T04:36:05.392617Z 0 [Note] Event Scheduler: Loaded 0 events
+2023-12-19T04:36:05.392908Z 0 [Note] mysqld: ready for connections.
+Version: '5.7.31-log'  socket: '/var/run/mysqld/mysqld.sock'  port: 0  MySQL Community Server (GPL)
+2023-12-19 12:36:06+08:00 [Note] [Entrypoint]: Temporary server started.
+Warning: Unable to load '/usr/share/zoneinfo/iso3166.tab' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/leap-seconds.list' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/zone.tab' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/zone1970.tab' as time zone. Skipping it.
+
+2023-12-19 12:36:08+08:00 [Note] [Entrypoint]: Stopping temporary server
+2023-12-19T04:36:08.402563Z 0 [Note] Giving 0 client threads a chance to die gracefully
+2023-12-19T04:36:08.402653Z 0 [Note] Shutting down slave threads
+2023-12-19T04:36:08.402657Z 0 [Note] Forcefully disconnecting 0 remaining clients
+2023-12-19T04:36:08.402661Z 0 [Note] Event Scheduler: Purging the queue. 0 events
+2023-12-19T04:36:08.402736Z 0 [Note] Binlog end
+2023-12-19T04:36:08.405075Z 0 [Note] Shutting down plugin 'ngram'
+2023-12-19T04:36:08.405114Z 0 [Note] Shutting down plugin 'partition'
+2023-12-19T04:36:08.405117Z 0 [Note] Shutting down plugin 'BLACKHOLE'
+2023-12-19T04:36:08.405119Z 0 [Note] Shutting down plugin 'ARCHIVE'
+2023-12-19T04:36:08.405120Z 0 [Note] Shutting down plugin 'PERFORMANCE_SCHEMA'
+2023-12-19T04:36:08.405145Z 0 [Note] Shutting down plugin 'MRG_MYISAM'
+2023-12-19T04:36:08.405147Z 0 [Note] Shutting down plugin 'MyISAM'
+2023-12-19T04:36:08.405151Z 0 [Note] Shutting down plugin 'INNODB_SYS_VIRTUAL'
+2023-12-19T04:36:08.405153Z 0 [Note] Shutting down plugin 'INNODB_SYS_DATAFILES'
+2023-12-19T04:36:08.405154Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLESPACES'
+2023-12-19T04:36:08.405155Z 0 [Note] Shutting down plugin 'INNODB_SYS_FOREIGN_COLS'
+2023-12-19T04:36:08.405156Z 0 [Note] Shutting down plugin 'INNODB_SYS_FOREIGN'
+2023-12-19T04:36:08.405157Z 0 [Note] Shutting down plugin 'INNODB_SYS_FIELDS'
+2023-12-19T04:36:08.405158Z 0 [Note] Shutting down plugin 'INNODB_SYS_COLUMNS'
+2023-12-19T04:36:08.405159Z 0 [Note] Shutting down plugin 'INNODB_SYS_INDEXES'
+2023-12-19T04:36:08.405160Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLESTATS'
+2023-12-19T04:36:08.405161Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLES'
+2023-12-19T04:36:08.405162Z 0 [Note] Shutting down plugin 'INNODB_FT_INDEX_TABLE'
+2023-12-19T04:36:08.405163Z 0 [Note] Shutting down plugin 'INNODB_FT_INDEX_CACHE'
+2023-12-19T04:36:08.405164Z 0 [Note] Shutting down plugin 'INNODB_FT_CONFIG'
+2023-12-19T04:36:08.405166Z 0 [Note] Shutting down plugin 'INNODB_FT_BEING_DELETED'
+2023-12-19T04:36:08.405167Z 0 [Note] Shutting down plugin 'INNODB_FT_DELETED'
+2023-12-19T04:36:08.405168Z 0 [Note] Shutting down plugin 'INNODB_FT_DEFAULT_STOPWORD'
+2023-12-19T04:36:08.405169Z 0 [Note] Shutting down plugin 'INNODB_METRICS'
+2023-12-19T04:36:08.405170Z 0 [Note] Shutting down plugin 'INNODB_TEMP_TABLE_INFO'
+2023-12-19T04:36:08.405172Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_POOL_STATS'
+2023-12-19T04:36:08.405174Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_PAGE_LRU'
+2023-12-19T04:36:08.405175Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_PAGE'
+2023-12-19T04:36:08.405176Z 0 [Note] Shutting down plugin 'INNODB_CMP_PER_INDEX_RESET'
+2023-12-19T04:36:08.405177Z 0 [Note] Shutting down plugin 'INNODB_CMP_PER_INDEX'
+2023-12-19T04:36:08.405178Z 0 [Note] Shutting down plugin 'INNODB_CMPMEM_RESET'
+2023-12-19T04:36:08.405179Z 0 [Note] Shutting down plugin 'INNODB_CMPMEM'
+2023-12-19T04:36:08.405180Z 0 [Note] Shutting down plugin 'INNODB_CMP_RESET'
+2023-12-19T04:36:08.405181Z 0 [Note] Shutting down plugin 'INNODB_CMP'
+2023-12-19T04:36:08.405182Z 0 [Note] Shutting down plugin 'INNODB_LOCK_WAITS'
+2023-12-19T04:36:08.405183Z 0 [Note] Shutting down plugin 'INNODB_LOCKS'
+2023-12-19T04:36:08.405184Z 0 [Note] Shutting down plugin 'INNODB_TRX'
+2023-12-19T04:36:08.405185Z 0 [Note] Shutting down plugin 'InnoDB'
+2023-12-19T04:36:08.405864Z 0 [Note] InnoDB: FTS optimize thread exiting.
+2023-12-19T04:36:08.406152Z 0 [Note] InnoDB: Starting shutdown...
+2023-12-19T04:36:08.508371Z 0 [Note] InnoDB: Dumping buffer pool(s) to /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:36:08.509100Z 0 [Note] InnoDB: Buffer pool(s) dump completed at 231219 12:36:08
+2023-12-19T04:36:10.256486Z 0 [Note] InnoDB: Shutdown completed; log sequence number 12578428
+2023-12-19T04:36:10.257054Z 0 [Note] InnoDB: Removed temporary tablespace data file: "ibtmp1"
+2023-12-19T04:36:10.257095Z 0 [Note] Shutting down plugin 'MEMORY'
+2023-12-19T04:36:10.257100Z 0 [Note] Shutting down plugin 'CSV'
+2023-12-19T04:36:10.257103Z 0 [Note] Shutting down plugin 'sha256_password'
+2023-12-19T04:36:10.257104Z 0 [Note] Shutting down plugin 'mysql_native_password'
+2023-12-19T04:36:10.257196Z 0 [Note] Shutting down plugin 'binlog'
+2023-12-19T04:36:10.257499Z 0 [Note] mysqld: Shutdown complete
+
+2023-12-19 12:36:10+08:00 [Note] [Entrypoint]: Temporary server stopped
+
+2023-12-19 12:36:10+08:00 [Note] [Entrypoint]: MySQL init process done. Ready for start up.
+
+2023-12-19T04:36:15.941781Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:36:15.942520Z 0 [Note] mysqld (mysqld 5.7.31-log) starting as process 1 ...
+2023-12-19T04:36:15.944912Z 0 [Note] InnoDB: PUNCH HOLE support available
+2023-12-19T04:36:15.944965Z 0 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2023-12-19T04:36:15.944968Z 0 [Note] InnoDB: Uses event mutexes
+2023-12-19T04:36:15.944970Z 0 [Note] InnoDB: GCC builtin __atomic_thread_fence() is used for memory barrier
+2023-12-19T04:36:15.944971Z 0 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2023-12-19T04:36:15.944973Z 0 [Note] InnoDB: Using Linux native AIO
+2023-12-19T04:36:15.945079Z 0 [Note] InnoDB: Number of pools: 1
+2023-12-19T04:36:15.945146Z 0 [Note] InnoDB: Using CPU crc32 instructions
+2023-12-19T04:36:15.946194Z 0 [Note] InnoDB: Initializing buffer pool, total size = 128M, instances = 1, chunk size = 128M
+2023-12-19T04:36:15.949956Z 0 [Note] InnoDB: Completed initialization of buffer pool
+2023-12-19T04:36:15.951318Z 0 [Note] InnoDB: If the mysqld execution user is authorized, page cleaner thread priority can be changed. See the man page of setpriority().
+2023-12-19T04:36:15.962653Z 0 [Note] InnoDB: Highest supported file format is Barracuda.
+2023-12-19T04:36:15.967417Z 0 [Note] InnoDB: Creating shared tablespace for temporary tables
+2023-12-19T04:36:15.967454Z 0 [Note] InnoDB: Setting file './ibtmp1' size to 12 MB. Physically writing the file full; Please wait ...
+2023-12-19T04:36:15.984043Z 0 [Note] InnoDB: File './ibtmp1' size is now 12 MB.
+2023-12-19T04:36:15.984518Z 0 [Note] InnoDB: 96 redo rollback segment(s) found. 96 redo rollback segment(s) are active.
+2023-12-19T04:36:15.984527Z 0 [Note] InnoDB: 32 non-redo rollback segment(s) are active.
+2023-12-19T04:36:15.985315Z 0 [Note] InnoDB: Waiting for purge to start
+2023-12-19T04:36:16.036492Z 0 [Note] InnoDB: 5.7.31 started; log sequence number 12578428
+2023-12-19T04:36:16.036830Z 0 [Note] Plugin 'FEDERATED' is disabled.
+2023-12-19T04:36:16.036891Z 0 [Note] InnoDB: Loading buffer pool(s) from /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:36:16.038568Z 0 [Note] InnoDB: Buffer pool(s) load completed at 231219 12:36:16
+2023-12-19T04:36:16.052032Z 0 [Note] Found ca.pem, server-cert.pem and server-key.pem in data directory. Trying to enable SSL support using them.
+2023-12-19T04:36:16.052081Z 0 [Note] Skipping generation of SSL certificates as certificate files are present in data directory.
+2023-12-19T04:36:16.052603Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:36:16.052713Z 0 [Note] Skipping generation of RSA key pair as key files are present in data directory.
+2023-12-19T04:36:16.053016Z 0 [Note] Server hostname (bind-address): '*'; port: 3306
+2023-12-19T04:36:16.053041Z 0 [Note] IPv6 is available.
+2023-12-19T04:36:16.053046Z 0 [Note]   - '::' resolves to '::';
+2023-12-19T04:36:16.053054Z 0 [Note] Server socket created on IP: '::'.
+2023-12-19T04:36:16.055277Z 0 [Warning] Insecure configuration for --pid-file: Location '/var/lib/mysql' in the path is accessible to all OS users. Consider choosing a different directory.
+2023-12-19T04:36:16.057540Z 0 [Note] Failed to start slave threads for channel ''
+2023-12-19T04:36:16.060538Z 0 [Note] Event Scheduler: Loaded 0 events
+2023-12-19T04:36:16.061118Z 0 [Note] mysqld: ready for connections.
+Version: '5.7.31-log'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server (GPL)
+[root@dockeros master]# docker exec -it mysql bash
+root@bfb7584c95c4:/# date
+Tue Dec 19 12:37:40 CST 2023
+root@bfb7584c95c4:/# cat /etc/issue
+Debian GNU/Linux 10 \n \l
+
+root@bfb7584c95c4:/# mysql -uroot -padmin
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 4
+Server version: 5.7.31-log MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> show database;
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'database' at line 1
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+4 rows in set (0.00 sec)
+
+mysql> exit
+Bye
+root@bfb7584c95c4:/# exit
+exit
+[root@dockeros master]# 
+```
 
 
+
+
+
+### **slave节点**
+
+操作
+
+```sh
+mkdir -p /data/mysql/slave
+
+cd /data/mysql/slave
+
+vi my.cnf
+[mysqld]
+#[必须]启用二进制日志
+log-bin=mysql-bin
+#[必须]服务器唯一id，默认是21，取IP后最后一段
+server-id=21
+```
+
+Dockerfile
+
+```sh
+FROM mysql:5.7.31
+MAINTAINER mysql from date UTC by Asia/Shanghai "nullnull"
+ENV TZ Asia/Shanghai
+COPY my.cnf /etc/mysql/
+```
+
+制作镜像
+
+```
+docker build --rm -t nullnull/mysqlslave:5.7.31 .
+```
+
+日志：
+
+```sh
+[root@dockeros21 ~]# mkdir -p /data/mysql/slave
+[root@dockeros21 ~]# 
+[root@dockeros21 ~]# cd /data/mysql/slave
+[root@dockeros21 slave]# ls
+[root@dockeros21 slave]# vi my.cnf
+[root@dockeros21 slave]# ls
+Dockerfile  my.cnf
+[root@dockeros21 slave]# 
+[root@dockeros21 slave]# docker build --rm -t nullnull/mysqlslave:5.7.31 .
+[+] Building 43.2s (7/7) FINISHED                                                                       docker:default
+ => [internal] load .dockerignore                                                                                 0.0s
+ => => transferring context: 2B                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                              0.0s
+ => => transferring dockerfile: 215B                                                                              0.0s
+ => [internal] load metadata for docker.io/library/mysql:5.7.31                                                  16.7s
+ => [internal] load build context                                                                                 0.0s
+ => => transferring context: 227B                                                                                 0.0s
+ => [1/2] FROM docker.io/library/mysql:5.7.31@sha256:b3dc8d10307ab7b9ca1a7981b1601a67e176408be618fc4216d137be37  24.1s
+ => => resolve docker.io/library/mysql:5.7.31@sha256:b3dc8d10307ab7b9ca1a7981b1601a67e176408be618fc4216d137be37d  0.0s
+ => => sha256:3830eda172a0285aa9899c422f26d739cde0ad5445962fbb9a2a8b0df00a1a64 2.62kB / 2.62kB                    0.0s
+ => => sha256:42cdba9f1b0840cd63254898edeaf6def81a503a6a53d57301c3b38e69cd8f15 7.10kB / 7.10kB                    0.0s
+ => => sha256:b3dc8d10307ab7b9ca1a7981b1601a67e176408be618fc4216d137be37dae10b 320B / 320B                        0.0s
+ => => sha256:bb79b6b2107fea8e8a47133a660b78e3a546998fcf0427be39ac9a0af4a97e90 27.09MB / 27.09MB                  4.0s
+ => => sha256:49e22f6fb9f7713028f8ed9b0beaa2ebac38d73ff6fd60532031e4a257f314c0 1.74kB / 1.74kB                    1.4s
+ => => sha256:842b1255668c99365efe9cf8367baf458ad590033cfbe73c03e67a961d34a288 4.18MB / 4.18MB                    5.3s
+ => => sha256:9f48d1f430002d35f5766b2ba9cfbe0c624a705a542622a94e5b86e2132aba7b 1.42MB / 1.42MB                    4.2s
+ => => extracting sha256:bb79b6b2107fea8e8a47133a660b78e3a546998fcf0427be39ac9a0af4a97e90                         3.3s
+ => => sha256:c693f0615bcee7154070df04d6cce10562437d69ee98d469252e950cd79e0d7f 115B / 115B                        5.5s
+ => => sha256:8a621b9dbed2309be1806a0a750a6deef7c2558f25ceee4fcfc06ec421fad097 13.45MB / 13.45MB                  9.2s
+ => => sha256:0807d32aef130f157419493647a5b252b6560b5385f14f102f388e576aeb1e98 2.40kB / 2.40kB                    6.0s
+ => => sha256:6d2fc69dfa35df3eb1099501d90a60c477cc59bb043350815faa61273f30ebb2 225B / 225B                        6.2s
+ => => sha256:56153548dd2c828e151b54d5dee6bc184254767aac1753e4f176a72ef098fccc 108.33MB / 108.33MB               19.7s
+ => => sha256:3bb6ba94030303d9e95c4d436e78295a17912542c3d539116efe436678d90684 5.14kB / 5.14kB                    6.9s
+ => => sha256:3e1888da91a7bfdd32ba485e7f82bec46eae19896901cc433c8203d8927087fb 121B / 121B                        7.6s
+ => => extracting sha256:49e22f6fb9f7713028f8ed9b0beaa2ebac38d73ff6fd60532031e4a257f314c0                         0.0s
+ => => extracting sha256:842b1255668c99365efe9cf8367baf458ad590033cfbe73c03e67a961d34a288                         0.3s
+ => => extracting sha256:9f48d1f430002d35f5766b2ba9cfbe0c624a705a542622a94e5b86e2132aba7b                         0.1s
+ => => extracting sha256:c693f0615bcee7154070df04d6cce10562437d69ee98d469252e950cd79e0d7f                         0.0s
+ => => extracting sha256:8a621b9dbed2309be1806a0a750a6deef7c2558f25ceee4fcfc06ec421fad097                         1.8s
+ => => extracting sha256:0807d32aef130f157419493647a5b252b6560b5385f14f102f388e576aeb1e98                         0.0s
+ => => extracting sha256:6d2fc69dfa35df3eb1099501d90a60c477cc59bb043350815faa61273f30ebb2                         0.0s
+ => => extracting sha256:56153548dd2c828e151b54d5dee6bc184254767aac1753e4f176a72ef098fccc                         4.1s
+ => => extracting sha256:3bb6ba94030303d9e95c4d436e78295a17912542c3d539116efe436678d90684                         0.0s
+ => => extracting sha256:3e1888da91a7bfdd32ba485e7f82bec46eae19896901cc433c8203d8927087fb                         0.0s
+ => [2/2] COPY my.cnf /etc/mysql/                                                                                 0.8s
+ => exporting to image                                                                                            0.3s
+ => => exporting layers                                                                                           0.3s
+ => => writing image sha256:04b63f6a1881256d0754ff2df05ee83d8acc147b3a0669981fee42e3a092fdbc                      0.0s
+ => => naming to docker.io/nullnull/mysqlslave:5.7.31                                                             0.0s
+[root@dockeros21 slave]# 
+```
+
+运行
+
+```sh
+docker run -itd --name=mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin nullnull/mysqlslave:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+
+
+#查看日志
+docker logs -f mysql
+
+# 进入mysql容器
+docker exec -it mysql bash
+
+
+# 查看容器版本 
+cat /etc/issue
+
+# 登录mysql查看数据库
+mysql -uroot -padmin
+
+show databases;
+
+exit
+
+
+exit
+```
+
+日志
+
+```sh
+[root@dockeros21 slave]# docker run -itd --name=mysql --restart always --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin nullnull/mysqlslave:5.7.31 --character-set-server=utf8 --collation-server=utf8_general_ci
+c1ed9afcb023d530f8725123353ce1f272046b33035877942af53e54e01b5fca
+[root@dockeros21 slave]# docker logs -f mysql
+2023-12-19 12:50:28+08:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-19 12:50:28+08:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'
+2023-12-19 12:50:28+08:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 5.7.31-1debian10 started.
+2023-12-19 12:50:28+08:00 [Note] [Entrypoint]: Initializing database files
+2023-12-19T04:50:28.681876Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:50:28.882352Z 0 [Warning] InnoDB: New log files created, LSN=45790
+2023-12-19T04:50:28.934794Z 0 [Warning] InnoDB: Creating foreign key constraint system tables.
+2023-12-19T04:50:28.957441Z 0 [Warning] No existing UUID has been found, so we assume that this is the first time that this server has been started. Generating a new UUID: 21e599d3-9e2a-11ee-b94a-0242ac110002.
+2023-12-19T04:50:28.959570Z 0 [Warning] Gtid table is not ready to be used. Table 'mysql.gtid_executed' cannot be opened.
+2023-12-19T04:50:29.278559Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:50:29.429016Z 1 [Warning] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+2023-12-19 12:50:31+08:00 [Note] [Entrypoint]: Database files initialized
+2023-12-19 12:50:31+08:00 [Note] [Entrypoint]: Starting temporary server
+2023-12-19 12:50:31+08:00 [Note] [Entrypoint]: Waiting for server startup
+2023-12-19T04:50:32.510496Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:50:32.517829Z 0 [Note] mysqld (mysqld 5.7.31-log) starting as process 78 ...
+2023-12-19T04:50:32.526122Z 0 [Note] InnoDB: PUNCH HOLE support available
+2023-12-19T04:50:32.526230Z 0 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2023-12-19T04:50:32.526233Z 0 [Note] InnoDB: Uses event mutexes
+2023-12-19T04:50:32.526234Z 0 [Note] InnoDB: GCC builtin __atomic_thread_fence() is used for memory barrier
+2023-12-19T04:50:32.526236Z 0 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2023-12-19T04:50:32.526238Z 0 [Note] InnoDB: Using Linux native AIO
+2023-12-19T04:50:32.526921Z 0 [Note] InnoDB: Number of pools: 1
+2023-12-19T04:50:32.527272Z 0 [Note] InnoDB: Using CPU crc32 instructions
+2023-12-19T04:50:32.532102Z 0 [Note] InnoDB: Initializing buffer pool, total size = 128M, instances = 1, chunk size = 128M
+2023-12-19T04:50:32.553039Z 0 [Note] InnoDB: Completed initialization of buffer pool
+2023-12-19T04:50:32.560495Z 0 [Note] InnoDB: If the mysqld execution user is authorized, page cleaner thread priority can be changed. See the man page of setpriority().
+2023-12-19T04:50:32.581507Z 0 [Note] InnoDB: Highest supported file format is Barracuda.
+2023-12-19T04:50:32.592492Z 0 [Note] InnoDB: Creating shared tablespace for temporary tables
+2023-12-19T04:50:32.592544Z 0 [Note] InnoDB: Setting file './ibtmp1' size to 12 MB. Physically writing the file full; Please wait ...
+2023-12-19T04:50:32.622369Z 0 [Note] InnoDB: File './ibtmp1' size is now 12 MB.
+2023-12-19T04:50:32.622701Z 0 [Note] InnoDB: 96 redo rollback segment(s) found. 96 redo rollback segment(s) are active.
+2023-12-19T04:50:32.622707Z 0 [Note] InnoDB: 32 non-redo rollback segment(s) are active.
+2023-12-19T04:50:32.626210Z 0 [Note] InnoDB: Waiting for purge to start
+2023-12-19T04:50:32.684529Z 0 [Note] InnoDB: 5.7.31 started; log sequence number 2719885
+2023-12-19T04:50:32.689557Z 0 [Note] Plugin 'FEDERATED' is disabled.
+2023-12-19T04:50:32.689592Z 0 [Note] InnoDB: Loading buffer pool(s) from /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:50:32.693778Z 0 [Note] InnoDB: Buffer pool(s) load completed at 231219 12:50:32
+2023-12-19T04:50:32.715185Z 0 [Note] Found ca.pem, server-cert.pem and server-key.pem in data directory. Trying to enable SSL support using them.
+2023-12-19T04:50:32.715249Z 0 [Note] Skipping generation of SSL certificates as certificate files are present in data directory.
+2023-12-19T04:50:32.715775Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:50:32.715844Z 0 [Note] Skipping generation of RSA key pair as key files are present in data directory.
+2023-12-19T04:50:32.718216Z 0 [Warning] Insecure configuration for --pid-file: Location '/var/lib/mysql' in the path is accessible to all OS users. Consider choosing a different directory.
+2023-12-19T04:50:32.719540Z 0 [Note] Failed to start slave threads for channel ''
+2023-12-19T04:50:32.722508Z 0 [Note] Event Scheduler: Loaded 0 events
+2023-12-19T04:50:32.722961Z 0 [Note] mysqld: ready for connections.
+Version: '5.7.31-log'  socket: '/var/run/mysqld/mysqld.sock'  port: 0  MySQL Community Server (GPL)
+2023-12-19 12:50:32+08:00 [Note] [Entrypoint]: Temporary server started.
+Warning: Unable to load '/usr/share/zoneinfo/iso3166.tab' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/leap-seconds.list' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/zone.tab' as time zone. Skipping it.
+Warning: Unable to load '/usr/share/zoneinfo/zone1970.tab' as time zone. Skipping it.
+
+2023-12-19 12:50:35+08:00 [Note] [Entrypoint]: Stopping temporary server
+2023-12-19T04:50:35.221727Z 0 [Note] Giving 0 client threads a chance to die gracefully
+2023-12-19T04:50:35.221791Z 0 [Note] Shutting down slave threads
+2023-12-19T04:50:35.221796Z 0 [Note] Forcefully disconnecting 0 remaining clients
+2023-12-19T04:50:35.221801Z 0 [Note] Event Scheduler: Purging the queue. 0 events
+2023-12-19T04:50:35.221846Z 0 [Note] Binlog end
+2023-12-19T04:50:35.223932Z 0 [Note] Shutting down plugin 'ngram'
+2023-12-19T04:50:35.223978Z 0 [Note] Shutting down plugin 'partition'
+2023-12-19T04:50:35.223982Z 0 [Note] Shutting down plugin 'BLACKHOLE'
+2023-12-19T04:50:35.223984Z 0 [Note] Shutting down plugin 'ARCHIVE'
+2023-12-19T04:50:35.223985Z 0 [Note] Shutting down plugin 'PERFORMANCE_SCHEMA'
+2023-12-19T04:50:35.224010Z 0 [Note] Shutting down plugin 'MRG_MYISAM'
+2023-12-19T04:50:35.224013Z 0 [Note] Shutting down plugin 'MyISAM'
+2023-12-19T04:50:35.224016Z 0 [Note] Shutting down plugin 'INNODB_SYS_VIRTUAL'
+2023-12-19T04:50:35.224018Z 0 [Note] Shutting down plugin 'INNODB_SYS_DATAFILES'
+2023-12-19T04:50:35.224019Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLESPACES'
+2023-12-19T04:50:35.224020Z 0 [Note] Shutting down plugin 'INNODB_SYS_FOREIGN_COLS'
+2023-12-19T04:50:35.224021Z 0 [Note] Shutting down plugin 'INNODB_SYS_FOREIGN'
+2023-12-19T04:50:35.224022Z 0 [Note] Shutting down plugin 'INNODB_SYS_FIELDS'
+2023-12-19T04:50:35.224023Z 0 [Note] Shutting down plugin 'INNODB_SYS_COLUMNS'
+2023-12-19T04:50:35.224024Z 0 [Note] Shutting down plugin 'INNODB_SYS_INDEXES'
+2023-12-19T04:50:35.224025Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLESTATS'
+2023-12-19T04:50:35.224026Z 0 [Note] Shutting down plugin 'INNODB_SYS_TABLES'
+2023-12-19T04:50:35.224027Z 0 [Note] Shutting down plugin 'INNODB_FT_INDEX_TABLE'
+2023-12-19T04:50:35.224027Z 0 [Note] Shutting down plugin 'INNODB_FT_INDEX_CACHE'
+2023-12-19T04:50:35.224028Z 0 [Note] Shutting down plugin 'INNODB_FT_CONFIG'
+2023-12-19T04:50:35.224030Z 0 [Note] Shutting down plugin 'INNODB_FT_BEING_DELETED'
+2023-12-19T04:50:35.224030Z 0 [Note] Shutting down plugin 'INNODB_FT_DELETED'
+2023-12-19T04:50:35.224031Z 0 [Note] Shutting down plugin 'INNODB_FT_DEFAULT_STOPWORD'
+2023-12-19T04:50:35.224032Z 0 [Note] Shutting down plugin 'INNODB_METRICS'
+2023-12-19T04:50:35.224033Z 0 [Note] Shutting down plugin 'INNODB_TEMP_TABLE_INFO'
+2023-12-19T04:50:35.224035Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_POOL_STATS'
+2023-12-19T04:50:35.224036Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_PAGE_LRU'
+2023-12-19T04:50:35.224037Z 0 [Note] Shutting down plugin 'INNODB_BUFFER_PAGE'
+2023-12-19T04:50:35.224038Z 0 [Note] Shutting down plugin 'INNODB_CMP_PER_INDEX_RESET'
+2023-12-19T04:50:35.224038Z 0 [Note] Shutting down plugin 'INNODB_CMP_PER_INDEX'
+2023-12-19T04:50:35.224039Z 0 [Note] Shutting down plugin 'INNODB_CMPMEM_RESET'
+2023-12-19T04:50:35.224040Z 0 [Note] Shutting down plugin 'INNODB_CMPMEM'
+2023-12-19T04:50:35.224042Z 0 [Note] Shutting down plugin 'INNODB_CMP_RESET'
+2023-12-19T04:50:35.224042Z 0 [Note] Shutting down plugin 'INNODB_CMP'
+2023-12-19T04:50:35.224043Z 0 [Note] Shutting down plugin 'INNODB_LOCK_WAITS'
+2023-12-19T04:50:35.224044Z 0 [Note] Shutting down plugin 'INNODB_LOCKS'
+2023-12-19T04:50:35.224045Z 0 [Note] Shutting down plugin 'INNODB_TRX'
+2023-12-19T04:50:35.224046Z 0 [Note] Shutting down plugin 'InnoDB'
+2023-12-19T04:50:35.224104Z 0 [Note] InnoDB: FTS optimize thread exiting.
+2023-12-19T04:50:35.224526Z 0 [Note] InnoDB: Starting shutdown...
+2023-12-19T04:50:35.325168Z 0 [Note] InnoDB: Dumping buffer pool(s) to /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:50:35.325396Z 0 [Note] InnoDB: Buffer pool(s) dump completed at 231219 12:50:35
+2023-12-19T04:50:36.553447Z 0 [Note] InnoDB: Shutdown completed; log sequence number 12578262
+2023-12-19T04:50:36.553986Z 0 [Note] InnoDB: Removed temporary tablespace data file: "ibtmp1"
+2023-12-19T04:50:36.553998Z 0 [Note] Shutting down plugin 'MEMORY'
+2023-12-19T04:50:36.554002Z 0 [Note] Shutting down plugin 'CSV'
+2023-12-19T04:50:36.554005Z 0 [Note] Shutting down plugin 'sha256_password'
+2023-12-19T04:50:36.554006Z 0 [Note] Shutting down plugin 'mysql_native_password'
+2023-12-19T04:50:36.554104Z 0 [Note] Shutting down plugin 'binlog'
+2023-12-19T04:50:36.554383Z 0 [Note] mysqld: Shutdown complete
+
+2023-12-19 12:50:37+08:00 [Note] [Entrypoint]: Temporary server stopped
+
+2023-12-19 12:50:37+08:00 [Note] [Entrypoint]: MySQL init process done. Ready for start up.
+
+2023-12-19T04:50:37.370298Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-19T04:50:37.370844Z 0 [Note] mysqld (mysqld 5.7.31-log) starting as process 1 ...
+2023-12-19T04:50:37.374560Z 0 [Note] InnoDB: PUNCH HOLE support available
+2023-12-19T04:50:37.374835Z 0 [Note] InnoDB: Mutexes and rw_locks use GCC atomic builtins
+2023-12-19T04:50:37.374840Z 0 [Note] InnoDB: Uses event mutexes
+2023-12-19T04:50:37.374841Z 0 [Note] InnoDB: GCC builtin __atomic_thread_fence() is used for memory barrier
+2023-12-19T04:50:37.374843Z 0 [Note] InnoDB: Compressed tables use zlib 1.2.11
+2023-12-19T04:50:37.374844Z 0 [Note] InnoDB: Using Linux native AIO
+2023-12-19T04:50:37.374946Z 0 [Note] InnoDB: Number of pools: 1
+2023-12-19T04:50:37.375176Z 0 [Note] InnoDB: Using CPU crc32 instructions
+2023-12-19T04:50:37.376229Z 0 [Note] InnoDB: Initializing buffer pool, total size = 128M, instances = 1, chunk size = 128M
+2023-12-19T04:50:37.380158Z 0 [Note] InnoDB: Completed initialization of buffer pool
+2023-12-19T04:50:37.382148Z 0 [Note] InnoDB: If the mysqld execution user is authorized, page cleaner thread priority can be changed. See the man page of setpriority().
+2023-12-19T04:50:37.393669Z 0 [Note] InnoDB: Highest supported file format is Barracuda.
+2023-12-19T04:50:37.398911Z 0 [Note] InnoDB: Creating shared tablespace for temporary tables
+2023-12-19T04:50:37.398954Z 0 [Note] InnoDB: Setting file './ibtmp1' size to 12 MB. Physically writing the file full; Please wait ...
+2023-12-19T04:50:37.409354Z 0 [Note] InnoDB: File './ibtmp1' size is now 12 MB.
+2023-12-19T04:50:37.409764Z 0 [Note] InnoDB: 96 redo rollback segment(s) found. 96 redo rollback segment(s) are active.
+2023-12-19T04:50:37.409769Z 0 [Note] InnoDB: 32 non-redo rollback segment(s) are active.
+2023-12-19T04:50:37.410211Z 0 [Note] InnoDB: Waiting for purge to start
+2023-12-19T04:50:37.463924Z 0 [Note] InnoDB: 5.7.31 started; log sequence number 12578262
+2023-12-19T04:50:37.464345Z 0 [Note] Plugin 'FEDERATED' is disabled.
+2023-12-19T04:50:37.464656Z 0 [Note] InnoDB: Loading buffer pool(s) from /var/lib/mysql/ib_buffer_pool
+2023-12-19T04:50:37.465994Z 0 [Note] InnoDB: Buffer pool(s) load completed at 231219 12:50:37
+2023-12-19T04:50:37.478824Z 0 [Note] Found ca.pem, server-cert.pem and server-key.pem in data directory. Trying to enable SSL support using them.
+2023-12-19T04:50:37.478879Z 0 [Note] Skipping generation of SSL certificates as certificate files are present in data directory.
+2023-12-19T04:50:37.479397Z 0 [Warning] CA certificate ca.pem is self signed.
+2023-12-19T04:50:37.479503Z 0 [Note] Skipping generation of RSA key pair as key files are present in data directory.
+2023-12-19T04:50:37.479726Z 0 [Note] Server hostname (bind-address): '*'; port: 3306
+2023-12-19T04:50:37.480115Z 0 [Note] IPv6 is available.
+2023-12-19T04:50:37.480228Z 0 [Note]   - '::' resolves to '::';
+2023-12-19T04:50:37.480240Z 0 [Note] Server socket created on IP: '::'.
+2023-12-19T04:50:37.482570Z 0 [Warning] Insecure configuration for --pid-file: Location '/var/lib/mysql' in the path is accessible to all OS users. Consider choosing a different directory.
+2023-12-19T04:50:37.484550Z 0 [Note] Failed to start slave threads for channel ''
+2023-12-19T04:50:37.486715Z 0 [Note] Event Scheduler: Loaded 0 events
+2023-12-19T04:50:37.486904Z 0 [Note] mysqld: ready for connections.
+Version: '5.7.31-log'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server (GPL)
+^C
+[root@dockeros21 slave]# docker exec -it mysql bash
+root@c1ed9afcb023:/# date
+Tue Dec 19 12:50:58 CST 2023
+root@c1ed9afcb023:/# cat /etc/issue
+Debian GNU/Linux 10 \n \l
+
+root@c1ed9afcb023:/# mysql -uroot -padmin
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 2
+Server version: 5.7.31-log MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2020, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+4 rows in set (0.00 sec)
+
+mysql> exit
+Bye
+root@c1ed9afcb023:/# exit
+exit
+[root@dockeros21 slave]#
+```
+
+
+
+### 主从节点配制
 
 ## 结束
