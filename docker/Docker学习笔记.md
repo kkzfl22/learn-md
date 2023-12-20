@@ -5722,7 +5722,7 @@ Dockerfile  docker-spring-boot.jar
 
 ## Docker安装Mysql主从复制
 
-使用MySQL官方提供的镜像制作主从复制服务器集群。
+### 使用MySQL官方提供的镜像制作主从复制服务器集群。
 
 **概念**
 
@@ -5764,7 +5764,7 @@ Binary Log: 主数据库的二进制日志；Relay log: 从服务器的中继日
 docker pull mysql:5.7.31
 ```
 
-### **master节点操作**
+#### **master节点操作**
 
 mysql-master-20
 
@@ -6051,11 +6051,7 @@ exit
 [root@dockeros master]# 
 ```
 
-
-
-
-
-### **slave节点**
+#### **slave节点**
 
 操作
 
@@ -6365,8 +6361,290 @@ exit
 [root@dockeros21 slave]#
 ```
 
+#### 主从节点配制
+
+**主节点配制**
+
+```sql
+#创建同步账户以及授权
+create user 'nullnull'@'%' identified by 'nullnull';
+grant replication slave on *.* to 'nullnull'@'%';
+flush privileges;
+
+#查看master状态
+show master status;
 
 
-### 主从节点配制
+#查看二进制日志相关的配置项
+show global variables like 'binlog%';
+
+
+#查看server相关的配置项
+show global variables like 'server%';
+```
+
+从节点配制
+
+```sql
+#设置master相关信息
+CHANGE MASTER TO
+master_host='192.168.5.20',
+master_user='nullnull',
+master_password='nullnull',
+master_port=3306,
+master_log_file='mysql-bin.000006',
+master_log_pos=812;
+
+
+#启动同步
+start slave;
+
+#查看master状态
+show slave status;
+```
+
+主从同步状态信息
+
+show slave status的结果信息：
+
+重点查看：**Slave_IO_Running和Slave_SQL_Running**
+
+| Name                         |Value                                                 |
+| -----------------------------|------------------------------------------------------|
+| Slave_IO_State               |Waiting for master to send event                      |
+| Master_Host                  |192.168.5.20                                          |
+| Master_User                  |nullnull                                              |
+| Master_Port                  |3306                                                  |
+| Connect_Retry                |60                                                    |
+| Master_Log_File              |mysql-bin.000006                                      |
+| Read_Master_Log_Pos          |2905                                                  |
+| Relay_Log_File               |c1ed9afcb023-relay-bin.000002                         |
+| Relay_Log_Pos                |2413                                                  |
+| Relay_Master_Log_File        |mysql-bin.000006                                      |
+| Slave_IO_Running             |Yes                                                   |
+| Slave_SQL_Running            |Yes                                                   |
+| Replicate_Do_DB              |                                                      |
+| Replicate_Ignore_DB          |                                                      |
+| Replicate_Do_Table           |                                                      |
+| Replicate_Ignore_Table       |                                                      |
+| Replicate_Wild_Do_Table      |                                                      |
+| Replicate_Wild_Ignore_Table  |                                                      |
+| Last_Errno                   |0                                                     |
+| Last_Error                   |                                                      |
+| Skip_Counter                 |0                                                     |
+| Exec_Master_Log_Pos          |2905                                                  |
+| Relay_Log_Space              |2627                                                  |
+| Until_Condition              |None                                                  |
+| Until_Log_File               |                                                      |
+| Until_Log_Pos                |0                                                     |
+| Master_SSL_Allowed           |No                                                    |
+| Master_SSL_CA_File           |                                                      |
+| Master_SSL_CA_Path           |                                                      |
+| Master_SSL_Cert              |                                                      |
+| Master_SSL_Cipher            |                                                      |
+| Master_SSL_Key               |                                                      |
+| Seconds_Behind_Master        |0                                                     |
+| Master_SSL_Verify_Server_Cert|No                                                    |
+| Last_IO_Errno                |0                                                     |
+| Last_IO_Error                |                                                      |
+| Last_SQL_Errno               |0                                                     |
+| Last_SQL_Error               |                                                      |
+| Replicate_Ignore_Server_Ids  |                                                      |
+| Master_Server_Id             |20                                                    |
+| Master_UUID                  |1c2c181b-9e28-11ee-806c-0242ac110002                  |
+| Master_Info_File             |/var/lib/mysql/master.info                            |
+| SQL_Delay                    |0                                                     |
+| SQL_Remaining_Delay          |                                                      |
+| Slave_SQL_Running_State      |Slave has read all relay log; waiting for more updates|
+| Master_Retry_Count           |86400                                                 |
+| Master_Bind                  |                                                      |
+| Last_IO_Error_Timestamp      |                                                      |
+| Last_SQL_Error_Timestamp     |                                                      |
+| Master_SSL_Crl               |                                                      |
+| Master_SSL_Crlpath           |                                                      |
+| Retrieved_Gtid_Set           |                                                      |
+| Executed_Gtid_Set            |                                                      |
+| Auto_Position                |0                                                     |
+| Replicate_Rewrite_DB         |                                                      |
+| Channel_Name                 |                                                      |
+| Master_TLS_Version           |                                                      |
+
+
+
+
+主从测试
+
+在主库上执行建库、建表、插入数据检查从库是否能够成功同步
+
+```sql
+CREATE DATABASE nullnull-clu CHARACTER SET utf8 COLLATE utf8_bin;
+
+use nullnull-clu;
+
+CREATE TABLE `user_data_info` (
+  `id` int(11) DEFAULT NULL,
+  `userName` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+INSERT INTO user_data_info (id,userName) 
+VALUES (1,'nullnull');
+```
+
+连接从库，检查是否成功执行
+
+![image-20231220093351264](.\images\image-20231220093351264.png)
+
+数据已经成功同步。至此，主从同步的集群安装完成。
+
+
+
+### 使用第三方的MySQL镜像
+
+镜像名称：bitnami/mysql
+
+官网地址：
+
+```http
+https://hub.docker.com/r/bitnami/mysql
+```
+
+注意：
+
+在使用官网的镜像的MySQL的主从复制中，已经使用3306端口，此第三镜像，需我更换端口以及目录。注意目录的授权。
+
+**节点信息**
+
+| 主机名          | IP           |
+| --------------- | ------------ |
+| mysql-master-20 | 192.168.5.20 |
+| mysql-slave-21  | 192.168.5.21 |
+
+操作
+
+```sh
+docker pull bitnami/mysql:5.7.30
+
+
+# 
+mkdir -p /data/bitnamimysql/docker-entrypoint-initdb.d
+chmod 777 /data/bitnamimysql/docker-entrypoint-initdb.d
+#SQL初始化文件上传至/data/bitnamimysql/docker-entrypoint-initdb.d目录下
+
+
+# master节点启动
+docker run -itd --name mysql-master \
+  -p 3307:3306 \
+  -e MYSQL_ROOT_PASSWORD=admin \
+  -e MYSQL_REPLICATION_MODE=master \
+  -e MYSQL_REPLICATION_USER=nullnull \
+  -e MYSQL_REPLICATION_PASSWORD=nullnull \
+ bitnami/mysql:5.7.30
+ 
+#运行master容器并导入数据库。  
+docker run -itd --name mysql-master \
+  -p 3307:3306 \
+  -e MYSQL_ROOT_PASSWORD=admin \
+  -e MYSQL_REPLICATION_MODE=master \
+  -e MYSQL_REPLICATION_USER=nullnull \
+  -e MYSQL_REPLICATION_PASSWORD=nullnull \
+  -v /data/bitnamimysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d \
+ bitnami/mysql:5.7.30 
+ 
+ 
+ # 从节点启动
+ docker run -itd --name mysql-slave \
+  -p 3307:3306 \
+  -e MYSQL_REPLICATION_MODE=slave \
+  -e MYSQL_REPLICATION_USER=nullnull \
+  -e MYSQL_REPLICATION_PASSWORD=nullnull \
+  -e MYSQL_MASTER_HOST=192.168.5.20 \
+  -e MYSQL_MASTER_ROOT_PASSWORD=admin \
+  -e MYSQL_MASTER_PORT_NUMBER=3307 \
+ bitnami/mysql:5.7.30
+```
+
+
+
+通过客户端检查从机数据
+
+![image-20231220124530136](.\images\image-20231220124530136.png)
+
+## mysql 主主复制
+
+pxc模式，没有主从之分，每个数据库都可以进行写入，数据可以保持强一致性，执行时间较慢，由于一般是强一致性，所以一般 用于存储重要的信息，例如金融、电信、军工。
+
+简介：
+
+PXC属于一套近乎完美的mysql高可用集群解决方案，相比那些比较传统的基于主从复制模式的集群架构，最突出的特点就是解决了诟病已久的数据复制延迟问题，基本上可以达到实时同步。而且节点与节点之间，他们相互的关系是对等的。本身galera cluster也是一种多主架构。galera cluster最关注的是数据的一致性，对待事物的行为时，要么在所有节点上执行，要不都不执行，它的实现机制决定了它对待一致性的行为非常严格，它也能非常美完的保证MySQL集群的数据一致性；
+
+要搭建PXC架构至少需要3个mysql实例来组成一个集群，三个实例之间不是主从模式，而是各自为主，所以三者对等关系，不分从属，这就叫multi-master架构。客户端写入和读取数据时，连接哪个实例都是一样的。读取到的数据时相同的，写入任意一个实例之后，集群自己会将新的写入数据同步到其他实例上，这种架构不共享任何数据，是一种高冗余架构。
+
+PXC操作流程：
+
+1. 客户端发起一个事务，该事务先在本地执行，执行完成之后就要发起对事务的提交操作了，在提交之前需要产生一个写集进行，并广播出去，然后获得一个事务的ID，一并传递到另外的节点上面。
+2. 其他节点在接收到数据之后，进行合并数据之后，没有冲突数据，执行apply_cd和commit_cb动作，否则就需要取消此次事务操作。而当前server节点通过验证之后，执行提交操作，并返回ok，如果验证没有通过，则执行回滚。
+3. 在生产环境中至少有3个节点的集群环境，如果其中一个节点没有验证通过，出现了数据冲突，那么此时采取的方多就是将出现不一致的节点踢出集群环境，而且它自己会执行shutdown命令，自动亲机。
+
+PXC的优化：
+
+1. 实现了mysql数据库集群架构的高可用性和强一致性。
+2. 完成了真正的多节点读写集群方案。
+3. 改善了传统意义上的主从复制延迟问题，基本到达了实时同步。
+4. 新加入的节点可以自动部署，无须提供手动备份，维护起来很方便。
+5. 由于是多节点写入，所以数据故障切换很容易。
+
+PXC缺点：
+
+1. 新加入节点开销大，需要复制完整的数据。采用SST传输开销大。
+2. 任何更新事务都需要全局验证通过，才会在每个节点上执行。集群性能受限于性能最差的节点。也就是经常说的短板效应。
+3. 因为要保证数据的一致性，所以在多节点并发写时，锁冲突问题比较严重。
+4. 只支持innodb存储引擎的表。
+5. 没有表级别的锁，执行DDL语句会把整个集群锁住，而且也kill不了（建议使用OSC操作，即在线DDL）
+6. 所有的表都必须包含主键，不然操作数据时会报错。
+
+镜像：
+
+```sh
+# 官方镜像
+docker pull percona/percona-xtradb-cluster:5.7.30
+docker pull percona/percona-xtradb-cluster:5.7
+
+#如果觉得pxc镜像自带的PXC名字过长，我们可以将他的名字进行修改，方便使用
+docker tag percona/percona-xtradb-cluster:5.7.30 pxc:5.7.30
+```
+
+注意：
+
+1. MySQL从主复制中，已经使用3306端口，pxc在单机上的安装使用3301、3302、3302端口.
+2. 使用docker-compose
+3. 在master节点完成配制，如果需要部署多台服务器，推荐使用docker-swarm集群方式。
+
+先使用docker命令完成，然后按此逻辑改成docker-compose方式
+
+操作过程：
+
+每个PXC内部包含一个mysql实例，如果需要创建包含3个数据库节点的集群，那么要创建3个pxc节点，出于安全考虑，需要给PXC集群实例创建一个Docker内部网络。
+
+```sh
+# 1. 拉取镜像
+docker pull percona/percona-xtradb-cluster:5.7.30
+# 2. 镜像重命名
+docker tag percona/percona-xtradb-cluster:5.7.30 pxc:5.7.30
+# 3. 创建单独的网络
+docker network create --subnet=172.18.0.0/24 pxc-net
+
+
+
+
+```
+
+
+
+
+
+
+
+
 
 ## 结束
