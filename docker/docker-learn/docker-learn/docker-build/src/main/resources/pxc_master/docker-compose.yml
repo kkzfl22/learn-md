@@ -1,0 +1,18 @@
+version: '3'
+services:
+  pxc01:
+    restart: always
+    image: pxc:5.7.30
+    container_name: pxc01
+    privileged: true
+    ports:
+      - 3301:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+      - CLUSTER_NAME=pxc
+    volumes:
+      - /data/pxc/v1:/var/lib/mysql
+networks:
+  default:
+    external:
+      name: pxc_network

@@ -6633,15 +6633,137 @@ docker pull percona/percona-xtradb-cluster:5.7.30
 docker tag percona/percona-xtradb-cluster:5.7.30 pxc:5.7.30
 # 3. 创建单独的网络
 docker network create --subnet=172.18.0.0/24 pxc-net
+# 4. 准备3个数据卷
+docker volume create --name v1
+docker volume create --name v2
+docker volume create --name v3
+# 5. 创建第一个节点
+docker run -d -p 3301:3306 -v v1:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull --privileged=true --name=node1 --net=pxc-net --ip 172.17.0.2 pxc:5.7.30
+# 6. 等待节点1完全启动后，创建另外两个节点
+docker run -d -p 3302:3306 -v v2:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node2 --net=pxc-net --ip 172.17.0.3 pxc:5.7.30
 
-
-
+docker run -d -p 3303:3306 -v v3:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node3 --net=pxc-net --ip 172.17.0.4 pxc:5.7.30
+# 完成：测试3个节点的自动复制。
 
 ```
 
 
 
+**docker-compose方式**
 
+准备
+
+```
+# 准备相关的挂载目录
+mkdir -p /data/pxc
+cd /data/pxc
+mkdir -p v1 v2 v3 master agent
+
+# 对/data/pxc/目录及所有子目录授权
+chmod 777 -R /data/pxc
+
+# 创建网络,他们使用一个网络，需要提前创建
+docker network create pxc_network --driver bridge
+docker network ls
+
+```
+
+master
+
+```yaml
+version: '3'
+services:
+  pxc01:
+    restart: always
+    image: pxc:5.7.30
+    container_name: pxc01
+    privileged: true
+    ports:
+      - 3301:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+      - CLUSTER_NAME=pxc
+    volumes:
+      - /data/pxc/v1:/var/lib/mysql
+networks:
+  default:
+    external:
+      name: pxc_network
+```
+
+agent
+
+```yaml
+version: '3'
+services:
+  pxc02:
+    restart: always
+    image: pxc:5.7.30
+    container_name: pxc02
+    privileged: true
+    ports:
+      - 3302:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+      - CLUSTER_NAME=pxc
+      - CLUSTER_JOIN=pxc01
+    volumes:
+      - /data/pxc/v2:/var/lib/mysql
+
+  pxc03:
+    restart: always
+    image: pxc:5.7.30
+    container_name: pxc03
+    privileged: true
+    ports:
+      - 3303:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin
+      - CLUSTER_NAME=pxc
+      - CLUSTER_JOIN=pxc01
+    volumes:
+      - /data/pxc/v3:/var/lib/mysql
+
+networks:
+  default:
+    external:
+      name: pxc_network
+```
+
+
+
+测试集群，在工具中执行SQL
+
+```sql
+show status like 'wsrep_cluster%';
+```
+
+注意事项：
+
+1. 一定要等master节点起来，在进行启动agent之前不能相互注册
+2. PXC节点不能太多，不然会把整体的性能下降。
+3. PXC节点之间的服务器配制一致。
+4. PXC集群只支持innoDB引擎
+5. docker-compose网络。
+
+```
+1. 新建网络，新建一个名为front的bridge类型网络。但是在实际创建过程中。docker-compose会默认增加docker-compose.yml文件所在目录名称+front的网络。
+例如：pxc/docker-compose.yml
+实际创建网络名称为：pxc-front.不是很符合开发要求。
+
+networks:
+  front:
+    driver: bridge
+    
+2. 使用已存在的网络：
+2.1 创建网络
+docker network create pxc_network --driver bridge
+2.2 使用已存在的网络
+networks:
+  default:
+    external:
+      name: pxc_network
+```
 
 
 
