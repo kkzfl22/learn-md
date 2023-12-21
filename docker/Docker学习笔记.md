@@ -6620,6 +6620,8 @@ docker tag percona/percona-xtradb-cluster:5.7.30 pxc:5.7.30
 2. 使用docker-compose
 3. 在master节点完成配制，如果需要部署多台服务器，推荐使用docker-swarm集群方式。
 
+### docker命令行运行
+
 先使用docker命令完成，然后按此逻辑改成docker-compose方式
 
 操作过程：
@@ -6786,7 +6788,7 @@ Initializing database
 
 ![image-20231221090713955](.\images\image-20231221090713955.png)
 
-**docker-compose方式**
+### **docker-compose方式**
 
 在运行docker-compose方式前，停止之前使用命令启动的pxc
 
@@ -6973,6 +6975,78 @@ networks:
     external:
       name: pxc_network
 ```
+
+
+
+
+
+## docker安装ELK
+
+官网地址 ：
+
+```http
+https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html
+```
+
+基础镜像：
+
+```sh
+docker pull elasticsearch:7.7.0
+docker pull kibana:7.7.0
+docker pull bolingcavalry/elasticsearch-head:6
+```
+
+### **安装前的准备工作:**
+
+>修改文件创建数
+>
+>1. 修改系统中允许应用最多创建多少文件等限制权限。Linux默认来说，一般 最多创建的文件是65536个，但是ES至少需要65536的文件创建数限制。
+>1. 修改系统中允许用户启动的进程开启多少个线程。默认的Linux限制root用户开启的进程可以开启任意数量的线程，其他用户开启的线程数是1024个线程，必须修改限制数量为4096+，因为ES至少需要4096的线程池预备。
+
+```sh
+#新增如下内容在limits.conf文件中
+vi /etc/security/limits.conf
+
+es soft nofile 65536
+es hard nofile 65536
+es soft nproc 4096
+es hard nproc 4096
+```
+
+>系统控制权限：
+>
+>修改系统控制权限，ElasticSearch需要开辟一个65536字节以上空间的虚拟内存。Linux默认不允许任何用户和应用程序直接开辟这么大的虚拟内存。
+
+```sh
+# 添加参数:新增如下内容在sysctl.conf文件中，当前用户拥有的内存权限大小
+vi /etc/sysctl.conf
+vm.max_map_count=262144
+
+#重启生效:让系统控制权限配置生效
+sysctl -p
+```
+
+### **试运行**
+
+```sh
+docker run -itd --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:7.7.0
+
+#拷贝出elasticsearch.yml
+docker cp elasticsearch:/usr/share/elasticsearch/elasticsearch.yml /data/elasticsearch/
+```
+
+elasticsearch.yml
+
+将内存修改中如下：
+
+```
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+```
+
+
 
 
 
