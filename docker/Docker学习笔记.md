@@ -6632,24 +6632,163 @@ docker pull percona/percona-xtradb-cluster:5.7.30
 # 2. 镜像重命名
 docker tag percona/percona-xtradb-cluster:5.7.30 pxc:5.7.30
 # 3. 创建单独的网络
-docker network create --subnet=172.18.0.0/24 pxc-net
+docker network create --subnet=172.20.0.0/24 pxc-net
 # 4. 准备3个数据卷
 docker volume create --name v1
 docker volume create --name v2
 docker volume create --name v3
 # 5. 创建第一个节点
-docker run -d -p 3301:3306 -v v1:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull --privileged=true --name=node1 --net=pxc-net --ip 172.17.0.2 pxc:5.7.30
+docker run -d -p 3301:3306 -v v1:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull --privileged=true --name=node1 --net=pxc-net --ip 172.20.0.2 pxc:5.7.30
 # 6. 等待节点1完全启动后，创建另外两个节点
-docker run -d -p 3302:3306 -v v2:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node2 --net=pxc-net --ip 172.17.0.3 pxc:5.7.30
+docker run -d -p 3302:3306 -v v2:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node2 --net=pxc-net --ip 172.20.0.3 pxc:5.7.30
 
-docker run -d -p 3303:3306 -v v3:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node3 --net=pxc-net --ip 172.17.0.4 pxc:5.7.30
+docker run -d -p 3303:3306 -v v3:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node3 --net=pxc-net --ip 172.20.0.4 pxc:5.7.30
 # 完成：测试3个节点的自动复制。
+```
 
+执行脚本测试：
+
+```sql
+-- 创建数据库并
+CREATE DATABASE nullnulldb CHARACTER SET utf8 COLLATE utf8_bin;
+
+-- 切换数据库
+use nullnulldb;
+
+-- 创建表语句
+CREATE TABLE data_user (
+ userid int(11) NOT NULL AUTO_INCREMENT,
+ username varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ password varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ userroles varchar(2) COLLATE utf8_bin DEFAULT NULL,
+ nickname varchar(50) COLLATE utf8_bin DEFAULT NULL,
+ PRIMARY KEY (userid)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+-- 插入数据
+INSERT INTO data_user (username,PASSWORD,userroles,nickname) VALUES 
+('admin','1234','04','超级管理员'),
+('nullnull','1234','03','管理员');
+
+
+-- 在任意节点插入数据，在其他节点查看
+INSERT INTO data_user (username,PASSWORD,userroles,nickname) VALUES 
+('nullnull2','1234','03','管理员2');
 ```
 
 
 
+操作日志:
+
+```sh
+[root@dockeros ~]# docker network create --subnet=172.20.0.0/24 pxc-net
+cbd80cff3cfd66429edde80d63c77ccfd9bf0022ca1dce8fddedc06f473bdabe
+[root@dockeros ~]# docker volume create --name v1
+v1
+[root@dockeros ~]# docker volume create --name v2
+v2
+[root@dockeros ~]# docker volume create --name v3
+v3
+[root@dockeros ~]# ls
+activity-5.14.3.image  data                nginx-1.19.3.image  zookeeper.3.6.2.image
+anaconda-ks.cfg        mysql-5.7.31.image  tomcat2
+[root@dockeros ~]# docker run -d -p 3301:3306 -v v1:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull --privileged=true --name=node1 --net=pxc-net --ip 172.20.0.2 pxc:5.7.30
+70d1f3aa5f7803d5c5cde9e07ec2121893c6457aa3ac7f91d6d416633067fe4d
+[root@dockeros ~]# docker logs -f  node1
++ '[' m = - ']'
++ CFG=/etc/mysql/node.cnf
++ wantHelp=
++ for arg in '"$@"'
++ case "$arg" in
++ vault_secret=/etc/mysql/vault-keyring-secret/keyring_vault.conf
++ '[' -f /etc/mysql/vault-keyring-secret/keyring_vault.conf ']'
++ file_env XTRABACKUP_PASSWORD xtrabackup
++ set +o xtrace
++ file_env CLUSTERCHECK_PASSWORD clustercheck
++ set +o xtrace
+++ hostname -f
++ NODE_NAME=70d1f3aa5f78
++ NODE_PORT=3306
++ '[' -n '' ']'
++ '[' -n '' ']'
++ : checking incoming cluster parameters
+++ hostname -I
+++ awk ' { print $1 } '
++ NODE_IP=172.20.0.2
++ sed -r 's|^[#]?wsrep_node_address=.*$|wsrep_node_address=172.20.0.2|' /etc/mysql/node.cnf
++ sed -r 's|^[#]?wsrep_node_incoming_address=.*$|wsrep_node_incoming_address=70d1f3aa5f78:3306|' /etc/mysql/node.cnf
++ sed -r 's|^[#]?wsrep_sst_auth=.*$|wsrep_sst_auth='\''xtrabackup:nullnull'\''|' /etc/mysql/node.cnf
++ [[ -n '' ]]
++ [[ -n PXC ]]
++ sed -r 's|^[#]?wsrep_cluster_name=.*$|wsrep_cluster_name=PXC|' /etc/mysql/node.cnf
++ '[' -z '' ']'
++ '[' mysqld = mysqld -a -z '' ']'
++ _check_config mysqld
++ toRun=("$@" --verbose --help --wsrep-provider='none')
+++ mysqld --verbose --help --wsrep-provider=none
++ errors=
+++ _get_config datadir mysqld
+++ local conf=datadir
+++ shift
+++ awk '$1 == "datadir" && /^[^ \t]/ { sub(/^[^ \t]+[ \t]+/, ""); print; exit }'
++++ mktemp -u
+++ mysqld --verbose --help --wsrep-provider=none --log-bin-index=/tmp/tmp.LkfbwJnEuD
++ DATADIR=/var/lib/mysql/
++ '[' '!' -d /var/lib/mysql//mysql ']'
++ file_env MYSQL_ROOT_PASSWORD
++ set +o xtrace
++ '[' -z admin -a -z '' -a -z '' ']'
++ rm -rf
++ mkdir -p /var/lib/mysql/
++ echo 'Initializing database'
++ mysqld --initialize-insecure --skip-ssl
+Initializing database
+2023-12-21T00:50:37.759659Z 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details).
+2023-12-21T00:50:37.759712Z 0 [Warning] WSREP: Node is running in bootstrap/initialize mode. Disabling pxc_strict_mode checks
+2023-12-21T00:50:38.584453Z 0 [Warning] InnoDB: New log files created, LSN=45790
+2023-12-21T00:50:39.292945Z 0 [Warning] InnoDB: Creating foreign key constraint system tables.
+2023-12-21T00:50:39.301312Z 0 [Warning] No existing UUID has been found, so we assume that this is the first time that this server has been started. Generating a new UUID: f5d1d353-9f9a-11ee-98f3-0242ac140002.
+2023-12-21T00:50:39.303386Z 0 [Warning] Gtid table is not ready to be used. Table 'mysql.gtid_executed' cannot be opened.
+2023-12-21T00:50:39.314029Z 1 [Warning] root@localhost is created with an empty password ! Please consider switching off the --
+......
+2023-12-21T00:51:15.562167Z 0 [Note] WSREP: Service thread queue flushed.
+2023-12-21T00:51:15.562315Z 2 [Note] WSREP: GCache history reset: fb898b24-9f9a-11ee-8fc1-bb56e18956e5:0 -> fb898b24-9f9a-11ee-8fc1-bb56e18956e5:18
+2023-12-21T00:51:15.565156Z 2 [Note] WSREP: Synchronized with group, ready for connections
+2023-12-21T00:51:15.565187Z 2 [Note] WSREP: Setting wsrep_ready to true
+2023-12-21T00:51:15.565190Z 2 [Note] WSREP: wsrep_notify_cmd is not defined, skipping notification.
+2023-12-21T00:51:15.606417Z 0 [Note] InnoDB: Buffer pool(s) load completed at 231221  0:51:15
+2023-12-21T00:54:11.960886Z 0 [Note] InnoDB: page_cleaner: 1000ms intended loop took 5404ms. The settings might not be optimal. (flushed=0, during the time.)
+2023-12-21T00:54:11.960941Z 0 [Warning] WSREP: last inactive check more than PT1.5S (3*evs.inactive_check_period) ago (PT4.76493S), skipping check
+2023-12-21T00:55:08.729091Z 0 [Note] InnoDB: page_cleaner: 1000ms intended loop took 4733ms. The settings might not be optimal. (flushed=0, during the time.)
+2023-12-21T00:55:08.729145Z 0 [Warning] WSREP: last inactive check more than PT1.5S (3*evs.inactive_check_period) ago (PT4.67463S), skipping check
+2023-12-21T00:55:10.902366Z 0 [Warning] WSREP: last inactive check more than PT1.5S (3*evs.inactive_check_period) ago (PT2.1732S), skipping check
+
+[root@dockeros ~]# docker run -d -p 3302:3306 -v v2:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node2 --net=pxc-net --ip 172.20.0.3 pxc:5.7.30
+6ba25d381d0819bfb6255d02f4969b0ed701317444cf67bf9e53af26debb5095
+[root@dockeros ~]# 
+[root@dockeros ~]# 
+[root@dockeros ~]# 
+[root@dockeros ~]# 
+[root@dockeros ~]# 
+[root@dockeros ~]# docker run -d -p 3303:3306 -v v3:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=admin -e CLUSTER_NAME=PXC -e XTRABACKUP_PASSWORD=nullnull -e CLUSTER_JOIN=node1 --privileged=true --name=node3 --net=pxc-net --ip 172.20.0.4 pxc:5.7.30
+3188aa9cc15b5ca0563e6fe7a306d628982817c5e3cbc528ab4e620e4a4b2d0a
+```
+
+在客户端工具中执行SQL，检查数据同步：
+
+![image-20231221090501913](.\images\image-20231221090501913.png)
+
+其他节点执行插入
+
+![image-20231221090540973](.\images\image-20231221090540973.png)
+
+数据查看：
+
+![image-20231221090713955](.\images\image-20231221090713955.png)
+
 **docker-compose方式**
+
+在运行docker-compose方式前，停止之前使用命令启动的pxc
 
 准备
 
@@ -6668,7 +6807,9 @@ docker network ls
 
 ```
 
-master
+**master**
+
+docker-compose.yml
 
 ```yaml
 version: '3'
@@ -6691,7 +6832,19 @@ networks:
       name: pxc_network
 ```
 
-agent
+将docker-compose.yml文件上传/data/pxc/master目录
+
+执行启动命令
+
+```
+docker-compose up -d
+```
+
+
+
+**agent**
+
+docker-compose.yml
 
 ```yaml
 version: '3'
@@ -6730,6 +6883,14 @@ networks:
       name: pxc_network
 ```
 
+将docker-compose.yml文件上传/data/pxc/agent目录
+
+执行启动命令
+
+```
+docker-compose up -d
+```
+
 
 
 测试集群，在工具中执行SQL
@@ -6737,6 +6898,54 @@ networks:
 ```sql
 show status like 'wsrep_cluster%';
 ```
+
+输入出信息
+
+| Variable_name            | Value                                |
+| ------------------------ | ------------------------------------ |
+| wsrep_cluster_weight     | 3                                    |
+| wsrep_cluster_conf_id    | 2                                    |
+| wsrep_cluster_size       | 3                                    |
+| wsrep_cluster_state_uuid | 31bc122e-9f9f-11ee-b5b7-fe11985df30b |
+| wsrep_cluster_status     | Primary                              |
+
+
+
+执行SQL测试：
+
+```sql
+-- 创建数据库并
+CREATE DATABASE nullnulldb CHARACTER SET utf8 COLLATE utf8_bin;
+
+-- 切换数据库
+use nullnulldb;
+
+-- 创建表语句
+CREATE TABLE data_user (
+ userid int(11) NOT NULL AUTO_INCREMENT,
+ username varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ password varchar(20) COLLATE utf8_bin DEFAULT NULL,
+ userroles varchar(2) COLLATE utf8_bin DEFAULT NULL,
+ nickname varchar(50) COLLATE utf8_bin DEFAULT NULL,
+ PRIMARY KEY (userid)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+-- 插入数据
+INSERT INTO data_user (username,PASSWORD,userroles,nickname) VALUES 
+('admin','1234','04','超级管理员'),
+('nullnull','1234','03','管理员');
+
+
+-- 在任意节点插入数据，在其他节点查看
+INSERT INTO data_user (username,PASSWORD,userroles,nickname) VALUES 
+('nullnull2','1234','03','管理员2');
+```
+
+至其他节点检查数据
+
+![image-20231221092727915](.\images\image-20231221092727915.png)
+
+
 
 注意事项：
 
