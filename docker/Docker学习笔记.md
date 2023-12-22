@@ -82,6 +82,37 @@ Linux dockeros 5.4.262-1.el7.elrepo.x86_64 #1 SMP Wed Nov 29 00:56:30 EST 2023 x
 [root@dockeros ~]#
 ```
 
+升级内核至最新的版本
+
+```sh
+#1、导入仓库源
+rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org
+
+rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-2.el7.elrepo.noarch.rpm
+
+#2、查看可安装的软件包
+yum --enablerepo="elrepo-kernel" list --showduplicates | sort -r | grep kernel-ml.x86_64
+yum --enablerepo="elrepo-kernel" list --showduplicates | sort -r | grep kernel-ml.x86_64
+
+#3、选择 ML 或 LT 版本安装
+无指定版本默认安装最新
+
+# 安装 ML 版本
+yum --enablerepo=elrepo-kernel install kernel-ml-devel kernel-ml -y
+
+# 安装 LT 版本，K8S全部选这个
+yum --enablerepo=elrepo-kernel install kernel-lt-devel kernel-lt -y
+
+#4、查看现有内核启动顺序
+awk -F\' '$1=="menuentry " {print $2}' /etc/grub2.cfg
+
+#5、修改默认启动项
+xxx 为序号数字，以指定启动列表中第x项为启动项，x从0开始计数
+grub2-set-default xxxx
+```
+
+
+
 **操作命令：**
 
 ```sh
@@ -7032,7 +7063,7 @@ sysctl -p
 docker run -itd --name elasticsearch -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" elasticsearch:7.7.0
 
 #拷贝出elasticsearch.yml
-docker cp elasticsearch:/usr/share/elasticsearch/elasticsearch.yml /data/elasticsearch/
+docker cp elasticsearch:/usr/share/elasticsearch/config/elasticsearch.yml /data/elasticsearch/
 ```
 
 elasticsearch.yml
@@ -7044,6 +7075,21 @@ cluster.name: "docker-cluster"
 network.host: 0.0.0.0
 http.cors.enabled: true
 http.cors.allow-origin: "*"
+```
+
+Dockerfile
+
+```sh
+FROM elasticsearch:7.7.0
+MAINTAINER  elasticsearch-zh form data UTC by Asia/Shanghai "nullnull"
+ENV TZ Asia/Shanghai
+COPY elasticsearch.yml /usr/share/elasticsearch/config/
+```
+
+制作镜像
+
+```
+docker build -t nullnull/elasticsearch:7.7.0 .
 ```
 
 
