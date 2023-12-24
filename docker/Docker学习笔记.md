@@ -59,6 +59,8 @@ yum repolist
 **升级系统内核**
 
 ```sh
+yum update
+
 rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm
 yum --enablerepo=elrepo-kernel install -y kernel-lt
 grep initrd16 /boot/grub2/grub.cfg
@@ -7090,6 +7092,214 @@ COPY elasticsearch.yml /usr/share/elasticsearch/config/
 
 ```
 docker build -t nullnull/elasticsearch:7.7.0 .
+```
+
+docker-compose
+
+ 挂载目录 
+
+```sh
+mkdir -p /data/elasticsearch/data
+mkdir -p /data/elasticsearch/plugins
+chmod 777  /data/elasticsearch/data
+chmod 777 /data/elasticsearch/plugins
+```
+
+docker-compose.yml
+
+```yaml
+version: '3'
+services:
+  elasticsearch:
+    image: nullnull/elasticsearch:7.7.0
+    container_name: elasticsearch770
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms2048m -Xmx2048m"
+    restart: always
+    volumes:
+      - "/data/elasticsearch/data:/usr/share/elasticsearch/data"
+      - "/data/elasticsearch/plugins:/usr/share/elasticsearch/plugins"
+  kibana:
+    image: kibana:7.7.0
+    container_name: kibana7
+    ports:
+      - 5601:5601
+    restart: always
+    depends_on:
+      - elasticsearch
+  elasticsearchhead:
+    image: bolingcavalry/elasticsearch-head:6
+    container_name: elasticsearchhead
+    environment:
+      - "TZ=Asia/Shanghai"
+    ports:
+      - 9100:9100
+    restart: always
+    depends_on:
+      - elasticsearch
+```
+
+启动服务
+
+将docker-compose启动上传服务器
+
+```sh
+docker-compose up -d
+```
+
+访问测试：
+
+```sh
+http://192.168.5.20:9200/
+
+http://192.168.5.20:9100/
+
+http://192.168.5.20:5601/
+```
+
+
+
+至此elastic的compose安装已经成功
+
+**安装ik分词器**
+
+```sh
+# 官网地址
+https://github.com/medcl/elasticsearch-analysis-ik
+
+# 分词名下载地址
+https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.7.0/elasticsearch-analysis-ik-7.7.0.zip
+
+cd /data/elasticsearch/plugins
+mkdir -p ik
+# 放入指定的ik目录
+
+
+# 重启ES
+docker-compose restart
+```
+
+## docker安装fastDFS
+
+安装条件：内存至少2G以上
+
+官网地址：
+
+```sh
+https://github.com/happyfish100/
+
+# 帮助手册
+https://github.com/happyfish100/fastdfs/wiki
+
+#下载地址:
+https://github.com/happyfish100/fastdfs-nginx-module
+https://github.com/happyfish100/libfastcommon
+http://nginx.org/download/nginx-1.16.1.tar.gz
+
+#指定下载的相关具体版本
+https://codeload.github.com/happyfish100/libfastcommon/tar.gz/refs/tags/V1.0.43
+https://codeload.github.com/happyfish100/fastdfs-nginx-module/tar.gz/refs/tags/V1.22
+http://nginx.org/download/nginx-1.16.1.tar.gz
+```
+
+本方法安装采用自定义镜像的方法
+
+官网提供镜像制作的素材，但是需要更改Dockerfile文件及Source目录中的软件包。将官方的fastdfs-6.06.tar.gz解压缩，里面有docker目录，提供单机和集群版本。但是都需要修改才能使用。此处使用local版本
+
+Dockerfile
+
+有3处改动
+
+1.  ADD的时候源文件，需要增加相应的版本号信息
+2. cd目录时需要增加对应版本号信息
+3. 基础镜像从centos7升级到centos7.8.2003版本
+
+```sh
+# centos 7
+FROM centos:7.8.2003
+# 添加配置文件
+# add profiles
+ADD conf/client.conf /etc/fdfs/
+ADD conf/http.conf /etc/fdfs/
+ADD conf/mime.types /etc/fdfs/
+ADD conf/storage.conf /etc/fdfs/
+ADD conf/tracker.conf /etc/fdfs/
+ADD fastdfs.sh /home
+ADD conf/nginx.conf /etc/fdfs/
+ADD conf/mod_fastdfs.conf /etc/fdfs
+
+# 添加源文件,对应的文件需要下载，并且放到对应的目录下,官方虽然此文件，但大小为0，基本没有用。需要替换
+# add source code
+ADD source/libfastcommon-1.0.43.tar.gz /usr/local/src/
+ADD source/fastdfs-6.06.tar.gz /usr/local/src/
+ADD source/fastdfs-nginx-module-1.22.tar.gz /usr/local/src/
+ADD source/nginx-1.16.1.tar.gz /usr/local/src/
+
+# Run
+RUN yum install git gcc gcc-c++ make automake autoconf libtool pcre pcre-devel zlib zlib-devel openssl-devel wget vim -y \
+  &&  mkdir /home/dfs   \
+  &&  cd /usr/local/src/  \
+  &&  cd libfastcommon-1.0.43/   \
+  &&  ./make.sh && ./make.sh install  \
+  &&  cd ../  \
+  &&  cd fastdfs-6.06/   \
+  &&  ./make.sh && ./make.sh install  \
+  &&  cd ../  \
+  &&  cd nginx-1.16.1/  \
+  &&  ./configure --add-module=/usr/local/src/fastdfs-nginx-module-1.22/src/   \
+  &&  make && make install  \
+  &&  chmod +x /home/fastdfs.sh
+
+# 此需要注释 
+# 不然会报错 did not complete successfully: exit code: 1
+#RUN ln -s /usr/local/src/fastdfs/init.d/fdfs_trackerd /etc/init.d/fdfs_trackerd \
+#  && ln -s /usr/local/src/fastdfs/init.d/fdfs_storaged /etc/init.d/fdfs_storaged
+
+# export config
+VOLUME /etc/fdfs
+
+EXPOSE 22122 23000 8888 80
+ENTRYPOINT ["/home/fastdfs.sh"]
+```
+
+制作镜像
+
+```sh
+docker build --rm -t nullnull/fastdfs:1.0 .
+```
+
+启动镜像
+
+官网上提供方式启动，会报找到不到127.0.0.1:23000端口，需要使用--net=host方式启动
+
+```sh
+# 启动命令
+docker run -d -e FASTDFS_IPADDR=192.168.5.20 --name fastdfs --restart=always --net=host nullnull/fastdfs:1.0
+```
+
+至此fastDFS安装完成。
+
+## docker安装gitlab
+
+>官网地址:
+>
+>https://hub.docker.com/r/gitlab/gitlab-ce
+>
+>教程地址：
+>
+>https://docs.gitlab.com/omnibus/docker/
+
+基础镜像:
+
+```sh
+#英文版
+docker pull gitlab/gitlab-ce:12.7.6-ce.0
+#中文版
+docker pull twang2218/gitlab-ce-zh:11.1.4
 ```
 
 
