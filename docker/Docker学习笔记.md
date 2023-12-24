@@ -7302,7 +7302,33 @@ docker pull gitlab/gitlab-ce:12.7.6-ce.0
 docker pull twang2218/gitlab-ce-zh:11.1.4
 ```
 
+运行容器 
 
+```
+# 创建目录
+mkdir -p /data/gitlab/config
+mkdir -p /data/gitlab/log
+mkdir -p /data/gitlab/data
+
+docker run -itd --name gitlab -p 443:443 -p 80:80 -p 222:22 --restart always -m 4GB -v /data/gitlab/config:/etc/gitlab -v /data/gitlab/logs:/var/log/gitlab -v /data/gitlab/data:/var/opt/gitlab -e TZ=Asia/Shanghai gitlab/gitlab-ce:12.7.6-ce.0
+```
+
+进行
+
+```sh
+vi /data/gitlab/config/gitlab.rb
+
+#配置项目访问地址：
+external_url 'http://192.168.5.20'
+
+# 配置ssh协议所使用的访问地址和端口
+gitlab_rails['gitlab_ssh_host'] = '192.168.5.20'
+gitlab_rails['time_zone'] = 'Asia/Shanghai'
+gitlab_rails['gitlab_shell_ssh_port'] = 222
+
+```
+
+配制完成后，需要进行重启
 
 
 
