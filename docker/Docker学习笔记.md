@@ -7444,9 +7444,7 @@ docker node ls
 docker network ls
 ```
 
-
-
-
+样例：
 
 ```+
 [root@os20 ~]# docker swarm init --advertise-addr 192.168.5.20:2377 
@@ -7471,6 +7469,304 @@ ceaf6b0af37d   docker_gwbridge   bridge    local
 cbeae8ea834c   none              null      local
 [root@os20 ~]# 
 ```
+
+其他机器加入集群
+
+Docker swarm的新节点加入策略是从管理节点获取一个加入的命令，例如：
+
+```sh
+docker swarm join --token SWMTKN-1-4h1f93z8fexow1gaz0vnegyu2u8oe9j2w0wwuhunfhqkojmq5a-0napytkn83uf39d51febo1i9d 192.168.5.20:2377
+```
+
+任何想加入集群的机器，只需要自己执行了这个命令，就可以加入swarm集群。
+
+```sh
+#1 如果有新的管理节点需要加入，在管理节点执行docker swarm join-token manager 即可得到管理节点manager的join token
+docker swarm join-token manager
+
+#2. 如果有新的工作节点需要加入，在管理节点执行docker swarm join-token worker 即可得到管理节点work节点的join token
+docker swarm join-token worker
+
+docker node ls
+```
+
+manager节点状态说明
+
+- Leader 意味着该节点是这个集群的管理和编排决策的主要管理器节点
+- Reachable 意味着节点是管理者，正在参与Raft共识。如果领导节点不可用，则该节点有资格被选为领导者。
+- Unavaiable 意味着节点是不能与其他管理器节点通信的管理器，如果管理节点不可用，应该将新的管理器节点加入集群，或者将工作器节点升级为管理器。
+
+AVAILABILITY的说明
+
+- Active 意味着调度程序可以将任务分配给节点。
+- Pause 意味着调度程序不会将新任务分配给节点，但现在任务仍在运行。
+- Drain 意味着调度程序不会向该节点分配新任务，调度程序关闭所有现有任务并在其他节点上调度它们 。
+
+manager节点信息查看
+
+```sh
+[root@os20 ~]# docker info
+Client: Docker Engine - Community
+ Version:    24.0.7
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.11.2
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.21.0
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ Containers: 1
+  Running: 1
+  Paused: 0
+  Stopped: 0
+ Images: 1
+ Server Version: 24.0.7
+ Storage Driver: overlay2
+  Backing Filesystem: xfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: active
+  NodeID: xvwlotjgywnz841e6ln3tznc9
+  Is Manager: true
+  ClusterID: qfjsswd463htaitvgofcyrucc
+  Managers: 1
+  Nodes: 3
+  Default Address Pool: 10.0.0.0/8  
+  SubnetSize: 24
+  Data Path Port: 4789
+  Orchestration:
+   Task History Retention Limit: 5
+  Raft:
+   Snapshot Interval: 10000
+   Number of Old Snapshots to Retain: 0
+   Heartbeat Tick: 1
+   Election Tick: 10
+  Dispatcher:
+   Heartbeat Period: 5 seconds
+  CA Configuration:
+   Expiry Duration: 3 months
+   Force Rotate: 0
+  Autolock Managers: false
+  Root Rotation In Progress: false
+  Node Address: 192.168.5.20
+  Manager Addresses:
+   192.168.5.20:2377
+ Runtimes: io.containerd.runc.v2 runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: 3dd1e886e55dd695541fdcd67420c2888645a495
+ runc version: v1.1.10-0-g18a0cb0
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+ Kernel Version: 5.4.265-1.el7.elrepo.x86_64
+ Operating System: CentOS Linux 7 (Core)
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 2
+ Total Memory: 15.63GiB
+ Name: os20
+ ID: ef9373fd-c897-40a2-a63c-7adc844837f4
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Live Restore Enabled: false
+```
+
+工作节点的信息
+
+```sh
+[root@os21 ~]# docker info
+Client: Docker Engine - Community
+ Version:    24.0.7
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.11.2
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.21.0
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ Containers: 0
+  Running: 0
+  Paused: 0
+  Stopped: 0
+ Images: 1
+ Server Version: 24.0.7
+ Storage Driver: overlay2
+  Backing Filesystem: xfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: active
+  NodeID: js4h1ntetrejnv6dam67atf37
+  Is Manager: false
+  Node Address: 192.168.5.21
+  Manager Addresses:
+   192.168.5.20:2377
+ Runtimes: io.containerd.runc.v2 runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: 3dd1e886e55dd695541fdcd67420c2888645a495
+ runc version: v1.1.10-0-g18a0cb0
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: builtin
+ Kernel Version: 5.4.265-1.el7.elrepo.x86_64
+ Operating System: CentOS Linux 7 (Core)
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 2
+ Total Memory: 15.63GiB
+ Name: os21
+ ID: de81ef7b-17b9-44dc-9292-29cc0c00681f
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Live Restore Enabled: false
+```
+
+### 节点权限的提升与降低
+
+```sh
+# 1, 将worker 节点提升为manager节点,在manager节点执行命令
+docker node promote os21
+docker node ls
+
+# 2,将manager节点降低为workder节点，在manager节点执行命令
+docker node demote os21
+docker node ls
+```
+
+样例：
+
+```sh
+[root@os20 ~]# docker node promote os21
+Node os21 promoted to a manager in the swarm.
+[root@os20 ~]# docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+xvwlotjgywnz841e6ln3tznc9 *   os20       Ready     Active         Leader           24.0.7
+js4h1ntetrejnv6dam67atf37     os21       Ready     Active         Reachable        24.0.7
+n2zen7d2q1rqdxqs71n00xgf7     os22       Ready     Active                          24.0.7
+[root@os20 ~]#
+[root@os20 ~]# docker node demote os21
+Manager os21 demoted in the swarm.
+[root@os20 ~]# docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+xvwlotjgywnz841e6ln3tznc9 *   os20       Ready     Active         Leader           24.0.7
+js4h1ntetrejnv6dam67atf37     os21       Ready     Active                          24.0.7
+n2zen7d2q1rqdxqs71n00xgf7     os22       Ready     Active                          24.0.7
+[root@os20 ~]# 
+```
+
+### 脱离集群
+
+```sh
+# 在要脱离集群的节点上执行命令:
+docker swarm leave
+# 过个几分钟去manager节点上查看节点的状态
+docker node ls
+
+# 如果要删除脱离集群的节点
+# 1. 需要先降级为worker节点后，再删除
+docker node rm 节点名称|节点ID
+
+
+# manager节点只能强制退出，manager退出后整个集群将不存在。
+docker swarm leave --force 
+```
+
+样例：
+
+```sh
+# os21节点
+[root@os21 ~]# docker swarm leave
+Node left the swarm.
+[root@os21 ~]# 
+
+# 至管理节点查看
+[root@os20 ~]# docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+xvwlotjgywnz841e6ln3tznc9 *   os20       Ready     Active         Leader           24.0.7
+js4h1ntetrejnv6dam67atf37     os21       Down      Active                          24.0.7
+n2zen7d2q1rqdxqs71n00xgf7     os22       Ready     Active                          24.0.7
+[root@os20 ~]# 
+
+# 至管理节点操作
+[root@os20 ~]# docker node rm os21
+os21
+[root@os20 ~]# docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+xvwlotjgywnz841e6ln3tznc9 *   os20       Ready     Active         Leader           24.0.7
+n2zen7d2q1rqdxqs71n00xgf7     os22       Ready     Active                          24.0.7
+[root@os20 ~]# 
+```
+
+
+
+### 图形化界面
+
+注意此需要安装在manager节点上
+
+官网地址：
+
+```http
+https://hub.docker.com/r/dockersamples/visualizer
+```
+
+镜像信息：
+
+```
+docker pull dockersamples/visualizer:latest
+
+# 运行镜像
+docker run -itd --name visualizer -p 8099:8080 -e HOST=192.168.5.20 -e 8080 -v /var/run/docker.sock:/var/run/docker.sock dockersamples/visualizer:latest
+
+
+# 也可以采用server命令运行镜像
+docker service create \
+  --name=viz \
+  --publish=8080:8080/tcp \
+  --constraint=node.role==manager \
+  --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+ dockersamples/visualizer
+
+
+```
+
+
+
+
 
 
 
