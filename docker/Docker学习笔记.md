@@ -7378,9 +7378,99 @@ VCS->Enable Version Control Integration...
 
 
 
+## Docker的Swarm集群
+
+### 节点信息
+
+| 主机名 | IP地址       | 说明        |
+| ------ | ------------ | ----------- |
+| os20   | 192.168.5.20 | manager节点 |
+| os21   | 192.168.5.21 | work01节点  |
+| 0s22   | 192.168.5.22 | work02节点  |
+
+硬件要求：
+
+| 硬件资源 | 最小本所 | 推荐配制 |
+| -------- | -------- | -------- |
+| CPU      | 1CPU     | 2CPU     |
+| 内存     | 2G       | 2-4G     |
+| 硬盘     | 20G      | 50G      |
+
+### 安装docker-swarm
+
+官方文档:
+
+https://docs.docker.com/engine/swarm/
+
+说明：
+
+docker Swarm和Docker Compose一样，都是Docker官方容器编排项目，但不同的是，Docker Compose是一个在单个服务器或主机上创建多个容器的工具，可以将缓存某个应用的多个Docker容器编码在一起，同时管理，而Docker Swarm则可以在多个服务器或者主机上创建容器集群服务，其主要作用把若干台主机抽象为一个整体，并且通过一个入口 （Docker stack）统一管理这些Docker主机上的各种Docker资源。
+
+stack是构建环境中的service集群，它是自动部署多个相互关联的服务的简便方法。而无需单独定义每个服务。
+
+stack file是一种yaml格式的文件，类似于docker-compose.yml，它定义了一个或多个服务，并定义了服务的环境变量、部署标签、容器数量以及相关的环境特定配制等。
+
+Docker Swarm由两部分组成
+
+- docker集群：将一个或者多个Docker节点组织起来，用户就能以集群的方式进行管理。
+- 应用编排：有一套APi用来部署和管理容器。
+
+![image-20231225124428038](.\images\image-20231225124428038.png)
+
+建议配制私有化仓库
+
+非必要缓件，集群中的每个节点都需要安装镜像，如果不搭建私有镜像，下载速度比较耗时
+
+```sh
+vi /etc/docker/daemon.json
+"insecure-registries":["192.168.5.21:5000"]
+systemctl daemon-reload
+systemctl restart docker
+```
+
+初始化集群
+
+```sh
+# --advertise-addr 用来指定其他节点连接m0时的地址
+# --listen-addr 用来指定swarm流量的IP和端口
+# 会在本地创建一个Docker网络，类型为
+# 在docker19，版本时，需要指定这两个参数，新版本不再需要指定 --listen-addr 192.168.5.20:2377
+docker swarm init  --advertise-addr 192.168.5.20:2377 --listen-addr 192.168.5.20:2377
+
+docker swarm init --advertise-addr 192.168.5.20:2377 
+
+docker node ls 
+
+docker network ls
+```
 
 
 
+
+
+```+
+[root@os20 ~]# docker swarm init --advertise-addr 192.168.5.20:2377 
+Swarm initialized: current node (xvwlotjgywnz841e6ln3tznc9) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-4h1f93z8fexow1gaz0vnegyu2u8oe9j2w0wwuhunfhqkojmq5a-0napytkn83uf39d51febo1i9d 192.168.5.20:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+[root@os20 ~]# docker node ls 
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+xvwlotjgywnz841e6ln3tznc9 *   os20       Ready     Active         Leader           24.0.7
+[root@os20 ~]# 
+[root@os20 ~]# docker network ls
+NETWORK ID     NAME              DRIVER    SCOPE
+d2c35cac0418   bridge            bridge    local
+ceaf6b0af37d   docker_gwbridge   bridge    local
+2dfb13ba7720   host              host      local
+3rd93mcyd8e5   ingress           overlay   swarm
+cbeae8ea834c   none              null      local
+[root@os20 ~]# 
+```
 
 
 
