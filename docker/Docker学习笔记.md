@@ -7330,6 +7330,56 @@ gitlab_rails['gitlab_shell_ssh_port'] = 222
 
 配制完成后，需要进行重启
 
+开始登录网页版本的gitlab进行配制。
+
+首先进入修改密码
+
+```sh
+username: root
+password: 12345678
+
+创建组:dev
+# 组分类： private : 私有的，Internal: 内部的 public 公开的
+
+创建项目：
+# 注意，不要初始化README，否则本地项目无法直接上传至gitlab服务器上.
+
+创建用户:
+#权限分两种：Regular： 普通权限用户。 Admin: 具有管理员权限的用户。
+#创建后才能再次设置密码.
+
+#给群组中的用户分配权限分五种：
+#Guest:可以创建issue、发表评论、不能读写版本库。
+#Reporter:可以克隆代码，不能提交、QA、PM可以赋予这个权限。
+#Developer:可以克隆代码、开发、提交、push，普通开发可以赋予这个权限。
+#Maintainer:可以创建项目、添加tag、保护分支、添加项目成员、编辑项目，核心开发人员可以赋予这个权限。
+#Owner:可以设置项目访问权限、-Visibility Level、删除项目、迁移项目、管理组成员、开发组组长可以赋予这个权限。
+```
+
+
+
+IDEA操作
+
+```
+# 1. 创建本地仓库
+VCS->Enable Version Control Integration...
+
+# 2. 建立缓冲区
+项目右键->git->add
+
+# 3. 将代码提交本地仓库
+项目右键->git->commit Directory
+
+# 4.设置远程仓库的地址
+项目右键->git->Repository->Remote
+
+# 5. 将本地代码推送远程gitlib仓库。
+```
+
+
+
+
+
 
 
 
