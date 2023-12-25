@@ -7787,6 +7787,344 @@ verify: Service converged
 
 ![image-20231225190840221](.\images\image-20231225190840221.png)
 
+### swarm命令
+
+| 命令                    | 描述                       |
+| ----------------------- | -------------------------- |
+| docker swarm init       | 初始化一个swarm集群        |
+| docker swarm join       | 加入集群作为节点或者管理器 |
+| docker swarm join-token | 管理用于加入集群的令牌     |
+| docker swarm leave      | 离开swarm集群              |
+| docker swarm unlock     | 解锁swarm集群              |
+| docker swarm unlock-key | 管理解锁钥匙               |
+| docker swarm update     | 更新swarm集群              |
+
+node命令
+
+| 命令                | 描述                                             |
+| ------------------- | ------------------------------------------------ |
+| docker node demote  | 从swarm集群管理器中降级一个或多个节点            |
+| docker node inspect | 显示一个或者多个节点的详细信息                   |
+| docker node ls      | 列出swarm集群的节点                              |
+| docker node promote | 将一个或者多个节点加入集群管理器中               |
+| docker node ps      | 列出一个或者多个节点上运行的任务，默认为当前节点 |
+| docker node rm      | 从swarm集群删除一个或者多个节点                  |
+| docker node update  | 更新一个节点                                     |
+
+service命令
+
+| 命令                    | 描述                           |
+| ----------------------- | ------------------------------ |
+| docker service create   | 创建服务                       |
+| docker service inspect  | 显示一个或者多个服务的详细信息 |
+| docker service logs     | 获取服务的日志                 |
+| docker service ls       | 列出服务                       |
+| docker service rm       | 删除一个或者多个服务           |
+| docker service scale    | 设置服务的实例数量             |
+| docker service update   | 更新服务                       |
+| docker service rollback | 恢复服务至update之前的配置     |
+
+stack命令
+
+| 命令                  | 描述                         |
+| --------------------- | ---------------------------- |
+| docker stack deploy   | 部署新的堆栈或者更新现有堆栈 |
+| docker stack ls       | 列出现有堆栈                 |
+| docker stack ps       | 列出堆栈中的任务             |
+| docker stack rm       | 删除一个或多个堆栈           |
+| docker stack services | 列出堆栈中的服务             |
+
+
+
+### 命令行部署nginx
+
+```sh
+# 准备基础镜像
+docker pull nginx:1.18.0-alpine
+docker pull nginx:1.19.3-alpine
+
+docker images ls
+
+# 导出镜像，并分发到其他节点
+docker save -o nginx-1.18.0-alipine.image 684dbf9f01f3
+docker save -o nginx-1.19.3.image 4efb29ff172a
+
+scp nginx-*  root@192.168.5.21:/root/
+scp nginx-*  root@192.168.5.22:/root/
+
+# 基础节点装载镜像
+docker load < nginx-1.18.0-alipine.image 
+docker load < nginx-1.19.3.image 
+
+```
+
+主节点上执行
+
+```sh
+[root@os20 ~]# docker pull nginx:1.18.0-alpine
+1.18.0-alpine: Pulling from library/nginx
+ddad3d7c1e96: Already exists 
+c7974bc8b744: Pull complete 
+d04f0a2e9201: Pull complete 
+df7ae1cb4591: Pull complete 
+4259d8811e1d: Pull complete 
+Digest: sha256:93baf2ec1bfefd04d29eb070900dd5d79b0f79863653453397e55a5b663a6cb1
+Status: Downloaded newer image for nginx:1.18.0-alpine
+docker.io/library/nginx:1.18.0-alpine
+[root@os20 ~]# docker pull nginx:1.19.3-alpine
+1.19.3-alpine: Pulling from library/nginx
+188c0c94c7c5: Pull complete 
+61c2c0635c35: Pull complete 
+378d0a9d4d5f: Pull complete 
+2fe865f77305: Pull complete 
+b92535839843: Pull complete 
+Digest: sha256:5aa44b407756b274a600c7399418bdfb1d02c33317ae27fd5e8a333afb115db1
+Status: Downloaded newer image for nginx:1.19.3-alpine
+docker.io/library/nginx:1.19.3-alpine
+[root@os20 images]# docker images
+REPOSITORY                 TAG             IMAGE ID       CREATED       SIZE
+dockersamples/visualizer   latest          43ce62428b8c   2 years ago   185MB
+nginx                      1.18.0-alpine   684dbf9f01f3   2 years ago   21.9MB
+nginx                      1.19.3-alpine   4efb29ff172a   3 years ago   21.8MB
+gitlab/gitlab-ce           12.7.6-ce.0     b9923370e7ce   3 years ago   1.85GB
+[root@os20 images]# docker save -o nginx-1.18.0-alipine.image 684dbf9f01f3
+[root@os20 images]# docker save -o nginx-1.19.3.image 4efb29ff172a
+```
+
+其他节点:
+
+```
+[root@os21 images]# docker load < nginx-1.18.0-alipine.image 
+9a5d14f9f550: Loading layer [==================================================>]  5.885MB/5.885MB
+d1cf28aead06: Loading layer [==================================================>]  17.48MB/17.48MB
+154dfe1bc87d: Loading layer [==================================================>]  3.072kB/3.072kB
+bda4c7e5e442: Loading layer [==================================================>]  4.096kB/4.096kB
+f88365b5c5d3: Loading layer [==================================================>]  3.584kB/3.584kB
+Loaded image ID: sha256:684dbf9f01f3250437d595669c7437c202573798ab34247d50338ff630e58b6a
+[root@os21 images]# docker load < nginx-1.19.3.image 
+ace0eda3e3be: Loading layer [==================================================>]  5.843MB/5.843MB
+4daeb7840e4d: Loading layer [==================================================>]  17.45MB/17.45MB
+835f5b67679c: Loading layer [==================================================>]  3.072kB/3.072kB
+d0e26daf1f58: Loading layer [==================================================>]  4.096kB/4.096kB
+8d6d1951ab0a: Loading layer [==================================================>]  3.584kB/3.584kB
+Loaded image ID: sha256:4efb29ff172a12f4a5ed5bc47eda3596f8b812173cf609cbb489253dad6e737f
+[root@os21 images]# 
+```
+
+部署nginx
+
+```sh
+# 在manager节点上创建overlay网络
+docker network create -d overlay nginx-net
+
+# 创建5个nginx容器的集群
+docker service create --name nginx --network nginx-net -p 80:80 --replicas 5  nginx:1.18.0-alpine
+
+# 在manager节点查看服务的情况，workder节点无法查看
+docker service ls
+
+# 在manager节点或者worker节点可以执行docker ps命令查看本机上的容器
+docker ps
+
+# manager节点上只用管理集群，不希望部署服务
+docker node update --availability drain os20
+
+# 使用命令进行服务的缩容
+docker service scale nginx=2
+```
+
+
+
+操作 
+
+```sh
+[root@os20 ~]# docker network create -d overlay nginx-net
+qznk57mr47jbk0ui95qkumwtd
+[root@os20 ~]# docker service create --name nginx --network nginx-net -p 80:80 --replicas 5  nginx:1.18.0-alpine
+6qz1fqdfrfpkjo04r14cjfyyu
+overall progress: 5 out of 5 tasks 
+1/5: running   [==================================================>] 
+2/5: running   [==================================================>] 
+3/5: running   [==================================================>] 
+4/5: running   [==================================================>] 
+5/5: running   [==================================================>] 
+verify: Service converged 
+[root@os20 ~]# docker service ls
+ID             NAME      MODE         REPLICAS   IMAGE                 PORTS
+6qz1fqdfrfpk   nginx     replicated   5/5        nginx:1.18.0-alpine   *:80->80/tcp
+```
+
+查看部署的nginx
+
+![image-20231225232845682](.\images\image-20231225232845682.png)
+
+当执行manager节点只管理不部署服务的命令后。
+
+```
+[root@os20 ~]# docker node update --availability drain os20
+os20
+```
+
+![image-20231225233226629](.\images\image-20231225233226629.png)
+
+当执行缩容后
+
+```sh
+[root@os20 ~]# docker service scale nginx=2
+nginx scaled to 2
+overall progress: 2 out of 2 tasks 
+1/2:   
+2/2: running   [==================================================>] 
+verify: Service converged 
+[root@os20 ~]# 
+```
+
+![image-20231225233504849](.\images\image-20231225233504849.png)
+
+
+
+升级nginx版本
+
+```sh
+# 1. 更新镜像
+docker service update --image nginx:1.19.3-alpine nginx
+
+
+# 2. 添加或者更新一个对外端口
+docker service  update --publish-add 8090:80 nginx
+```
+
+样例:
+
+```sh
+[root@os20 ~]# docker service update --image nginx:1.19.3-alpine nginx
+nginx
+overall progress: 2 out of 2 tasks 
+1/2: running   [==================================================>] 
+2/2: running   [==================================================>] 
+verify: Service converged 
+[root@os20 ~]# docker service  update --publish-add 8090:80 nginx
+nginx
+overall progress: 2 out of 2 tasks 
+1/2: running   [==================================================>] 
+2/2: running   [==================================================>] 
+verify: Service converged 
+
+```
+
+
+
+![image-20231225233840591](.\images\image-20231225233840591.png)
+
+清理
+
+```sh
+[root@os20 ~]# docker service rm nginx
+nginx
+[root@os20 ~]# docker network rm nginx-net
+nginx-net
+```
+
+
+
+
+
+
+
+### docker-compose部署
+
+docker-compose.yml
+
+```yaml
+version: '3'
+services:
+  nginx-web:
+    image: nginx:1.19.3-alipine
+    container_name: nginx
+    networks:
+      - nginx-net
+    restart: always
+    ports:
+      - 80:80
+    deploy:
+      replicas: 5
+networks:
+  nginx-net:
+    driver: overlay
+```
+
+上传服务器
+
+```
+在manager节点上创建docker-compose.yml文件，执行命令
+docker stack deploy nginx-stack --compose-file=docker-compose.yml
+docker stack deploy nginx-stack -c docker-compose.yml
+
+# 查看stack服务运行情况
+docker stack services nginx-stack
+
+# 查看5个容器运行在哪些个节点。
+docker service ls nginx-stack_nginx-web
+docker service ps nginx-stack_nginx-web
+
+```
+
+日志
+
+```sh
+[root@os20 nginx]# docker service ls 
+ID             NAME                    MODE         REPLICAS   IMAGE                  PORTS
+nfj0hutdjks6   nginx-stack_nginx-web   replicated   0/5        nginx:1.19.3-alipine   *:80->80/tcp
+[root@os20 nginx]# docker service ps nginx-stack_nginx-web
+ID             NAME                          IMAGE                  NODE      DESIRED STATE   CURRENT STATE                      ERROR                              PORTS
+tyc7vs2a6mhb   nginx-stack_nginx-web.1       nginx:1.19.3-alipine   os22      Running         Preparing 13 seconds ago                                              
+dn9ffxyh9ufo    \_ nginx-stack_nginx-web.1   nginx:1.19.3-alipine   os21      Shutdown        Rejected 14 seconds ago            "No such image: nginx:1.19.3-a…"   
+aaya0opqjfxu    \_ nginx-stack_nginx-web.1   nginx:1.19.3-alipine   os21      Shutdown        Rejected 48 seconds ago            "No such image: nginx:1.19.3-a…"   
+1qsj3s1cg0c0    \_ nginx-stack_nginx-web.1   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+bzknjzhn0p9q    \_ nginx-stack_nginx-web.1   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+y3uyztpli81h   nginx-stack_nginx-web.2       nginx:1.19.3-alipine   os22      Ready           Preparing less than a second ago                                      
+1askqsc687pa    \_ nginx-stack_nginx-web.2   nginx:1.19.3-alipine   os22      Shutdown        Rejected 1 second ago              "No such image: nginx:1.19.3-a…"   
+kckcvc69j34m    \_ nginx-stack_nginx-web.2   nginx:1.19.3-alipine   os21      Shutdown        Rejected 19 seconds ago            "No such image: nginx:1.19.3-a…"   
+woojxnm6cfeo    \_ nginx-stack_nginx-web.2   nginx:1.19.3-alipine   os22      Shutdown        Rejected 53 seconds ago            "No such image: nginx:1.19.3-a…"   
+rxiq2dchv2pi    \_ nginx-stack_nginx-web.2   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+qbe4evfbpida   nginx-stack_nginx-web.3       nginx:1.19.3-alipine   os22      Running         Preparing 32 seconds ago                                              
+x2kv5azkmmzx    \_ nginx-stack_nginx-web.3   nginx:1.19.3-alipine   os21      Shutdown        Rejected 33 seconds ago            "No such image: nginx:1.19.3-a…"   
+i1r8kkrd9jzs    \_ nginx-stack_nginx-web.3   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+ki5p23iyzdw9    \_ nginx-stack_nginx-web.3   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+ka860gof6u5c    \_ nginx-stack_nginx-web.3   nginx:1.19.3-alipine   os21      Shutdown        Rejected 2 minutes ago             "No such image: nginx:1.19.3-a…"   
+2jbp7vkdn4rt   nginx-stack_nginx-web.4       nginx:1.19.3-alipine   os22      Ready           Preparing 2 seconds ago                                               
+yehyllbi1pxt    \_ nginx-stack_nginx-web.4   nginx:1.19.3-alipine   os21      Shutdown        Rejected 3 seconds ago             "No such image: nginx:1.19.3-a…"   
+juha3b5f7tce    \_ nginx-stack_nginx-web.4   nginx:1.19.3-alipine   os21      Shutdown        Rejected 36 seconds ago            "No such image: nginx:1.19.3-a…"   
+0yeyzlzh052x    \_ nginx-stack_nginx-web.4   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+hlpu128jj203    \_ nginx-stack_nginx-web.4   nginx:1.19.3-alipine   os21      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+x6wurftcgiyt   nginx-stack_nginx-web.5       nginx:1.19.3-alipine   os22      Ready           Preparing 3 seconds ago                                               
+9llvg8qp07u1    \_ nginx-stack_nginx-web.5   nginx:1.19.3-alipine   os22      Shutdown        Rejected 4 seconds ago             "No such image: nginx:1.19.3-a…"   
+sfwonpdanzuy    \_ nginx-stack_nginx-web.5   nginx:1.19.3-alipine   os21      Shutdown        Rejected 23 seconds ago            "No such image: nginx:1.19.3-a…"   
+mpreaoh44760    \_ nginx-stack_nginx-web.5   nginx:1.19.3-alipine   os21      Shutdown        Rejected 57 seconds ago            "No such image: nginx:1.19.3-a…"   
+9x8rox4k57m3    \_ nginx-stack_nginx-web.5   nginx:1.19.3-alipine   os22      Shutdown        Rejected about a minute ago        "No such image: nginx:1.19.3-a…"   
+[root@os20 nginx]# 
+```
+
+
+
+总结：
+
+- networks中也可以不指定driver:overlay, 因为docker swarm默认网络类型是overlay
+- 整个network都可以不用配置。stack部署会默认创建网络。如果我们定义网络。docker stack deploy时会先默认创建一个网络，在创建一个我们定义的网络。
+- 一定要把镜像先拉取到本地再执行。
+
+### Docker stack和Docker Compose区别
+
+- Docker stack会忽略了构建指令，无法使用stack命令构建新镜像，它是需要镜像预先构建好的。所以docker-compose更适合于开发场景。
+- Docker Compose是一个Python项目，在内部，它使用Docker API规范来操作容器。 所以需要安装Docker-Compose，以便在Dokcer一起在计算机上使用。
+- Docker stack功能包含在Docker引擎中。不需要安装额外的包来使用它，Docker stack只是swarm mode的一部分
+- Docker stack不支持基于第2版本写的Docker-compose.yml，也就是version版本至少为3，然尔Docker Compose对版本为2和3的文件仍然可以处理。
+- Docker stack把docker compose的所有工作都做完了，因此docker stack将占主导地位。对于大多数用户来说，切换到docker stack即不困难也不需要太多的开销，建议使用Docker stack.
+
+
+
+
+
 
 
 

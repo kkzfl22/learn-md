@@ -1,0 +1,15 @@
+version: '3'
+services:
+  nginx-web:
+    image: nginx:1.19.3-alipine
+    container_name: nginx
+    networks:
+      - nginx-net
+    restart: always
+    ports:
+      - 80:80
+    deploy:
+      replicas: 5
+networks:
+  nginx-net:
+    driver: overlay
