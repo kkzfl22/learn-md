@@ -7761,10 +7761,31 @@ docker service create \
   --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
  dockersamples/visualizer
 
-
 ```
 
+示例：
 
+```
+[root@os20 ~]# docker run -itd --name visualizer -p 8099:8080 -e HOST=192.168.5.20 -e 8080 -v /var/run/docker.sock:/var/run/docker.sock dockersamples/visualizer:latest
+208af7b51f3c753210092575d915eb016e8200981cf6526d3ca17667768b07b1
+[root@os20 ~]# docker stop visualizer && docker rm visualizer
+visualizer
+visualizer
+
+[root@os20 ~]# docker service create \
+>   --name=viz \
+>   --publish=8080:8080/tcp \
+>   --constraint=node.role==manager \
+>   --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+>  dockersamples/visualizer
+0r2s3o5e6sgqn09zzi5m07w5m
+overall progress: 1 out of 1 tasks 
+1/1: running   
+verify: Service converged 
+[root@os20 ~]# 
+```
+
+![image-20231225190840221](.\images\image-20231225190840221.png)
 
 
 
