@@ -8123,9 +8123,431 @@ mpreaoh44760    \_ nginx-stack_nginx-web.5   nginx:1.19.3-alipine   os21      Sh
 
 
 
+## harbor的HTTPS安装
+
+默认情况下，harbar不提供证书，可以在没有安全的情况下部署harbo，就可以通过http方式连接到harbor，但是，只有在没有连接到外部internet的测试环境或者开发环境才可以使用http，在生产环境中，始终需要使用https，要配制HTTPS，必须创建SSL证书，可以使用受信任的第三方CA签名的证书，也可以使用自签名证书，这里使用自签证书，使用OpenSSL创建CA,以及如何使用CA签署服务器证书和客户端证书，下面以主机名为harbor.nullnull.com，并且DNS指向运行harbor的主机。
+
+官方文档https配制文档:
+
+```
+https://github.com/goharbor/harbor/blob/v1.9.4/docs/configure_https.md
+```
+
+### 生成证书
+
+```sh
+# 加入本地的一个域名解析，直接使用hosts文件进行指向
+echo "192.168.5.21 harbor.nullnull.com" >> /etc/hosts
+cat /etc/hosts
+
+mkdir  -p /data/harbor
+cd /data/harbor
+#将压缩包上传到此目录
+tar -zxvf harbor-offline-installer-v1.9.4.tgz
+
+cd harbor
+mkdir ssl
+cd ssl
+
+# 获取证书
+# 在生产环境中，应该从CA官方获取证书，在开发和测试环境中，可以使用自己的CA证书。下面使用自签证书
+cd /data/harbor/harbor/ssl
+
+# 创建根证书
+openssl genrsa -out ca.key 4096
+openssl req -x509 -new -nodes -sha512 -days 3650 -subj "/C=TW/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=harbor.nullnull.com" -key ca.key -out ca.crt
+
+# 获取服务器证书
+# 证书通常包含.crt文件和.key文件。例如harbor.nullnull.com.crt和harbor.nullnull.com.key
+# 创建自己的私钥
+openssl genrsa -out harbor.nullnull.com.key 4096
+# 生成证书的签名请求
+# 调整-subj选项中的值以反映组织信息，如果使用域名方式连接harbor主机，则必须其指定为common name(cn)属性，并在key和CSR文件名中使用它
+openssl req -sha512 -new -subj "/C=TW/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=harbor.nullnull.com" -key        harbor.nullnull.com.key -out harbor.nullnull.com.csr 
+
+# 生成注册表主机的证书
+# 无论使用域名还是使用IP地址连接到Harbor主机，都必须创建此文件，以使可以为harbor主机生成符合使用者替代（SAN）和x509 v3扩展要求的证书，替换DNS条目以反映harbor的域
+cat > v3.ext <<-EOF 
+authorityKeyIdentifier=keyid,issuer 
+basicConstraints=CA:FALSE 
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment 
+extendedKeyUsage = serverAuth 
+subjectAltName = @alt_names 
+[alt_names] 
+DNS.1=harbor.nullnull.com 
+EOF
+
+# 使用v3.ext文件为harbor主机生成证书
+openssl x509 -req -sha512 -days 3650 -extfile v3.ext -CA ca.crt -CAkey ca.key -CAcreateserial -in harbor.nullnull.com.csr -out harbor.nullnull.com.crt
+
+```
+
+操作记录:
+
+```sh
+[root@os21 etc]# echo "192.168.5.21 harbor.nullnull.com" >> /etc/hosts
+[root@os21 etc]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.5.21 harbor.nullnull.com
+[root@os21 etc]# mkdir  -p /data/harbor
+[root@os21 etc]# cd /data/harbor
+[root@os21 etc]#
+[root@os21 harbor]# tar -zxvf harbor-offline-installer-v1.9.4.tgz
+harbor/harbor.v1.9.4.tar.gz
+harbor/prepare
+harbor/LICENSE
+harbor/install.sh
+harbor/harbor.yml
+[root@os21 harbor]# cd harbor
+[root@os21 harbor]# ls
+harbor.v1.9.4.tar.gz  harbor.yml  install.sh  LICENSE  prepare
+[root@os21 harbor]# mkdir ssl
+[root@os21 harbor]# cd ssl/
+[root@os21 ssl]# openssl genrsa -out ca.key 4096
+Generating RSA private key, 4096 bit long modulus
+................................++
+.....................++
+e is 65537 (0x10001)
+[root@os21 ssl]# openssl req -x509 -new -nodes -sha512 -days 3650 -subj "/C=TW/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=harbor.nullnull.com" -key ca.key -out ca.crt
+[root@os21 ssl]# ls
+ca.crt  ca.key
+[root@os21 ssl]# openssl genrsa -out harbor.nullnull.com.key 4096
+Generating RSA private key, 4096 bit long modulus
+.....................................................................................................................................++
+...........++
+e is 65537 (0x10001)
+[root@os21 ssl]# openssl req -sha512 -new -subj "/C=TW/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=harbor.nullnull.com" -key        harbor.nullnull.com.key -out harbor.nullnull.com.csr
+[root@os21 ssl]# cat > v3.ext <<-EOF 
+> authorityKeyIdentifier=keyid,issuer 
+> basicConstraints=CA:FALSE 
+> keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment 
+> extendedKeyUsage = serverAuth 
+> subjectAltName = @alt_names 
+> [alt_names] 
+> DNS.1=harbor.nullnull.com 
+> EOF
+[root@os21 ssl]# openssl x509 -req -sha512 -days 3650 -extfile v3.ext -CA ca.crt -CAkey ca.key -CAcreateserial -in harbor.nullnull.com.csr -out harbor.nullnull.com.crt
+Signature ok
+subject=/C=TW/ST=Beijing/L=Beijing/O=example/OU=Personal/CN=harbor.nullnull.com
+Getting CA Private Key
+```
 
 
 
+### 为docker配制服务器证书，密钥和CA
+
+生成ca.crt、harbor.nullnull.com.crt、harbor.nullnull.com.key必须将它们提供组Harbor和Docker，并重新配制Harbor以使用它们，
+
+将harbor.nullnull.com.crt转换为harbor.nullnull.com.cert，供Docker使用、
+
+Docker守护进程将.crt文件解释为CA证书，.cert文件解释为客户端证书。
+
+```sh
+openssl x509 -inform PEM -in harbor.nullnull.com.crt -out harbor.nullnull.com.cert
+
+
+mkdir -p /etc/docker/certs.d/harbor.nullnull.com
+
+cp harbor.nullnull.com.cert /etc/docker/certs.d/harbor.nullnull.com/
+cp harbor.nullnull.com.key /etc/docker/certs.d/harbor.nullnull.com/
+cp ca.crt /etc/docker/certs.d/harbor.nullnull.com/
+
+# 重启Docker服务
+systemctl daemon-reload
+systemctl restart docker
+```
+
+
+
+### 修改harbor.yml文件 
+
+```sh
+# 进入harbor目录 
+cd /data/harbor/harbor
+vi harbor.yml
+hostname: harbor.nullnull.com
+https:
+  port: 443
+  certificate: /data/harbor/harbor/ssl/harbor.nullnull.com.crt
+  private_key: /data/harbor/harbor/ssl/harbor.nullnull.com.key
+
+```
+
+
+
+### 安装harbor
+
+```
+cd /data/harbor/harbor
+
+docker pull goharbor/prepare:v1.9.4
+
+
+./prepare 
+./install.sh
+
+```
+
+输出查看:
+
+```sh
+[root@os21 harbor]# docker pull goharbor/prepare:v1.9.4
+v1.9.4: Pulling from goharbor/prepare
+59bb73b1db41: Pull complete 
+151a8120c357: Pull complete 
+bdb3b55ae888: Pull complete 
+bc627acc6004: Pull complete 
+b9e028a223e6: Pull complete 
+0b1166b529f5: Pull complete 
+5255c5c54d23: Pull complete 
+Digest: sha256:3b0e3b40be3056aa2eab2f02393065a615e442c7e6f572def2f1f991257c8d5d
+Status: Downloaded newer image for goharbor/prepare:v1.9.4
+docker.io/goharbor/prepare:v1.9.4
+[root@os21 harbor]# ls
+harbor.v1.9.4.tar.gz  harbor.yml  install.sh  LICENSE  prepare  ssl
+[root@os21 harbor]# ./prepare 
+prepare base dir is set to /data/harbor/harbor
+Generated configuration file: /config/log/logrotate.conf
+Generated configuration file: /config/log/rsyslog_docker.conf
+Generated configuration file: /config/nginx/nginx.conf
+Generated configuration file: /config/core/env
+Generated configuration file: /config/core/app.conf
+Generated configuration file: /config/registry/config.yml
+Generated configuration file: /config/registryctl/env
+Generated configuration file: /config/db/env
+Generated configuration file: /config/jobservice/env
+Generated configuration file: /config/jobservice/config.yml
+Generated and saved secret to file: /secret/keys/secretkey
+Generated certificate, key file: /secret/core/private_key.pem, cert file: /secret/registry/root.crt
+Generated configuration file: /compose_location/docker-compose.yml
+Clean up the input dir
+[root@os21 harbor]# ./install.sh
+
+[Step 0]: checking installation environment ...
+
+Note: docker version: 24.0.7
+
+Note: docker-compose version: 1.27.4
+
+[Step 1]: loading Harbor images ...
+40f95e7c4d8c: Loading layer  12.77MB/12.77MB
+87bc69f1a650: Loading layer  55.42MB/55.42MB
+2d7b6446b66d: Loading layer  5.632kB/5.632kB
+4fff34e50f40: Loading layer  37.38kB/37.38kB
+5e79cfafc57c: Loading layer  55.42MB/55.42MB
+Loaded image: goharbor/harbor-core:v1.9.4
+57c193635092: Loading layer  115.8MB/115.8MB
+48c741dd71e6: Loading layer  12.23MB/12.23MB
+bca1df60136e: Loading layer  2.048kB/2.048kB
+3ded12c0b4d9: Loading layer  48.13kB/48.13kB
+1ab30734b178: Loading layer  3.072kB/3.072kB
+09dcb0a00864: Loading layer  12.28MB/12.28MB
+Loaded image: goharbor/clair-photon:v2.1.0-v1.9.4
+b3a6b161a0f0: Loading layer  7.039MB/7.039MB
+1ed6312f133c: Loading layer  196.6kB/196.6kB
+fee283579213: Loading layer    172kB/172kB
+1946b2964bfc: Loading layer  15.36kB/15.36kB
+026952c4573d: Loading layer  3.584kB/3.584kB
+37bd829992ae: Loading layer  10.84MB/10.84MB
+Loaded image: goharbor/harbor-portal:v1.9.4
+0fa4e197a1e0: Loading layer  10.84MB/10.84MB
+Loaded image: goharbor/nginx-photon:v1.9.4
+9f4e1ee20fe3: Loading layer  9.009MB/9.009MB
+eb044190906a: Loading layer  42.31MB/42.31MB
+04e55b2b95d5: Loading layer  2.048kB/2.048kB
+41efcb18a521: Loading layer  3.072kB/3.072kB
+16903b9eaf51: Loading layer  42.31MB/42.31MB
+Loaded image: goharbor/chartmuseum-photon:v0.9.0-v1.9.4
+Loaded image: goharbor/prepare:v1.9.4
+12f86854bc80: Loading layer   80.2MB/80.2MB
+5e76c79bec2e: Loading layer  3.072kB/3.072kB
+694b3e7869d5: Loading layer   59.9kB/59.9kB
+27609e3dd221: Loading layer  61.95kB/61.95kB
+Loaded image: goharbor/redis-photon:v1.9.4
+01c4d294000a: Loading layer  9.005MB/9.005MB
+e836fee5658c: Loading layer  3.072kB/3.072kB
+ac9add5e34a0: Loading layer   2.56kB/2.56kB
+1af6a0c8f2bb: Loading layer  21.76MB/21.76MB
+692f3a6593bb: Loading layer  21.76MB/21.76MB
+Loaded image: goharbor/registry-photon:v2.7.1-patch-2819-2553-v1.9.4
+50d697c7c241: Loading layer  9.004MB/9.004MB
+ccc72da8223b: Loading layer  6.239MB/6.239MB
+d8f9724c0195: Loading layer  16.04MB/16.04MB
+813deff8bdee: Loading layer  28.24MB/28.24MB
+27eeaef358bd: Loading layer  22.02kB/22.02kB
+52a7091247e7: Loading layer  50.52MB/50.52MB
+Loaded image: goharbor/notary-server-photon:v0.6.1-v1.9.4
+391081d598f3: Loading layer  50.36MB/50.36MB
+6e82a6bf9097: Loading layer  3.584kB/3.584kB
+f44a631c4f72: Loading layer  3.072kB/3.072kB
+c841d5236832: Loading layer   2.56kB/2.56kB
+253571258f05: Loading layer  3.072kB/3.072kB
+88d0f16c60e6: Loading layer  3.584kB/3.584kB
+a4499b4f52d1: Loading layer  12.29kB/12.29kB
+Loaded image: goharbor/harbor-log:v1.9.4
+b94d1cd23704: Loading layer  63.49MB/63.49MB
+7108c9c351ce: Loading layer  56.37MB/56.37MB
+013a04104e87: Loading layer  5.632kB/5.632kB
+c91b8f37358e: Loading layer  2.048kB/2.048kB
+aa04ed1247cb: Loading layer   2.56kB/2.56kB
+ea3d1b630734: Loading layer   2.56kB/2.56kB
+9dd11aa8e16a: Loading layer   2.56kB/2.56kB
+69fab71b0bc5: Loading layer  10.24kB/10.24kB
+Loaded image: goharbor/harbor-db:v1.9.4
+573233339cd8: Loading layer  12.77MB/12.77MB
+1c4fa76d32f8: Loading layer  48.14MB/48.14MB
+Loaded image: goharbor/harbor-jobservice:v1.9.4
+401a522fd2d5: Loading layer  9.005MB/9.005MB
+93bfd55aee1a: Loading layer  3.072kB/3.072kB
+41bc5eeff535: Loading layer  21.76MB/21.76MB
+768368529512: Loading layer  3.072kB/3.072kB
+d0f0f102247d: Loading layer  8.661MB/8.661MB
+32b9c7908fb4: Loading layer  30.42MB/30.42MB
+Loaded image: goharbor/harbor-registryctl:v1.9.4
+f8bf76e63a50: Loading layer  14.61MB/14.61MB
+9cc53a4748a9: Loading layer  28.24MB/28.24MB
+ae2e3edc6219: Loading layer  22.02kB/22.02kB
+43599ec252a3: Loading layer  49.09MB/49.09MB
+Loaded image: goharbor/notary-signer-photon:v0.6.1-v1.9.4
+713f7d39cadb: Loading layer  338.3MB/338.3MB
+dc092fe63769: Loading layer  119.8kB/119.8kB
+Loaded image: goharbor/harbor-migrator:v1.9.4
+
+
+[Step 2]: preparing environment ...
+prepare base dir is set to /data/harbor/harbor
+Clearing the configuration file: /config/log/logrotate.conf
+Clearing the configuration file: /config/log/rsyslog_docker.conf
+Clearing the configuration file: /config/nginx/nginx.conf
+Clearing the configuration file: /config/core/env
+Clearing the configuration file: /config/core/app.conf
+Clearing the configuration file: /config/registry/config.yml
+Clearing the configuration file: /config/registryctl/env
+Clearing the configuration file: /config/registryctl/config.yml
+Clearing the configuration file: /config/db/env
+Clearing the configuration file: /config/jobservice/env
+Clearing the configuration file: /config/jobservice/config.yml
+Generated configuration file: /config/log/logrotate.conf
+Generated configuration file: /config/log/rsyslog_docker.conf
+Generated configuration file: /config/nginx/nginx.conf
+Generated configuration file: /config/core/env
+Generated configuration file: /config/core/app.conf
+Generated configuration file: /config/registry/config.yml
+Generated configuration file: /config/registryctl/env
+Generated configuration file: /config/db/env
+Generated configuration file: /config/jobservice/env
+Generated configuration file: /config/jobservice/config.yml
+loaded secret from file: /secret/keys/secretkey
+Generated configuration file: /compose_location/docker-compose.yml
+Clean up the input dir
+
+
+
+[Step 3]: starting Harbor ...
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+Creating network "harbor_harbor" with the default driver
+Creating harbor-log ... done
+Creating registryctl   ... done
+Creating harbor-db     ... done
+Creating harbor-portal ... done
+Creating registry      ... done
+Creating redis         ... done
+Creating harbor-core   ... done
+Creating nginx             ... done
+Creating harbor-jobservice ... done
+
+✔ ----Harbor has been installed and started successfully.----
+
+Now you should be able to visit the admin portal at https://harbor.nullnull.com. 
+For more details, please visit https://github.com/goharbor/harbor .
+
+[root@os21 harbor]# 
+```
+
+### 客户端UI访问
+
+在windows的主机需要添加域名解析
+
+```
+C:\Windows\System32\drivers\etc\hosts
+
+192.168.5.21 harbor.nullnull.com
+```
+
+在浏览器中访问: https://harbor.nullnull.com/
+
+![image-20231226123415159](.\images\image-20231226123415159.png)
+
+添加一个项目nullnulledu,用于上传.
+
+
+
+### 客户端上传镜像
+
+```
+# 将harbor服务器生成的ca.crt文件复杂到/etc/pki/ca-trust/source/anchors/中
+scp root@192.168.5.21:/data/harbor/harbor/ssl/ca.crt /etc/pki/ca-trust/source/anchors/
+# 执行命令更新ca证书授权： 
+update-ca-trust
+# 重启docker服务
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+#加入域名解析
+echo "192.168.5.21  harbor.nullnull.com" >> /etc/hosts
+
+# 登录仓库
+docker login harbor.nullnull.com
+admin
+Harbor12345
+
+
+docker tag nginx:1.19.3-alpine harbor.nullnull.com/nullnulledu/nginx:v1
+docker push harbor.nullnull.com/nullnulledu/nginx:v1
+```
+
+
+
+输出：
+
+```sh
+[root@os20 anchors]# scp root@192.168.5.21:/data/harbor/harbor/ssl/ca.crt /etc/pki/ca-trust/source/anchors/
+root@192.168.5.21's password: 
+ca.crt                                                                                 100% 2049     1.3MB/s   00:00    
+[root@os20 anchors]# update-ca-trust
+[root@os20 anchors]# sudo systemctl daemon-reload
+[root@os20 anchors]# sudo systemctl restart docker
+[root@os20 anchors]# echo "192.168.5.21  harbor.nullnull.com" >> /etc/hosts
+[root@os20 anchors]# docker login harbor.nullnull.com
+Username: admin
+Password: 
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+[root@os20 anchors]# docker images
+REPOSITORY                 TAG             IMAGE ID       CREATED       SIZE
+dockersamples/visualizer   latest          43ce62428b8c   2 years ago   185MB
+nginx                      1.18.0-alpine   684dbf9f01f3   2 years ago   21.9MB
+nginx                      1.19.3-alpine   4efb29ff172a   3 years ago   21.8MB
+gitlab/gitlab-ce           12.7.6-ce.0     b9923370e7ce   3 years ago   1.85GB
+[root@os20 anchors]# docker tag nginx:1.19.3-alpine harbor.nullnull.com/nullnulledu/nginx:v1
+[root@os20 anchors]# docker push harbor.nullnull.com/nullnulledu/nginx:v1
+The push refers to repository [harbor.nullnull.com/nullnulledu/nginx]
+8d6d1951ab0a: Pushed 
+d0e26daf1f58: Pushed 
+835f5b67679c: Pushed 
+4daeb7840e4d: Pushed 
+ace0eda3e3be: Pushed 
+v1: digest: sha256:a411d06ab4f5347ac9652357ac35600555aeff0b910326cc7adc36d471e0b36f size: 1360
+[root@os20 anchors]# 
+```
 
 
 
