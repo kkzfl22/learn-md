@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat-deployment
+  labels:
+    apps: tomcat-deployment
+spec:
+  replicas: 3
+  template:
+    metadata:
+      name: tomcat-deployment
+      labels:
+        app: tomcat
+    spec:
+      containers:
+        - name: tomcat-deployment
+          image: tomcat:9.0.20-jre8-alpine
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+  selector:
+    matchLabels:
+      app: tomcat
