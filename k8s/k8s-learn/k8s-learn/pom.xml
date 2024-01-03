@@ -11,6 +11,7 @@
     <url>http://maven.apache.org</url>
     <modules>
         <module>base-yaml</module>
+        <module>pod</module>
     </modules>
 
     <properties>

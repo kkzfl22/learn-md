@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+    - name: myapp-container
+      image: busybox:1.32.0
+      imagePullPolicy: IfNotPresent
+      # 整个命令的意思是：打印“the app is running”，然后等待1小时。
+      # 如果“echo the app is running”命令成功执行（返回值为0），那么sleep 3600命令才会被执行。
+      command: ['sh','-c','echo the app is running && sleep 3600']
+  initContainers:
+    - name: init-myservice
+      image: busybox:1.32.0
+      imagePullPolicy: IfNotPresent
+      # 等待某个服务变得可用，等待一个 DNS 记录被创建或更新，以便其他服务可以解析并使用它。
+      command: ['sh','-c','until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
+    - name: init-mydb
+      image: busybox:1.32.0
+      command: ['sh','-c','until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
