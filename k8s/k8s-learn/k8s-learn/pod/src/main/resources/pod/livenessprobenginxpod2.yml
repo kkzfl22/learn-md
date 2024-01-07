@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: livenessprobenginx-pod2
+  labels:
+    app: livenessprobenginx-pod2
+spec:
+  containers:
+    - name: livenessprobenginx-pod2
+      image: nginx:1.17.10-alpine
+      imagePullPolicy: IfNotPresent
+      livenessProbe:
+        tcpSocket:
+          # 监测8080端口，如果8080端口没有反馈，重启pod
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 3
+        timeoutSeconds: 5
+  restartPolicy: Always
