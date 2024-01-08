@@ -1,24 +1,24 @@
 apiVersion: apps/v1
-kind: ReplicaSet
+kind: Deployment
 metadata:
-  name: replicasetdemo
+  name: deploymentdemo1
   labels:
-    app: replicasetdemo
+    app: deploymentdemo1
 spec:
-  replicas: 3
+  replicas: 10
   template:
     metadata:
-      name: replicasetdemo
+      name: deploymentdemo1
       labels:
-        app: replicasetdemo
+        app: deploymentdemo1
     spec:
       containers:
-        - name: replicasetdemo
-          image: nginx:1.17.10-alpine
+        - name: demploymentdemo1
+          image: nginx:1.17.10-alipine
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
       restartPolicy: Always
   selector:
     matchLabels:
-      app: replicasetdemo
+      app: deploymentdemo1
