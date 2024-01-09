@@ -13,8 +13,8 @@ spec:
         app: deploymentdemo1
     spec:
       containers:
-        - name: demploymentdemo1
-          image: nginx:1.17.10-alipine
+        - name: deploymentdemo1
+          image: nginx:1.17.10-alpine
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
@@ -22,3 +22,4 @@ spec:
   selector:
     matchLabels:
       app: deploymentdemo1
+      
