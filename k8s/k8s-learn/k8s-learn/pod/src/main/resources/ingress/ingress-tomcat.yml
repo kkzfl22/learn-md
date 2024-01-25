@@ -1,0 +1,11 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-ingress-test
+spec:
+  backend:
+    # 对哪个服务启作用，就配制哪个服务的名称
+    serviceName: tomcat-svc
+    # 服务的端口号,指定的是容器的端口号，即tomcat容器的端口号,
+    # 即tomcat-service.yml文件中tomcat-deployment的spec.template.spec.containers.ports.containerPort
+    servicePort: 8080
