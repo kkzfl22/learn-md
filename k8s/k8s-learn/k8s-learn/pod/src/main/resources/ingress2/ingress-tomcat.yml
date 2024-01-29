@@ -1,0 +1,13 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-ingress-test
+spec:
+  rules:
+    - host: ingress-tomcat.nullnull.com
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: tomcat-svc
+              servicePort: 8080
