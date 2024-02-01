@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadbsecret
+type: Opaque
+data:
+  password: YWRtaW4=
+  #mariadb的用户名root加密，用于演示.
+  username: cm9vdA==
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deploy
+  labels:
+    app: mariadb-deploy
+spec:
+  replicas: 1
+  template:
+    metadata:
+      name: mariadb-deploy
+      labels:
+        app: mariadb-deploy
+    spec:
+      containers:
+        - name: mariadb-deploy
+          image: mariadb:10.5.2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: mariadbsecret
+            - name: TZ
+              value: Asia/Shanghai
+          args:
+            - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+          ports:
+            - containerPort: 3306
+  selector:
+    matchLabels:
+      app: mariadb-deploy
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-svc
+spec:
+  selector:
+    app: mariadb-deploy
+  ports:
+    - port: 3306
+      targetPort: 3306
+      nodePort: 30036
+  type: NodePort
