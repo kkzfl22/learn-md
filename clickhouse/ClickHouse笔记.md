@@ -727,6 +727,14 @@ https://benchmark.clickhouse.com/
 
 ## 7. ClickHouse的数据类型
 
+官网文档地址：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/data-types
+```
+
+
+
 ```markdown
 Data Types in ClickHouse
 ClickHouse can store various kinds of data in table cells. 
@@ -950,6 +958,9 @@ select toUInt8(-8);
 
 ```markdown
 # 浮点数
+Float32, Float64
+对于小数点后面的位数是有严格要求的，否则数据结果准确性就成问题。
+
 note
 If you need accurate calculations, in particular if you work with financial or business data requiring a high precision, you should consider using Decimal instead.
 
@@ -1025,6 +1036,7 @@ SELECT 0.5 / 0
 ┌─divide(0.5, 0)─┐
 │            inf │
 └────────────────┘
+正无穷
 
 -Inf — Negative infinity.
 SELECT -0.5 / 0
@@ -1032,6 +1044,7 @@ SELECT -0.5 / 0
 ┌─divide(-0.5, 0)─┐
 │            -inf │
 └─────────────────┘
+负无穷
 
 NaN — Not a number.
 SELECT 0 / 0
@@ -1039,19 +1052,482 @@ SELECT 0 / 0
 ┌─divide(0, 0)─┐
 │          nan │
 └──────────────┘
-
+不是一个数字
 See the rules for NaN sorting in the section ORDER BY clause.
+```
+
+货币类型-decimal
+
+```markdown
+Decimal, Decimal(P), Decimal(P, S), Decimal32(S), Decimal64(S), Decimal128(S), Decimal256(S)
+
+Signed fixed-point numbers that keep precision during add, subtract and multiply operations. For division least significant digits are discarded (not rounded).
+
+Parameters
+P - precision. Valid range: [ 1 : 76 ]. Determines how many decimal digits number can have (including fraction). By default, the precision is 10.
+S - scale. Valid range: [ 0 : P ]. Determines how many decimal digits fraction can have.
+Decimal(P) is equivalent to Decimal(P, 0). Similarly, the syntax Decimal is equivalent to Decimal(10, 0).
+
+Depending on P parameter value Decimal(P, S) is a synonym for:
+
+P from [ 1 : 9 ] - for Decimal32(S)
+P from [ 10 : 18 ] - for Decimal64(S)
+P from [ 19 : 38 ] - for Decimal128(S)
+P from [ 39 : 76 ] - for Decimal256(S)
+Decimal Value Ranges
+Decimal32(S) - ( -1 * 10^(9 - S), 1 * 10^(9 - S) )
+Decimal64(S) - ( -1 * 10^(18 - S), 1 * 10^(18 - S) )
+Decimal128(S) - ( -1 * 10^(38 - S), 1 * 10^(38 - S) )
+Decimal256(S) - ( -1 * 10^(76 - S), 1 * 10^(76 - S) )
+For example, Decimal32(4) can contain numbers from -99999.9999 to 99999.9999 with 0.0001 step.
+
+Internal Representation
+Internally data is represented as normal signed integers with respective bit width. Real value ranges that can be stored in memory are a bit larger than specified above, which are checked only on conversion from a string.
+
+Because modern CPUs do not support 128-bit and 256-bit integers natively, operations on Decimal128 and Decimal256 are emulated. Thus, Decimal128 and Decimal256 work significantly slower than Decimal32/Decimal64.
+
+Operations and Result Type
+Binary operations on Decimal result in wider result type (with any order of arguments).
+
+Decimal64(S1) <op> Decimal32(S2) -> Decimal64(S)
+Decimal128(S1) <op> Decimal32(S2) -> Decimal128(S)
+Decimal128(S1) <op> Decimal64(S2) -> Decimal128(S)
+Decimal256(S1) <op> Decimal<32|64|128>(S2) -> Decimal256(S)
+Rules for scale:
+
+add, subtract: S = max(S1, S2).
+multiply: S = S1 + S2.
+divide: S = S1.
+For similar operations between Decimal and integers, the result is Decimal of the same size as an argument.
+
+Operations between Decimal and Float32/Float64 are not defined. If you need them, you can explicitly cast one of argument using toDecimal32, toDecimal64, toDecimal128 or toFloat32, toFloat64 builtins. Keep in mind that the result will lose precision and type conversion is a computationally expensive operation.
+
+Some functions on Decimal return result as Float64 (for example, var or stddev). Intermediate calculations might still be performed in Decimal, which might lead to different results between Float64 and Decimal inputs with the same values.
+```
+
+使用样例：
+
+加减法
+
+```sh
+select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x+y as z,toTypeName(z) as zType;
+# 通过观察发现，当P输入不足时，默认为类型的最大长度。
+# add, subtract: S = max(S1, S2).
+# 加减法时，取两加数的最大位数
+```
+
+输出：
+
+```sh
+
+os21 :) select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x+y as z,toTypeName(z) as zType;
+
+SELECT
+    toDecimal64(2, 3) AS x,
+    toTypeName(x) AS xType,
+    toDecimal32(1, 2) AS y,
+    toTypeName(y) AS yType,
+    x + y AS z,
+    toTypeName(z) AS zType
+
+Query id: bbf60cf8-2392-4e13-8b1b-84b776b5bcd9
+
+┌─x─┬─xType──────────┬─y─┬─yType─────────┬─z─┬─zType──────────┐
+│ 2 │ Decimal(18, 3) │ 1 │ Decimal(9, 2) │ 3 │ Decimal(18, 3) │
+└───┴────────────────┴───┴───────────────┴───┴────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+```
+
+乘法
+
+```sh
+select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x*y as z,toTypeName(z) as zType;
+# 通过观察发现，当P输入不足时，默认为类型的最大长度。
+# multiply: S = S1 + S2.
+# 乘法，取两个数据位数相加
+```
+
+输出:
+
+```sh
+os21 :) select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x*y as z,toTypeName(z) as zType;
+
+SELECT
+    toDecimal64(2, 3) AS x,
+    toTypeName(x) AS xType,
+    toDecimal32(1, 2) AS y,
+    toTypeName(y) AS yType,
+    x * y AS z,
+    toTypeName(z) AS zType
+
+Query id: 3942817f-f6e2-4906-bf86-4b7fe0f7c55f
+
+┌─x─┬─xType──────────┬─y─┬─yType─────────┬─z─┬─zType──────────┐
+│ 2 │ Decimal(18, 3) │ 1 │ Decimal(9, 2) │ 2 │ Decimal(18, 5) │
+└───┴────────────────┴───┴───────────────┴───┴────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+```
+
+除法
+
+```sh
+select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x/y as z,toTypeName(z) as zType;
+# 通过观察发现，当P输入不足时，默认为类型的最大长度。
+# divide: S = S1.
+# 除法，使用被除数
+```
+
+输出
+
+```sh
+os21 :) select toDecimal64(2,3) as x,toTypeName(x) as xType,toDecimal32(1,2) as y,toTypeName(y) as yType,x/y as z,toTypeName(z) as zType;
+
+SELECT
+    toDecimal64(2, 3) AS x,
+    toTypeName(x) AS xType,
+    toDecimal32(1, 2) AS y,
+    toTypeName(y) AS yType,
+    x / y AS z,
+    toTypeName(z) AS zType
+
+Query id: d1cde916-18d3-4f9d-b634-6cc968b81d8b
+
+┌─x─┬─xType──────────┬─y─┬─yType─────────┬─z─┬─zType──────────┐
+│ 2 │ Decimal(18, 3) │ 1 │ Decimal(9, 2) │ 2 │ Decimal(18, 3) │
+└───┴────────────────┴───┴───────────────┴───┴────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) 
 ```
 
 
 
+### 7.2 布尔类型
+
+```markdown
+Bool
+Type bool is internally stored as UInt8. Possible values are true (1), false (0).
+
+select true as col, toTypeName(col);
+┌─col──┬─toTypeName(true)─┐
+│ true │ Bool             │
+└──────┴──────────────────┘
+
+select true == 1 as col, toTypeName(col);
+┌─col─┬─toTypeName(equals(true, 1))─┐
+│   1 │ UInt8                       │
+└─────┴─────────────────────────────┘
+
+CREATE TABLE test_bool
+(
+    `A` Int64,
+    `B` Bool
+)
+ENGINE = Memory;
+
+INSERT INTO test_bool VALUES (1, true),(2,0);
+
+SELECT * FROM test_bool;
+┌─A─┬─B─────┐
+│ 1 │ true  │
+│ 2 │ false │
+└───┴───────┘
+```
+
+### 7.3 UUID
+
+```markdown
+UUID
+A Universally Unique Identifier (UUID) is a 16-byte value used to identify records. For detailed information about UUIDs, see Wikipedia.
+
+While different UUID variants exist (see here), ClickHouse does not validate that inserted UUIDs conform to a particular variant. UUIDs are internally treated as a sequence of 16 random bytes with 8-4-4-4-12 representation at SQL level.
+
+Example UUID value:
+
+61f0c404-5cb3-11e7-907b-a6006ad3dba0
+
+The default UUID is all-zero. It is used, for example, when a new record is inserted but no value for a UUID column is specified:
+
+00000000-0000-0000-0000-000000000000
+
+Due to historical reasons, UUIDs are sorted by their second half. UUIDs should therefore not be used directly in a primary key, sorting key, or partition key of a table.
+```
+
+样例
+
+```sh
+create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
+desc data_type_uuid;
+insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
+select * from data_type_uuid;
+
+# 如果不设置则使用00000000-0000-0000-0000-000000000000来填充
+insert into data_type_uuid(name) select 'nullnull2';
+select * from data_type_uuid;
+```
+
+输出：
+
+```sh
+os21 :) create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
+
+CREATE TABLE data_type_uuid
+(
+    `uuid` UUID,
+    `name` String
+)
+ENGINE = Memory
+
+Query id: e80f5d28-84b8-413a-9a61-4a8c0fd9a5c7
+
+Ok.
+
+0 rows in set. Elapsed: 0.004 sec. 
+
+os21 :) desc data_type_uuid;
+
+DESCRIBE TABLE data_type_uuid
+
+Query id: b9283419-df46-40ca-a3df-f03ab9f63e99
+
+┌─name─┬─type───┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ uuid │ UUID   │              │                    │         │                  │                │
+│ name │ String │              │                    │         │                  │                │
+└──────┴────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
+
+INSERT INTO data_type_uuid (uuid, name) SELECT
+    generateUUIDv4(),
+    'nullnull'
+
+Query id: 25a80683-4ee6-489b-a70b-569541bc636d
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) select * from data_type_uuid;
+
+SELECT *
+FROM data_type_uuid
+
+Query id: cbd73b8d-5cce-4753-90e2-a1f822bdd710
+
+┌─uuid─────────────────────────────────┬─name─────┐
+│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
+└──────────────────────────────────────┴──────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+os21 :) insert into data_type_uuid(name) select 'nullnull2';
+
+INSERT INTO data_type_uuid (name) SELECT 'nullnull2'
+
+Query id: f4199d1d-6dbc-4de6-8756-ef72b7698533
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) select * from data_type_uuid;
+
+SELECT *
+FROM data_type_uuid
+
+Query id: c9611e50-c762-4fac-8937-3dbc5062361d
+
+┌─uuid─────────────────────────────────┬─name─────┐
+│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
+└──────────────────────────────────────┴──────────┘
+┌─uuid─────────────────────────────────┬─name──────┐
+│ 00000000-0000-0000-0000-000000000000 │ nullnull2 │
+└──────────────────────────────────────┴───────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+```
+
+### 7.4 数组类型
+
+```markdown
+Array(T)
+An array of T-type items, with the starting array index as 1. T can be any data type, including an array.
+下标从1开始 .
+```
+
+使用数组
+
+```sh
+# 创建数组
+select array(1,2) as x,toTypeName(x);
+# 通过观察可以发现，数组的类型经过推导为UInt8
+
+# 第二种定义方式
+select [1,2] as x,toTypeName(x);
+
+# 在array中存在null的情况
+select array(1,2,null) as x ,toTypeName(x);
 
 
+# 建表测试
+create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
+desc datatype_array;
+
+insert into datatype_array values(1,['drink','eat','run']),(2,['sleep','game']);
+select * from datatype_array;
+# 数据下标从1开始，使用0会报错
+select id,bobby[0] from datatype_array;
+# 正确的获取方式
+select id,bobby[1] from datatype_array;
+# 获取数组元素个数
+select id,bobby.size0 from datatype_array;
+```
+
+```sh
+# 创建数组
+os21 :) select array(1,2) as x,toTypeName(x);
+
+SELECT
+    [1, 2] AS x,
+    toTypeName(x)
+
+Query id: 91907fa4-89d0-4af7-beda-310a68c1b847
+
+┌─x─────┬─toTypeName([1, 2])─┐
+│ [1,2] │ Array(UInt8)       │
+└───────┴────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 第二种定义方式
+os21 :) select [1,2] as x,toTypeName(x);
+
+SELECT
+    [1, 2] AS x,
+    toTypeName(x)
+
+Query id: b06d0d7c-24a6-4340-92be-5c76c6c994a8
+
+┌─x─────┬─toTypeName([1, 2])─┐
+│ [1,2] │ Array(UInt8)       │
+└───────┴────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 在array中存在null的情况
+os21 :) select array(1,2,null) as x ,toTypeName(x);
+
+SELECT
+    [1, 2, NULL] AS x,
+    toTypeName(x)
+
+Query id: ba4c52a0-eb4e-421e-b579-67af0b3a87aa
+
+┌─x──────────┬─toTypeName([1, 2, NULL])─┐
+│ [1,2,NULL] │ Array(Nullable(UInt8))   │
+└────────────┴──────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 建表测试
+os21 :) create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
+
+CREATE TABLE datatype_array
+(
+    `id` UInt8,
+    `bobby` Array(String)
+)
+ENGINE = Memory
+
+Query id: c71009b8-57bc-4ded-9c89-67500c6d0233
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+os21 :) desc datatype_array;
+
+DESCRIBE TABLE datatype_array
+
+Query id: 371d21c0-ac17-4035-90ce-4f8064c86812
+
+┌─name──┬─type──────────┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ id    │ UInt8         │              │                    │         │                  │                │
+│ bobby │ Array(String) │              │                    │         │                  │                │
+└───────┴───────────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.000 sec. 
+
+os21 :) select * from datatype_array;
+
+SELECT *
+FROM datatype_array
+
+Query id: 1b118634-363a-492d-822b-a120d6101731
+
+┌─id─┬─bobby─────────────────┐
+│  1 │ ['drink','eat','run'] │
+│  2 │ ['sleep','game']      │
+└────┴───────────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+os21 :) select id,bobby[0] from datatype_array;
+
+SELECT
+    id,
+    bobby[0]
+FROM datatype_array
+
+Query id: 11723a58-6b56-43ea-ac74-5dc7a71c1496
 
 
+0 rows in set. Elapsed: 0.026 sec. 
 
+Received exception from server (version 22.12.6):
+Code: 135. DB::Exception: Received from localhost:9000. DB::Exception: Array indices are 1-based. (ZERO_ARRAY_OR_TUPLE_INDEX)
 
+# 正确的获取方式
+os21 :) select id,bobby[1] from datatype_array;
 
+SELECT
+    id,
+    bobby[1]
+FROM datatype_array
+
+Query id: eb43d8e2-f495-45e1-8a43-4658f7fcc763
+
+┌─id─┬─arrayElement(bobby, 1)─┐
+│  1 │ drink                  │
+│  2 │ sleep                  │
+└────┴────────────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 获取数组元素个数
+os21 :) select id,bobby.size0 from datatype_array;
+
+SELECT
+    id,
+    bobby.size0
+FROM datatype_array
+
+Query id: aba57554-4248-4771-80bf-e3e9f2f68a24
+
+┌─id─┬─bobby.size0─┐
+│  1 │           3 │
+│  2 │           2 │
+└────┴─────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+```
 
 
 
