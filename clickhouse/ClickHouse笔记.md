@@ -1531,6 +1531,403 @@ Query id: aba57554-4248-4771-80bf-e3e9f2f68a24
 
 
 
+### 7.5 Nullable类型
+
+```markdown
+Nullable(T)
+Allows to store special marker (NULL) that denotes “missing value” alongside normal values allowed by T. For example, a Nullable(Int8) type column can store Int8 type values, and the rows that do not have a value will store NULL.
+
+T can’t be any of the composite data types Array, Map and Tuple but composite data types can contain Nullable type values, e.g. Array(Nullable(Int8)).
+
+A Nullable type field can’t be included in table indexes.
+
+NULL is the default value for any Nullable type, unless specified otherwise in the ClickHouse server configuration.
+
+Storage Features
+To store Nullable type values in a table column, ClickHouse uses a separate file with NULL masks in addition to normal file with values. Entries in masks file allow ClickHouse to distinguish between NULL and a default value of corresponding data type for each table row. Because of an additional file, Nullable column consumes additional storage space compared to a similar normal one.
+
+note
+Using Nullable almost always negatively affects performance, keep this in mind when designing your databases.
+使用NUll会对性能产生影响，特别注意。
+```
+
+
+
+### 7.6 Map类型
+
+```markdown
+Data type Map(K, V) stores key-value pairs.
+
+Unlike other databases, maps are not unique in ClickHouse, i.e. a map can contain two elements with the same key. (The reason for that is that maps are internally implemented as Array(Tuple(K, V)).)
+
+You can use use syntax m[k] to obtain the value for key k in map m. Also, m[k] scans the map, i.e. the runtime of the operation is linear in the size of the map.
+
+Parameters
+
+K — The type of the Map keys. Arbitrary type except Nullable and LowCardinality nested with Nullable types.
+V — The type of the Map values. Arbitrary type.
+```
+
+样例
+
+```sql
+# 创建表
+create table datatype_map(data Map(String,UInt64)) engine=Memory;
+
+# 插入数据
+insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
+
+# 查询数据
+select data['key1'] from datatype_map;
+
+```
+
+样例：
+
+```sh
+# 创建表
+os21 :) create table datatype_map(data Map(String,UInt64)) engine=Memory;
+
+CREATE TABLE datatype_map
+(
+    `data` Map(String, UInt64)
+)
+ENGINE = Memory
+
+Query id: 9910343c-ae72-4b09-8a9c-81e26a21185d
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 插入数据
+os21 :) insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
+
+INSERT INTO datatype_map FORMAT Values
+
+Query id: c18985a5-00dc-471f-a5a7-4e42bb459331
+
+Ok.
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 查询一个不存在的KEY
+s21 :) select data['key'] from datatype_map;
+
+SELECT data['key']
+FROM datatype_map
+
+Query id: d584d685-5412-4fb6-a374-345ea6afc835
+
+┌─arrayElement(data, 'key')─┐
+│                         0 │
+│                         0 │
+│                         0 │
+└───────────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 查询存在的数据
+os21 :) select data['key1'] from datatype_map;
+
+SELECT data['key1']
+FROM datatype_map
+
+Query id: 098e88a8-3aa4-477e-935b-3f51669fe55b
+
+┌─arrayElement(data, 'key1')─┐
+│                          1 │
+│                          2 │
+│                          3 │
+└────────────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+```
+
+### 7.7 String类型与FixedString(N)
+
+String
+
+```markdown
+String
+Strings of an arbitrary length. The length is not limited. The value can contain an arbitrary set of bytes, including null bytes. The String type replaces the types VARCHAR, BLOB, CLOB, and others from other DBMSs.
+任意长度
+
+When creating tables, numeric parameters for string fields can be set (e.g. VARCHAR(255)), but ClickHouse ignores them.
+
+Aliases:
+
+String — LONGTEXT, MEDIUMTEXT, TINYTEXT, TEXT, LONGBLOB, MEDIUMBLOB, TINYBLOB, BLOB, VARCHAR, CHAR, CHAR LARGE OBJECT, CHAR VARYING, CHARACTER LARGE OBJECT, CHARACTER VARYING, NCHAR LARGE OBJECT, NCHAR VARYING, NATIONAL CHARACTER LARGE OBJECT, NATIONAL CHARACTER VARYING, NATIONAL CHAR VARYING, NATIONAL CHARACTER, NATIONAL CHAR, BINARY LARGE OBJECT, BINARY VARYING,
+Encodings
+ClickHouse does not have the concept of encodings. Strings can contain an arbitrary set of bytes, which are stored and output as-is. If you need to store texts, we recommend using UTF-8 encoding. At the very least, if your terminal uses UTF-8 (as recommended), you can read and write your values without making conversions. Similarly, certain functions for working with strings have separate variations that work under the assumption that the string contains a set of bytes representing a UTF-8 encoded text. For example, the length function calculates the string length in bytes, while the lengthUTF8 function calculates the string length in Unicode code points, assuming that the value is UTF-8 encoded.
+```
+
+FixedString
+
+```markdown
+FixedString(N)
+A fixed-length string of N bytes (neither characters nor code points).
+
+To declare a column of FixedString type, use the following syntax:
+
+<column_name> FixedString(N)
+
+Where N is a natural number.
+
+The FixedString type is efficient when data has the length of precisely N bytes. In all other cases, it is likely to reduce efficiency.
+
+Examples of the values that can be efficiently stored in FixedString-typed columns:
+
+The binary representation of IP addresses (FixedString(16) for IPv6).
+Language codes (ru_RU, en_US ... ).
+Currency codes (USD, RUB ... ).
+Binary representation of hashes (FixedString(16) for MD5, FixedString(32) for SHA256).
+To store UUID values, use the UUID data type.
+
+When inserting the data, ClickHouse:
+
+Complements a string with null bytes if the string contains fewer than N bytes.
+Throws the Too large value for FixedString(N) exception if the string contains more than N bytes.
+```
+
+样例:
+
+```sql
+# 创建一个内存表
+create table datatype_string(id UInt8,name String)engine=Memory;
+
+# 查看表结构
+desc datatype_string;
+
+# 插入数据
+insert into datatype_string values(1,'null1'),(2,'null2'),(3,'null3');
+
+# 查询数据
+select * from datatype_string;
+
+
+
+# FixedString
+
+# FixedString长度检查
+select toFixedString('1',5) name,length(name) len;
+#可以发现此固定占用5位.
+
+# 长度检查对比
+select toFixedString('null',6) name, name='null', length(name) len;
+#可以发现长度不一样，但值相同，但是在有些片下，此结果是0，所有需要注意.
+
+
+
+create table datatype_fixstring(id UInt8,name FixedString(5))engine=Memory;
+
+desc datatype_fixstring;
+
+# 插入数据测试
+insert into datatype_fixstring values(1,'null'),(2,'null1');
+
+select * from  datatype_fixstring;
+
+
+insert into datatype_fixstring values(1,'1234567');
+
+# 中文
+insert into datatype_fixstring values(1,'中文');
+
+# 检查长度
+select length('中文');
+
+
+```
+
+样例:
+
+```sh
+# String创建表
+os21 :) create table datatype_string(id UInt8,name String)engine=Memory;
+
+CREATE TABLE datatype_string
+(
+    `id` UInt8,
+    `name` String
+)
+ENGINE = Memory
+
+Query id: 2288989c-a8f7-47db-b13c-f7c26688b425
+
+Ok.
+
+0 rows in set. Elapsed: 0.004 sec. 
+
+# 查看表结构
+os21 :) desc datatype_string;
+
+DESCRIBE TABLE datatype_string
+
+Query id: 01df6c2d-3f47-4d90-baa3-b52f604c7632
+
+┌─name─┬─type───┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ id   │ UInt8  │              │                    │         │                  │                │
+│ name │ String │              │                    │         │                  │                │
+└──────┴────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 插入数据
+os21 :) insert into datatype_string values(1,'null1'),(2,'null2'),(3,'null3');
+
+INSERT INTO datatype_string FORMAT Values
+
+Query id: fc36f98c-dbb8-47f8-9da3-efc8354a3309
+
+Ok.
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 查询数据
+os21 :) select * from datatype_string;
+
+SELECT *
+FROM datatype_string
+
+Query id: 278f8f45-9793-4aa1-8706-b9194a72ceea
+
+┌─id─┬─name──┐
+│  1 │ null1 │
+│  2 │ null2 │
+│  3 │ null3 │
+└────┴───────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# FixedString长度检查
+os21 :) select toFixedString('1',5) name,length(name) len;
+
+SELECT
+    toFixedString('1', 5) AS name,
+    length(name) AS len
+
+Query id: c2347102-54ba-4e1a-90c6-fd01271a60bf
+
+┌─name─┬─len─┐
+│ 1    │   5 │
+└──────┴─────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+# FixedString长度检查及对比
+os21 :) select toFixedString('null',6) name, name='null', length(name) len;
+
+SELECT
+    toFixedString('null', 6) AS name,
+    name = 'null',
+    length(name) AS len
+
+Query id: c3f4c4a9-dbf4-4dd9-97ec-3ecdb26e9027
+
+┌─name─┬─equals(toFixedString('null', 6), 'null')─┬─len─┐
+│ null │                                        1 │   6 │
+└──────┴──────────────────────────────────────────┴─────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+
+
+# 固定长度建表
+os21 :) create table datatype_fixstring(id UInt8,name FixedString(5))engine=Memory;
+
+CREATE TABLE datatype_fixstring
+(
+    `id` UInt8,
+    `name` FixedString(5)
+)
+ENGINE = Memory
+
+Query id: 106299fc-1cac-44ab-b922-cfa9f5462a42
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 查看描述
+os21 :) desc datatype_fixstring;
+
+DESCRIBE TABLE datatype_fixstring
+
+Query id: 1c19534b-9926-4b8f-a2c8-28bd8f961310
+
+┌─name─┬─type───────────┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ id   │ UInt8          │              │                    │         │                  │                │
+│ name │ FixedString(5) │              │                    │         │                  │                │
+└──────┴────────────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 插入数据
+os21 :) insert into datatype_fixstring values(1,'null'),(2,'null1');
+
+INSERT INTO datatype_fixstring FORMAT Values
+
+Query id: f9711a1d-5b1d-4564-a646-7f6a38f4efc9
+
+Ok.
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 查询数据
+os21 :) select * from  datatype_fixstring;
+
+SELECT *
+FROM datatype_fixstring
+
+Query id: 9c603c2e-e72d-4ae1-b0b7-7bb15c9d3cc2
+
+┌─id─┬─name──┐
+│  1 │ null  │
+│  2 │ null1 │
+└────┴───────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 异常数据检查
+os21 :) insert into datatype_fixstring values(1,'1234567');
+
+INSERT INTO datatype_fixstring FORMAT Values
+
+Query id: ef2ba8f3-e4f7-4455-8751-18fc338dc52c
+
+Ok.
+Exception on client:
+Code: 131. DB::Exception: String too long for type FixedString(5): while executing 'FUNCTION if(isNull(_dummy_0) : 3, defaultValueOfTypeName('FixedString(5)') :: 2, _CAST(_dummy_0, 'FixedString(5)') :: 4) -> if(isNull(_dummy_0), defaultValueOfTypeName('FixedString(5)'), _CAST(_dummy_0, 'FixedString(5)')) FixedString(5) : 1': While executing ValuesBlockInputFormat: data for INSERT was parsed from query. (TOO_LARGE_STRING_SIZE)
+
+os21 :) insert into datatype_fixstring values(1,'中文');
+
+INSERT INTO datatype_fixstring FORMAT Values
+
+Query id: b7911809-b1ea-46d6-b1b2-76dd5fb1c92d
+
+Ok.
+Exception on client:
+Code: 131. DB::Exception: String too long for type FixedString(5): while executing 'FUNCTION if(isNull(_dummy_0) : 3, defaultValueOfTypeName('FixedString(5)') :: 2, _CAST(_dummy_0, 'FixedString(5)') :: 4) -> if(isNull(_dummy_0), defaultValueOfTypeName('FixedString(5)'), _CAST(_dummy_0, 'FixedString(5)')) FixedString(5) : 1': While executing ValuesBlockInputFormat: data for INSERT was parsed from query. (TOO_LARGE_STRING_SIZE)
+
+os21 :) select length('中文');
+
+SELECT length('中文')
+
+Query id: 58032d0b-aef7-494b-a496-041faa31bedd
+
+┌─length('中文')─┐
+│              6 │
+└────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+```
+
+
+
 
 
 
