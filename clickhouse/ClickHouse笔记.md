@@ -1207,7 +1207,7 @@ os21 :)
 
 
 
-### 7.2 布尔类型
+### 7.2  布尔类型
 
 ```markdown
 Bool
@@ -1924,6 +1924,744 @@ Query id: 58032d0b-aef7-494b-a496-041faa31bedd
 └────────────────┘
 
 1 row in set. Elapsed: 0.001 sec. 
+```
+
+
+
+## 8. ClickHouse内置函数
+
+
+
+### 8.1 算术函数
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/functions/arithmetic-functions
+```
+
+描述
+
+```sh
+Arithmetic Functions
+Arithmetic functions work for any two operands of type UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, or Float64.
+
+Before performing the operation, both operands are casted to the result type. The result type is determined as follows (unless specified differently in the function documentation below):
+
+If both operands are up to 32 bits wide, the size of the result type will be the size of the next bigger type following the bigger of the two operands (integer size promotion). For example, UInt8 + UInt16 = UInt32 or Float32 * Float32 = Float64.
+If one of the operands has 64 or more bits, the size of the result type will be the same size as the bigger of the two operands. For example, UInt32 + UInt128 = UInt128 or Float32 * Float64 = Float64.
+If one of the operands is signed, the result type will also be signed, otherwise it will be signed. For example, UInt32 * Int32 = Int64.
+These rules make sure that the result type will be the smallest type which can represent all possible results. While this introduces a risk of overflows around the value range boundary, it ensures that calculations are performed quickly using the maximum native integer width of 64 bit. This behavior also guarantees compatibility with many other databases which provide 64 bit integers (BIGINT) as the biggest integer type.
+
+```
+
+样例
+
+```sh
+select toTypeName(0),toTypeName(0+0),toTypeName(0+0+0),toTypeName(0+0+0+0);
+```
+
+输出:
+
+```sh
+os21 :) select toTypeName(0),toTypeName(0+0),toTypeName(0+0+0),toTypeName(0+0+0+0);
+
+SELECT
+    toTypeName(0),
+    toTypeName(0 + 0),
+    toTypeName((0 + 0) + 0),
+    toTypeName(((0 + 0) + 0) + 0)
+
+Query id: ac35f387-e080-4785-8d0a-838b1eccfcf5
+
+┌─toTypeName(0)─┬─toTypeName(plus(0, 0))─┬─toTypeName(plus(plus(0, 0), 0))─┬─toTypeName(plus(plus(plus(0, 0), 0), 0))─┐
+│ UInt8         │ UInt16                 │ UInt32                          │ UInt64                                   │
+└───────────────┴────────────────────────┴─────────────────────────────────┴──────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+```
+
+样例
+
+```sh
+# 加法运算
+select plus(12,21),plus(10,-10),plus(-10,-10);
+
+# 减法运算
+select minus(12,2),minus(10,-10),minus(-10,-10);
+
+# 乘法运算
+select multiply(12,2),multiply(12,-2),multiply(-12,-3);
+
+# 除法运算
+select divide(12,4),divide(10,3),divide(2,4);
+select divide(-4,-2),divide(-4,2),divide(-4.5,3);
+
+# 除0操作
+select divide(0,0);
+select divide(10,0), divide(-10,0);
+
+# intDivOrZero
+select intDivOrZero(1,0);
+select intDivOrZero(1,0.01);
+```
+
+输出:
+
+```sh
+# 加法运算
+os21 :) select plus(12,21),plus(10,-10),plus(-10,-10);
+
+SELECT
+    12 + 21,
+    10 + -10,
+    -10 + -10
+
+Query id: becc2fed-e597-4998-8d12-b3e6e2e2da4d
+
+┌─plus(12, 21)─┬─plus(10, -10)─┬─plus(-10, -10)─┐
+│           33 │             0 │            -20 │
+└──────────────┴───────────────┴────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 减法运算
+os21 :) select minus(12,2),minus(10,-10),minus(-10,-10);
+
+SELECT
+    12 - 2,
+    10 - -10,
+    -10 - -10
+
+Query id: 6165ad3f-56b9-4819-8b02-51cebdafe412
+
+┌─minus(12, 2)─┬─minus(10, -10)─┬─minus(-10, -10)─┐
+│           10 │             20 │               0 │
+└──────────────┴────────────────┴─────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 乘法运算
+os21 :) select multiply(12,2),multiply(12,-2),multiply(-12,-3);
+
+SELECT
+    12 * 2,
+    12 * -2,
+    -12 * -3
+
+Query id: 75d4913d-b466-40b9-995d-774311abf68e
+
+┌─multiply(12, 2)─┬─multiply(12, -2)─┬─multiply(-12, -3)─┐
+│              24 │              -24 │                36 │
+└─────────────────┴──────────────────┴───────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 除法运算
+os21 :) select divide(12,4),divide(10,3),divide(2,4);
+
+SELECT
+    12 / 4,
+    10 / 3,
+    2 / 4
+
+Query id: 7165df27-8f1f-4516-b2be-d7dab7d19fad
+
+┌─divide(12, 4)─┬──────divide(10, 3)─┬─divide(2, 4)─┐
+│             3 │ 3.3333333333333335 │          0.5 │
+└───────────────┴────────────────────┴──────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) select divide(-4,-2),divide(-4,2),divide(-4.5,3);
+
+SELECT
+    -4 / -2,
+    -4 / 2,
+    -4.5 / 3
+
+Query id: 776afc4d-ae48-43db-acb3-aa51de9e561e
+
+┌─divide(-4, -2)─┬─divide(-4, 2)─┬─divide(-4.5, 3)─┐
+│              2 │            -2 │            -1.5 │
+└────────────────┴───────────────┴─────────────────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+# 除0操作
+os21 :) select divide(0,0);
+
+SELECT 0 / 0
+
+Query id: e582862b-3956-412b-ae27-38e601e97894
+
+┌─divide(0, 0)─┐
+│          nan │
+└──────────────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+
+os21 :) select divide(10,0), divide(-10,0);
+
+SELECT
+    10 / 0,
+    -10 / 0
+
+Query id: dece3e76-2012-47a1-a622-64657ab24f60
+
+┌─divide(10, 0)─┬─divide(-10, 0)─┐
+│           inf │           -inf │
+└───────────────┴────────────────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+# 除法结果为0或者其他正常值
+os21 :) select intDivOrZero(1,0);
+
+SELECT intDivOrZero(1, 0)
+
+Query id: 7319cfe0-70ac-48ce-b159-6f2c6380bd8d
+
+Connecting to localhost:9000 as user default.
+Connected to ClickHouse server version 22.12.6 revision 54461.
+
+┌─intDivOrZero(1, 0)─┐
+│                  0 │
+└────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 除法结果为0或者其他正常值
+os21 :) select intDivOrZero(1,1);
+
+SELECT intDivOrZero(1, 1)
+
+Query id: cec5a630-65e8-4455-b4e6-7edcc03fa90b
+
+┌─intDivOrZero(1, 1)─┐
+│                  1 │
+└────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) select intDivOrZero(0,1);
+
+SELECT intDivOrZero(0, 1)
+
+Query id: bd3b0529-be50-4cb0-a3e4-a710074fa06d
+
+┌─intDivOrZero(0, 1)─┐
+│                  0 │
+└────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 除法结果为0或者其他正常值
+os21 :) select intDivOrZero(1,0.01);
+
+SELECT intDivOrZero(1, 0.01)
+
+Query id: e9c5b522-a31f-405b-98b7-c2ba7bfb66eb
+
+┌─intDivOrZero(1, 0.01)─┐
+│                   100 │
+└───────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) SELECT   intDiv(1, 0.001) AS res;
+        
+
+# 除法直接除于小数，则报错
+SELECT intDiv(1, 0.001) AS res
+
+Query id: 9560c3c3-e141-471d-9b81-9ba1c5674703
+
+
+0 rows in set. Elapsed: 0.052 sec. 
+
+Received exception from server (version 22.12.6):
+Code: 153. DB::Exception: Received from localhost:9000. DB::Exception: Cannot perform integer division, because it will produce infinite or too large number: While processing intDiv(1, 0.001) AS res. (ILLEGAL_DIVISION)
+
+os21 :) 
+```
+
+
+
+### 8.2 比较函数
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/functions/comparison-functions
+```
+
+介绍
+
+```markdown
+Comparison Functions
+Below comparison functions return 0 or 1 as Uint8.
+
+The following types can be compared:
+
+numbers
+strings and fixed strings
+dates
+dates with times
+Only values within the same group can be compared (e.g. UInt16 and UInt64) but not across groups (e.g. UInt16 and DateTime).
+
+Strings are compared byte-by-byte. Note that this may lead to unexpected results if one of the strings contains UTF-8 encoded multi-byte characters.
+
+A string S1 which has another string S2 as prefix is considered longer than S2.
+
+```
+
+函数
+
+```sh
+# 等于
+# equals, =, == operators
+equals(a, b)
+
+# 不等于
+# notEquals, !=, <> operators
+notEquals(a, b)
+
+
+# 小于函数
+# less, < operator
+less(a, b)
+```
+
+样例
+
+```markdown
+# 等于函数
+os21 :) select equals(1,1), 1=1,toDateTime('2024-08-01') == toDateTime('2024-08-01');
+
+SELECT
+    1 = 1,
+    1 = 1,
+    toDateTime('2024-08-01') = toDateTime('2024-08-01')
+
+Query id: a5cd3127-1826-49c7-8e35-e6629b9b2fe4
+
+┌─equals(1, 1)─┬─equals(1, 1)─┬─equals(toDateTime('2024-08-01'), toDateTime('2024-08-01'))─┐
+│            1 │            1 │                                                          1 │
+└──────────────┴──────────────┴────────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 不等于函数
+os21 :) select notEquals(1, 1), 1 != 2,toDateTime('2024-08-01') <> toDateTime('2024-08-01');
+
+SELECT
+    1 != 1,
+    1 != 2,
+    toDateTime('2024-08-01') != toDateTime('2024-08-01')
+
+Query id: 26bf494f-b510-4769-8f0e-e8a27c911558
+
+┌─notEquals(1, 1)─┬─notEquals(1, 2)─┬─notEquals(toDateTime('2024-08-01'), toDateTime('2024-08-01'))─┐
+│               0 │               1 │                                                             0 │
+└─────────────────┴─────────────────┴───────────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+# 小于函数
+os21 :) select less(1,2),toDateTime('2024-08-01') < toDateTime('2024-08-02');
+
+SELECT
+    1 < 2,
+    toDateTime('2024-08-01') < toDateTime('2024-08-02')
+
+Query id: feaef79c-e64b-4b7d-a40f-68c9670d8c25
+
+┌─less(1, 2)─┬─less(toDateTime('2024-08-01'), toDateTime('2024-08-02'))─┐
+│          1 │                                                        1 │
+└────────────┴──────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+```
+
+
+
+### 8.3 逻辑函数
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/functions/logical-functions
+```
+
+样例
+
+```sh
+# and
+# 非0即为true
+select and(0,1,2);
+select and(1,1,2);
+
+# or
+# 有一个满足即为1
+SELECT or(1, 0, 0, 2, NULL,-1);
+
+# not 
+# Returned value
+# 1, if val evaluates to false,
+# 0, if val evaluates to true,
+# NULL, if val is NULL.
+select not(1),not(0),not(-1),not(null);
+```
+
+
+
+输出
+
+```sh
+# and
+os21 :) select and(0,1,2);
+
+SELECT 0 AND 1 AND 2
+
+Query id: e040536e-955c-4822-900e-9687703b28aa
+
+┌─and(0, 1, 2)─┐
+│            0 │
+└──────────────┘
+
+1 row in set. Elapsed: 0.003 sec. 
+
+os21 :) select and(1,1,2);
+
+SELECT 1 AND 1 AND 2
+
+Query id: 622ff6b7-835d-408d-887c-c166e80c5044
+
+┌─and(1, 1, 2)─┐
+│            1 │
+└──────────────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+
+# or
+os21 :) SELECT or(1, 0, 0, 2, NULL,-1);
+
+SELECT 1 OR 0 OR 0 OR 2 OR NULL OR -1
+
+Query id: 0ef4b8be-a130-4dff-a407-198e7a328b76
+
+┌─or(1, 0, 0, 2, NULL, -1)─┐
+│                        1 │
+└──────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
+# not 
+os21 :) select not(1),not(0),not(-1),not(null);
+
+SELECT
+    NOT 1,
+    NOT 0,
+    NOT -1,
+    NOT NULL
+
+Query id: a6b7a741-bfcb-45c7-8fae-4ace642919dc
+
+┌─not(1)─┬─not(0)─┬─not(-1)─┬─not(NULL)─┐
+│      0 │      1 │       0 │ ᴺᵁᴸᴸ      │
+└────────┴────────┴─────────┴───────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+```
+
+
+
+
+
+### 8.4 取整函数
+
+官网API地址：
+
+```markdown
+https://clickhouse.com/docs/en/sql-reference/functions/rounding-functions
+```
+
+```sql
+-- 保留小数位数，向下取整
+select floor(123.12,1);
+
+-- 向上取整
+select ceil(123.12,1);
+
+
+-- 四舍五入
+select round(123.56,1);
+select round(123.42,1);
+```
+
+样例:
+
+```sh
+#  保留小数位数,向下取整
+os21 :) select floor(123.12,1);
+
+SELECT floor(123.12, 1)
+
+Query id: 13550082-5675-4d29-a93f-3a3efcf902e3
+
+┌─floor(123.12, 1)─┐
+│            123.1 │
+└──────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 向上取整
+os21 :) select ceil(123.12,1);
+
+SELECT ceil(123.12, 1)
+
+Query id: 14d687c3-eda7-48c4-a0d8-b982dc36fb7b
+
+┌─ceil(123.12, 1)─┐
+│           123.2 │
+└─────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 四舍五入
+os21 :) select round(123.56,1);
+
+SELECT round(123.56, 1)
+
+Query id: dc02a013-8513-4b47-be55-c1cc8cc74a9b
+
+┌─round(123.56, 1)─┐
+│            123.6 │
+└──────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) select round(123.42,1);
+
+SELECT round(123.42, 1)
+
+Query id: cfbe37ec-1a9c-402b-b2c9-5e0b4eb50b33
+
+┌─round(123.42, 1)─┐
+│            123.4 │
+└──────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+```
+
+
+
+### 8.5 转换函数
+
+官网地址:
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/functions/type-conversion-functions
+```
+
+样例：
+
+```sh
+# 转换为int8
+select toInt8(8), toInt8(-8),toInt8('-8');
+
+# 转换为DateTime
+SELECT toDateTime('2024-08-02 13:44:17') as outTime, toDateTime(outTime, 'UTC');
+
+# 转换为Datetime64
+SELECT toDateTime64('2024-08-02 12:49:10.1234567890123456789',9) AS value, toTypeName(value);
+
+# 格式化时间
+SELECT parseDateTime('2024-08-02 12:49:10', '%Y-%M-%D %H:%m:%s')
+
+
+
+# ToString函数
+select toString('2024-08-02 12:57:49','Asia/Shanghai') ;
+select toString('2024-08-02 12:57:49','UTC');
+
+SELECT
+    now() AS ts,
+    time_zone as outzone,
+    toString(ts, outzone) AS str_tz_datetime
+FROM system.time_zones
+WHERE time_zone LIKE 'Asia%'
+LIMIT 10;
+
+
+
+
+SELECT
+    now() AS ts,
+    time_zone
+FROM system.time_zones
+WHERE time_zone LIKE 'Asia%'
+LIMIT 10
+
+```
+
+输出:
+
+```sh
+# 转换为int8
+os21 :) select toInt8(8), toInt8(-8),toInt8('-8')
+
+SELECT
+    toInt8(8),
+    toInt8(-8),
+    toInt8('-8')
+
+Query id: 961db50a-6123-4b87-b697-d4420359e42f
+
+┌─toInt8(8)─┬─toInt8(-8)─┬─toInt8('-8')─┐
+│         8 │         -8 │           -8 │
+└───────────┴────────────┴──────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 转换为DateTime
+os21 :) SELECT toDateTime('2024-08-02 13:44:17') as outTime, toDateTime(outTime, 'UTC');
+
+SELECT
+    toDateTime('2024-08-02 13:44:17') AS outTime,
+    toDateTime(outTime, 'UTC')
+
+Query id: 51eda2b7-5a04-4dc3-b8aa-15f14700ddec
+
+┌─────────────outTime─┬─toDateTime(toDateTime('2024-08-02 13:44:17'), 'UTC')─┐
+│ 2024-08-02 13:44:17 │                                  2024-08-02 05:44:17 │
+└─────────────────────┴──────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+# 转换为Datetime64
+os21 :) SELECT toDateTime64('2024-08-02 12:49:10.1234567890123456789',9) AS value, toTypeName(value);
+
+SELECT
+    toDateTime64('2024-08-02 12:49:10.1234567890123456789', 9) AS value,
+    toTypeName(value)
+
+Query id: 615a7525-c3fc-4c3b-9443-2e3a44cfd747
+
+┌─────────────────────────value─┬─toTypeName(toDateTime64('2024-08-02 12:49:10.1234567890123456789', 9))─┐
+│ 2024-08-02 12:49:10.123456789 │ DateTime64(9)                                                          │
+└───────────────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+```
+
+
+
+### 8.6 逻辑函数
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/functions/conditional-functions
+```
+
+函数
+
+```sh
+# if
+if(cond, then, else)
+
+# 多条件函数
+multiIf(cond_1, then_1, cond_2, then_2, ..., else)
+
+# null 值条件 
+```
+
+输出
+
+```sh
+# if函数
+os21 :) select if(1,'is ok','is error');
+
+SELECT if(1, 'is ok', 'is error')
+
+Query id: 7a873ee8-6ed6-4479-923e-12caeea5c067
+
+┌─'is ok'─┐
+│ is ok   │
+└─────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+# 多条件函数
+os21 :) select multiIf(data.left < data.right, '<', data.left > data.right, '>',  '=')
+        from (
+        (select 2 as left, 1 as  right from numbers(1))
+        UNION ALL
+        (select 1 as left, 4 as  right  from numbers(1) )
+        UNION  ALL
+        (select null as left, 4 as  right  from numbers(1))
+        ) data;
+
+SELECT multiIf(data.left < data.right, '<', data.left > data.right, '>', '=')
+FROM
+(
+
+        SELECT
+        2 AS left,
+        1 AS right
+    FROM numbers(1)
+    UNION ALL
+        SELECT
+        1 AS left,
+        4 AS right
+    FROM numbers(1)
+    UNION ALL
+        SELECT
+        NULL AS left,
+        4 AS right
+    FROM numbers(1)
+) AS data
+
+Query id: f7e8d574-5224-441b-8363-5848f28b7a13
+
+┌─multiIf(less(left, right), '<', greater(left, right), '>', '=')─┐
+│ <                                                               │
+└─────────────────────────────────────────────────────────────────┘
+┌─multiIf(less(left, right), '<', greater(left, right), '>', '=')─┐
+│ >                                                               │
+└─────────────────────────────────────────────────────────────────┘
+┌─multiIf(less(left, right), '<', greater(left, right), '>', '=')─┐
+│ =                                                               │
+└─────────────────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+
+# 空值条件
+os21 :) SELECT
+            NULL < 1,
+            2 < NULL,
+            NULL < NULL,
+            NULL = NULL;
+
+SELECT
+    NULL < 1,
+    2 < NULL,
+    NULL < NULL,
+    NULL = NULL
+
+Query id: 058be9d4-2454-4183-b22c-501cb0127fdc
+
+┌─less(NULL, 1)─┬─less(2, NULL)─┬─less(NULL, NULL)─┬─equals(NULL, NULL)─┐
+│ ᴺᵁᴸᴸ          │ ᴺᵁᴸᴸ          │ ᴺᵁᴸᴸ             │ ᴺᵁᴸᴸ               │
+└───────────────┴───────────────┴──────────────────┴────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
 ```
 
 
