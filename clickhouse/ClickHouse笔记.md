@@ -2668,7 +2668,70 @@ Query id: 058be9d4-2454-4183-b22c-501cb0127fdc
 
 
 
-## 9. CK的分区操作
+## 9. ClickHouseDDL
+
+### 9.1 插入数据
+
+关于CK的数据格式：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/formats
+```
+
+
+
+创建的表
+
+```sql
+CREATE TABLE ddl_user
+(
+    `id` UInt8,
+    `name` String,
+    `address` String
+)
+ENGINE = TinyLog
+```
+
+
+
+方式1：普通的SQL插入
+
+```sql
+insert into ddl_user(id,name,address)
+values(1,'张三','上海'),
+(2,'李四','北京'),
+(3,'王五','深圳');
+```
+
+
+
+方式2： 使用CSV文件导入
+
+```sql
+-- 1.准备数据文件 data.csv
+10,小刘,上海
+20,小曾,上海
+30,小辰,上海
+
+-- 使用命令导入
+cat  data.csv | clickhouse-client --query "INSERT INTO nullnull.ddl_user FORMAT CSV" --max_insert_block_size=100000 --user maxwell --password 
+```
+
+方式3：
+
+当大批量导出时，推荐此方式
+
+```sql
+INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMAT Native;
+```
+
+
+
+
+
+### 9.9 分区操作
+
+分区操作的命令
 
 ```sh
 # 分区装载
@@ -2677,6 +2740,96 @@ ALTER TABLE ${tableName}  ATTACH PARTITION ${partition}
 # 分区卸载
 ALTER TABLE ${tableName}   DROP PARTITION ${partition}
 ```
+
+分区的样例,
+
+分区表的创建与加载数据
+
+```sh
+# 创建分区表
+create table nullnull_partition_01(
+	id UInt8,
+	name String,
+	birthday DateTime
+)engine = MergeTree()
+partition by toDate(birthday)
+order by id;
+
+# 插入数据
+insert into nullnull_partition_01(id,name,birthday)
+values(1,'小刘','2024-10-25 12:46:00'),
+(2,'小曾','2024-10-23 12:46:00'),
+(3,'小丽','2024-10-22 12:46:00');
+
+
+# 查询数据
+select * from nullnull_partition_01;
+
+```
+
+日志输出：
+
+```sh
+mwrpt-clickhouse :) create table nullnull_partition_01(
+^Iid UInt8,
+^Iname String,
+^Ibirthday DateTime
+)engine = MergeTree()
+partition by toDate(birthday)
+order by id;
+
+CREATE TABLE nullnull_partition_01
+(
+    `id` UInt8,
+    `name` String,
+    `birthday` DateTime
+)
+ENGINE = MergeTree
+PARTITION BY toDate(birthday)
+ORDER BY id
+
+Query id: 779d4e41-8850-4746-adb9-32651a150c2a
+
+Ok.
+
+0 rows in set. Elapsed: 0.019 sec. 
+
+mwrpt-clickhouse :) insert into nullnull_partition_01(id,name,birthday)
+values(1,'小刘','2024-10-25 12:46:00'),
+(2,'小曾','2024-10-23 12:46:00'),
+(3,'小丽','2024-10-22 12:46:00');
+
+INSERT INTO nullnull_partition_01 (id, name, birthday) FORMAT Values
+
+Query id: b6f680c3-76e5-4070-a963-e3b3650a9571
+
+Ok.
+
+3 rows in set. Elapsed: 0.003 sec. 
+
+mwrpt-clickhouse :) select * from nullnull_partition_01;
+
+SELECT *
+FROM nullnull_partition_01
+
+Query id: ea7664a4-cd46-4e47-a51c-7cc1ad2c3340
+
+┌─id─┬─name─┬────────────birthday─┐
+│  3 │ 小丽 │ 2024-10-22 12:46:00 │
+└────┴──────┴─────────────────────┘
+┌─id─┬─name─┬────────────birthday─┐
+│  1 │ 小刘 │ 2024-10-25 12:46:00 │
+└────┴──────┴─────────────────────┘
+┌─id─┬─name─┬────────────birthday─┐
+│  2 │ 小曾 │ 2024-10-23 12:46:00 │
+└────┴──────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.002 sec. 
+
+mwrpt-clickhouse :) 
+```
+
+
 
 
 
@@ -2714,6 +2867,35 @@ select xxx from xxx
 ```
 
 
+
+
+
+
+
+## CK常用SQL
+
+统计表的空间占用
+
+```sql
+SELECT
+	sum(rows) AS `总行数`,
+	sum(data_uncompressed_bytes) AS `原始大小-Byes`,
+	formatReadableSize(sum(data_uncompressed_bytes)) AS `原始大小`,
+	sum(data_compressed_bytes) AS `压缩大小-bytes`,
+	formatReadableSize(sum(data_compressed_bytes)) AS `压缩大小`,
+	round((sum(data_compressed_bytes) / sum(data_uncompressed_bytes)) * 100,
+	0) AS `压缩率`,
+	`table` AS `表名`
+FROM
+	system.parts
+where
+	database = 'maxwell_mes'
+--and `table` = 'his_wafer_sorting'
+and `table` not like  'ods_%'
+group by
+	`table`
+order by `总行数`
+```
 
 
 
