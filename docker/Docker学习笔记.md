@@ -70,6 +70,42 @@ grub2-set-default 0
 reboot
 ```
 
+### 使用阿里云进行升级解决网络慢的问题
+
+```sh
+vi /etc/yum.repos.d/elrepo.repo
+#编辑内容：
+[elrepo]
+name=elrepo
+baseurl=https://mirrors.aliyun.com/elrepo/archive/kernel/el7/x86_64
+gpgcheck=0
+enabled=1
+
+#清空和刷新yum源元数据缓存
+yum clean all && yum makecache
+#解析：yum clean all，清空历史yum源元数据；yum makecache，创建yum源元数据缓存。
+
+
+#查看 ml 最新版本
+yum --enablerepo="elrepo" list --showduplicates | sort -r | grep kernel-ml.x86_64
+#查看 lt 长期支持版本
+yum --enablerepo="elrepo" list --showduplicates | sort -r | grep kernel-lt.x86_64
+
+
+yum --enablerepo=elrepo install -y kernel-lt
+
+# 查看当前已经安装的版本
+grep initrd16 /boot/grub2/grub.cfg
+grub2-set-default 0
+
+# 重启以让其版本生效
+reboot
+```
+
+
+
+
+
 **查看系统内核版本**
 
 ```sh

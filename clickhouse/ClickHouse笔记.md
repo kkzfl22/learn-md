@@ -2668,6 +2668,57 @@ Query id: 058be9d4-2454-4183-b22c-501cb0127fdc
 
 
 
+## 9. CK的分区操作
+
+```sh
+# 分区装载
+ALTER TABLE ${tableName}  ATTACH PARTITION ${partition}
+
+# 分区卸载
+ALTER TABLE ${tableName}   DROP PARTITION ${partition}
+```
+
+
+
+
+
+## 10  多维数据分析
+
+```sql
+# 在传统的统计中，存在一种分析。比按A和B进行分组。
+select XXX from xxx group by a,b
+union all 
+select XXX from xxx group by a
+union all
+select xxx from xxx group by b
+union all
+select xxx from xxx
+# 将这种4种场景聚合在一起进行分析。
+
+# 维度a,b
+# rollup 上卷，从每一个维度开始，不能跳过
+	# group by  统计所有
+	# group by a
+	# group by a,b
+# cube : 多维分析,所有情况都会有
+	# group by a,b
+	# group by a
+	# group by b
+	# group by  统计所有
+# total ： 总计 
+	# group by a,b
+	# group by  统计所有
+	
+	
+	
+```
+
+
+
+
+
+
+
 
 
 ## 结束
