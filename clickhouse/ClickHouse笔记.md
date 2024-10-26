@@ -249,6 +249,18 @@ docker stop some-clickhouse-server && docker rm some-clickhouse-server
 样例：
 
 ```sh
+docker pull dockerpull.com/clickhouse/clickhouse-server:22.6.3.35
+
+docker run -d -p 18123:8123 -p19000:9000  \
+     -v /opt/nullnull/clickhouse/data:/var/lib/clickhouse/:z \
+     -v /opt/nullnull/clickhouse/log:/var/log/clickhouse-server/:z \
+     -v /opt/nullnull/clickhouse/config/config.d:/etc/clickhouse-server/config.d/:z \
+     -v /opt/nullnull/clickhouse/config/users.d:/etc/clickhouse-server/users.d/:z \
+     --name some-clickhouse-server  \
+     --ulimit nofile=262144:262144 \
+     dockerpull.com/clickhouse/clickhouse-server:22.6.3.35
+
+
 [root@os21 config.d]# docker run -d \
 > -p 18123:8123 -p19000:9000  \
 >     -v /opt/nullnull/clickhouse/data:/var/lib/clickhouse/:z \
@@ -2731,6 +2743,10 @@ INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMA
 
 ### 9.9 分区操作
 
+分区在于减少查询读取数据的条数
+
+在ck中需要使用mergeTree引擎
+
 分区操作的命令
 
 ```sh
@@ -2746,6 +2762,7 @@ ALTER TABLE ${tableName}   DROP PARTITION ${partition}
 分区表的创建与加载数据
 
 ```sh
+
 # 创建分区表
 create table nullnull_partition_01(
 	id UInt8,
@@ -2827,6 +2844,41 @@ Query id: ea7664a4-cd46-4e47-a51c-7cc1ad2c3340
 3 rows in set. Elapsed: 0.002 sec. 
 
 mwrpt-clickhouse :) 
+```
+
+
+
+分区表信息
+
+```sql
+select * from system.parts;
+```
+
+详细的分区信息
+
+```sql
+a5e651989f3b :) select database,table,name,partition_id from system.parts where table ='nullnull_partition_01'
+
+SELECT
+    database,
+    table,
+    name,
+    partition_id
+FROM system.parts
+WHERE table = 'nullnull_partition_01'
+
+Query id: 9d3b9be5-d2b8-4189-b979-1e81546e4fa2
+
+┌─database─┬─table─────────────────┬─name───────────┬─partition_id─┐
+│ default  │ nullnull_partition_01 │ 20241022_3_3_0 │ 20241022     │
+│ default  │ nullnull_partition_01 │ 20241023_2_2_0 │ 20241023     │
+│ default  │ nullnull_partition_01 │ 20241025_1_1_0 │ 20241025     │
+└──────────┴───────────────────────┴────────────────┴──────────────┘
+
+3 rows in set. Elapsed: 0.004 sec. 
+
+a5e651989f3b :) 
+
 ```
 
 
