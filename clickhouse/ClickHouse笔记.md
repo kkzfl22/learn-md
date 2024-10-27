@@ -249,7 +249,8 @@ docker stop some-clickhouse-server && docker rm some-clickhouse-server
 样例：
 
 ```sh
-docker pull dockerpull.com/clickhouse/clickhouse-server:22.6.3.35
+# docker pull dockerpull.com/clickhouse/clickhouse-server:22.6.3.35
+docker pull dockerpull.com/clickhouse/clickhouse-server:24.2.1.2248
 
 docker run -d -p 18123:8123 -p19000:9000  \
      -v /opt/nullnull/clickhouse/data:/var/lib/clickhouse/:z \
@@ -258,7 +259,7 @@ docker run -d -p 18123:8123 -p19000:9000  \
      -v /opt/nullnull/clickhouse/config/users.d:/etc/clickhouse-server/users.d/:z \
      --name some-clickhouse-server  \
      --ulimit nofile=262144:262144 \
-     dockerpull.com/clickhouse/clickhouse-server:22.6.3.35
+     dockerpull.com/clickhouse/clickhouse-server:24.2.1.2248
 
 
 [root@os21 config.d]# docker run -d \
@@ -594,6 +595,136 @@ ENGINE = Atomic
 /var/lib/clickhouse/metadata
 [root@os21 metadata]#
 ```
+
+MergeTree数据目录结构
+
+```sh
+[root@mes01 6f281bfb-015f-4957-a58c-ee87927e1db7]# tree .
+.
+├── 20241025_2_4_1
+│   ├── checksums.txt
+│   ├── columns.txt
+│   ├── count.txt
+│   ├── data.bin
+│   ├── data.cmrk3
+│   ├── default_compression_codec.txt
+│   ├── metadata_version.txt
+│   ├── minmax_create_time.idx
+│   ├── partition.dat
+│   ├── primary.cidx
+│   └── serialization.json
+├── 20241027_1_3_1
+│   ├── checksums.txt
+│   ├── columns.txt
+│   ├── count.txt
+│   ├── data.bin
+│   ├── data.cmrk3
+│   ├── default_compression_codec.txt
+│   ├── metadata_version.txt
+│   ├── minmax_create_time.idx
+│   ├── partition.dat
+│   ├── primary.cidx
+│   └── serialization.json
+├── detached
+└── format_version.txt
+
+root@mes01 6f281bfb-015f-4957-a58c-ee87927e1db7]# ll
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 22:44 20241025_2_4_1
+drwxr-x---. 2 101 101 259 Oct 27 22:44 20241027_1_3_1
+drwxr-x---. 2 101 101   6 Oct 27 22:43 detached
+-rw-r-----. 1 101 101   1 Oct 27 22:43 format_version.txt
+[root@mes01 6f281bfb-015f-4957-a58c-ee87927e1db7]# cd 20241025_2_4_1/
+[root@mes01 20241025_2_4_1]# ll
+total 44
+-rw-r-----. 1 101 101 333 Oct 27 22:44 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 22:44 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 22:44 count.txt
+-rw-r-----. 1 101 101 186 Oct 27 22:44 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 22:44 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 22:44 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 22:44 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 22:44 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 22:44 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 22:44 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 22:44 serialization.json
+
+# 数据行数
+[root@mes01 20241025_2_4_1]# cat count.txt 
+2[root@mes01 20241025_2_4_1]# 
+# 列信息
+[root@mes01 20241025_2_4_1]# cat columns.txt
+columns format version: 1
+5 columns:
+`id` UInt32
+`order_id` String
+`name` String
+`money` Decimal(16, 2)
+`create_time` DateTime
+[root@mes01 20241025_2_4_1]# 
+```
+
+解释
+
+```sh
+#分区目录解释
+20241027_1_3_1
+# 20241027 分区的日期
+# 1 分区内最小块的编号
+# 3 分区内最大块的编号
+# 1 最后表示为合并的等级，也就是合并的次数。
+
+
+# 分区内的目录文件详细信息
+data.bin 数据文件
+data.cmrk3 数据标记文件
+default_compression_codec.txt 默认的压缩格式
+count.txt 数据条数
+columns.txt 列的信息
+checksums.txt 校验信息
+primary.cidx  主健的索引文件，稀疏索引结构。
+partition.dat 分区信息
+minmax_create_time.idx 分区内的索引文件，给分区使用。
+
+```
+
+详细的分区信息解释
+
+```sh
+PartitionId_MinBlockNum_MaxBlockNum_Level
+分区值_最小分区块编号_最大分区块编号_合并层级
+    =》PartitionId
+        数据分区ID生成规则
+        数据分区规则由分区ID决定，分区ID由PARTITION BY分区键决定。根据分区键字段类型，ID生成规则可分为：
+            未定义分区键
+                没有定义PARTITION BY，默认生成一个目录名为all的数据分区，所有数据均存放在all目录下。
+
+            整型分区键
+                分区键为整型，那么直接用该整型值的字符串形式做为分区ID。
+
+            日期类分区键
+                分区键为日期类型，或者可以转化成日期类型。
+
+            其他类型分区键
+                String、Float类型等，通过128位的Hash算法取其Hash值作为分区ID。
+    =》MinBlockNum
+        最小分区块编号，自增类型，从1开始向上递增。每产生一个新的目录分区就向上递增一个数字。
+    =》MaxBlockNum
+        最大分区块编号，新创建的分区MinBlockNum等于MaxBlockNum的编号。
+    =》Level
+        合并的层级，被合并的次数。合并次数越多，层级值越大。
+        
+        
+bin文件：数据文件
+mrk文件：标记文件
+    标记文件在 idx索引文件 和 bin数据文件 之间起到了桥梁作用。
+    以mrk2结尾的文件，表示该表启用了自适应索引间隔。
+primary.idx文件：主键索引文件，用于加快查询效率。
+minmax_create_time.idx：分区键的最大最小值。
+checksums.txt：校验文件，用于校验各个文件的正确性。存放各个文件的size以及hash值。
+```
+
+
 
 
 
@@ -1219,7 +1350,19 @@ os21 :)
 
 
 
-### 7.2  布尔类型
+### 7.2 浮点数
+
+Float32-float
+
+Float64-double
+
+一般尽可能以整数的形式存储数据，将固定精度的数字转换为整数值，时间以毫秒为单位表示。浮点数在计算时，可能引起四舍五入的误差。
+
+
+
+
+
+### 7.3  布尔类型
 
 ```markdown
 Bool
@@ -1251,416 +1394,100 @@ SELECT * FROM test_bool;
 └───┴───────┘
 ```
 
-### 7.3 UUID
+没有单独的类型来存储布尔值，可以使用Uint8类型，取值限制为0或者1.
 
-```markdown
-UUID
-A Universally Unique Identifier (UUID) is a 16-byte value used to identify records. For detailed information about UUIDs, see Wikipedia.
+### 7.4 Decimal类型
 
-While different UUID variants exist (see here), ClickHouse does not validate that inserted UUIDs conform to a particular variant. UUIDs are internally treated as a sequence of 16 random bytes with 8-4-4-4-12 representation at SQL level.
+有符号的浮点数，可以加、减和乘法运算过程中保持精度。对于除法，最低有效数字会被丢弃。
 
-Example UUID value:
+有符号的定点数，可在加、减和乘法运算过程中保持精度。ClickHouse提供了Decimal32、Decimal64和Decimal128三种精度的定点数，支持几种写法：
 
-61f0c404-5cb3-11e7-907b-a6006ad3dba0
+- Decimal(P, S)
 
-The default UUID is all-zero. It is used, for example, when a new record is inserted but no value for a UUID column is specified:
+- Decimal32(S)
 
-00000000-0000-0000-0000-000000000000
+  **数据范围：( -1 \* 10^(9 - S), 1 \* 10^(9 - S) )**
 
-Due to historical reasons, UUIDs are sorted by their second half. UUIDs should therefore not be used directly in a primary key, sorting key, or partition key of a table.
-```
+- Decimal64(S)
 
-样例
+  **数据范围：( -1 \* 10^(18 - S), 1 \* 10^(18 - S) )**
 
-```sh
-create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
-desc data_type_uuid;
-insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
-select * from data_type_uuid;
+- Decimal128(S)
 
-# 如果不设置则使用00000000-0000-0000-0000-000000000000来填充
-insert into data_type_uuid(name) select 'nullnull2';
-select * from data_type_uuid;
-```
+  **数据范围： ( -1 \* 10^(38 - S), 1 \* 10^(38 - S) )**
 
-输出：
+- Decimal256(S)
 
-```sh
-os21 :) create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
+  **数据范围：( -1 \* 10^(76 - S), 1 \* 10^(76 - S) )**
 
-CREATE TABLE data_type_uuid
-(
-    `uuid` UUID,
-    `name` String
-)
-ENGINE = Memory
+其中：**P**代表精度，决定总位数（整数部分+小数部分），取值范围是1～76
 
-Query id: e80f5d28-84b8-413a-9a61-4a8c0fd9a5c7
+​           **S**代表规模，决定小数位数，取值范围是0～P
 
-Ok.
+根据**P**的范围，可以有如下的等同写法：
 
-0 rows in set. Elapsed: 0.004 sec. 
+| P 取值      | 原生写法示例  | 等同于        |
+| ----------- | ------------- | ------------- |
+| [ 1 : 9 ]   | Decimal(9,2)  | Decimal32(2)  |
+| [ 10 : 18 ] | Decimal(18,2) | Decimal64(2)  |
+| [ 19 : 38 ] | Decimal(38,2) | Decimal128(2) |
+| [ 39 : 76 ] | Decimal(76,2) | Decimal256(2) |
 
-os21 :) desc data_type_uuid;
+**注意点**：不同精度的数据进行四则运算时，**精度(总位数)和规模(小数点位数)**会发生变化，具体规则如下：
 
-DESCRIBE TABLE data_type_uuid
+- 精度对应的规则
 
-Query id: b9283419-df46-40ca-a3df-f03ab9f63e99
+  - Decimal64(S1) `运算符` Decimal32(S2)   ->  Decimal64(S)
+  - Decimal128(S1) `运算符`  Decimal32(S2) -> Decimal128(S）
+  - Decimal128(S1) `运算符`  Decimal64(S2) -> Decimal128(S)
+  - Decimal256(S1) `运算符`  Decimal<32|64|128>(S2) -> Decimal256(S)
 
-┌─name─┬─type───┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
-│ uuid │ UUID   │              │                    │         │                  │                │
-│ name │ String │              │                    │         │                  │                │
-└──────┴────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+  **可以看出：两个不同精度的数据进行四则运算时，结果数据已最大精度为准**
 
-2 rows in set. Elapsed: 0.001 sec. 
+- 规模(小数点位数)对应的规则
 
-os21 :) insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
+  - 加法|减法：S = max(S1, S2)，即以两个数据中小数点位数最多的为准
+  - 乘法： S = S1 + S2(注意：S1精度 >= S2精度)，即以两个数据的小数位相加为准
 
-INSERT INTO data_type_uuid (uuid, name) SELECT
-    generateUUIDv4(),
-    'nullnull'
-
-Query id: 25a80683-4ee6-489b-a70b-569541bc636d
-
-Ok.
-
-0 rows in set. Elapsed: 0.001 sec. 
-
-os21 :) select * from data_type_uuid;
-
-SELECT *
-FROM data_type_uuid
-
-Query id: cbd73b8d-5cce-4753-90e2-a1f822bdd710
-
-┌─uuid─────────────────────────────────┬─name─────┐
-│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
-└──────────────────────────────────────┴──────────┘
-
-1 row in set. Elapsed: 0.001 sec. 
-os21 :) insert into data_type_uuid(name) select 'nullnull2';
-
-INSERT INTO data_type_uuid (name) SELECT 'nullnull2'
-
-Query id: f4199d1d-6dbc-4de6-8756-ef72b7698533
-
-Ok.
-
-0 rows in set. Elapsed: 0.001 sec. 
-
-os21 :) select * from data_type_uuid;
-
-SELECT *
-FROM data_type_uuid
-
-Query id: c9611e50-c762-4fac-8937-3dbc5062361d
-
-┌─uuid─────────────────────────────────┬─name─────┐
-│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
-└──────────────────────────────────────┴──────────┘
-┌─uuid─────────────────────────────────┬─name──────┐
-│ 00000000-0000-0000-0000-000000000000 │ nullnull2 │
-└──────────────────────────────────────┴───────────┘
-
-2 rows in set. Elapsed: 0.001 sec. 
-```
-
-### 7.4 数组类型
-
-```markdown
-Array(T)
-An array of T-type items, with the starting array index as 1. T can be any data type, including an array.
-下标从1开始 .
-```
-
-使用数组
+s，标识小数位数，一般金额字段、汇率、利率等为了保证小数精度，使用Decimal类型。
 
 ```sh
-# 创建数组
-select array(1,2) as x,toTypeName(x);
-# 通过观察可以发现，数组的类型经过推导为UInt8
-
-# 第二种定义方式
-select [1,2] as x,toTypeName(x);
-
-# 在array中存在null的情况
-select array(1,2,null) as x ,toTypeName(x);
-
-
-# 建表测试
-create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
-desc datatype_array;
-
-insert into datatype_array values(1,['drink','eat','run']),(2,['sleep','game']);
-select * from datatype_array;
-# 数据下标从1开始，使用0会报错
-select id,bobby[0] from datatype_array;
-# 正确的获取方式
-select id,bobby[1] from datatype_array;
-# 获取数组元素个数
-select id,bobby.size0 from datatype_array;
-```
-
-```sh
-# 创建数组
-os21 :) select array(1,2) as x,toTypeName(x);
-
-SELECT
-    [1, 2] AS x,
-    toTypeName(x)
-
-Query id: 91907fa4-89d0-4af7-beda-310a68c1b847
-
-┌─x─────┬─toTypeName([1, 2])─┐
-│ [1,2] │ Array(UInt8)       │
-└───────┴────────────────────┘
-
-1 row in set. Elapsed: 0.001 sec. 
-
-# 第二种定义方式
-os21 :) select [1,2] as x,toTypeName(x);
-
-SELECT
-    [1, 2] AS x,
-    toTypeName(x)
-
-Query id: b06d0d7c-24a6-4340-92be-5c76c6c994a8
-
-┌─x─────┬─toTypeName([1, 2])─┐
-│ [1,2] │ Array(UInt8)       │
-└───────┴────────────────────┘
-
-1 row in set. Elapsed: 0.001 sec. 
-
-# 在array中存在null的情况
-os21 :) select array(1,2,null) as x ,toTypeName(x);
-
-SELECT
-    [1, 2, NULL] AS x,
-    toTypeName(x)
-
-Query id: ba4c52a0-eb4e-421e-b579-67af0b3a87aa
-
-┌─x──────────┬─toTypeName([1, 2, NULL])─┐
-│ [1,2,NULL] │ Array(Nullable(UInt8))   │
-└────────────┴──────────────────────────┘
-
-1 row in set. Elapsed: 0.001 sec. 
-
-# 建表测试
-os21 :) create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
-
-CREATE TABLE datatype_array
-(
-    `id` UInt8,
-    `bobby` Array(String)
-)
-ENGINE = Memory
-
-Query id: c71009b8-57bc-4ded-9c89-67500c6d0233
-
-Ok.
-
-0 rows in set. Elapsed: 0.002 sec. 
-
-os21 :) desc datatype_array;
-
-DESCRIBE TABLE datatype_array
-
-Query id: 371d21c0-ac17-4035-90ce-4f8064c86812
-
-┌─name──┬─type──────────┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
-│ id    │ UInt8         │              │                    │         │                  │                │
-│ bobby │ Array(String) │              │                    │         │                  │                │
-└───────┴───────────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
-
-2 rows in set. Elapsed: 0.000 sec. 
-
-os21 :) select * from datatype_array;
-
-SELECT *
-FROM datatype_array
-
-Query id: 1b118634-363a-492d-822b-a120d6101731
-
-┌─id─┬─bobby─────────────────┐
-│  1 │ ['drink','eat','run'] │
-│  2 │ ['sleep','game']      │
-└────┴───────────────────────┘
-
-2 rows in set. Elapsed: 0.001 sec. 
-
-os21 :) 
-os21 :) select id,bobby[0] from datatype_array;
-
-SELECT
-    id,
-    bobby[0]
-FROM datatype_array
-
-Query id: 11723a58-6b56-43ea-ac74-5dc7a71c1496
-
-
-0 rows in set. Elapsed: 0.026 sec. 
-
-Received exception from server (version 22.12.6):
-Code: 135. DB::Exception: Received from localhost:9000. DB::Exception: Array indices are 1-based. (ZERO_ARRAY_OR_TUPLE_INDEX)
-
-# 正确的获取方式
-os21 :) select id,bobby[1] from datatype_array;
-
-SELECT
-    id,
-    bobby[1]
-FROM datatype_array
-
-Query id: eb43d8e2-f495-45e1-8a43-4658f7fcc763
-
-┌─id─┬─arrayElement(bobby, 1)─┐
-│  1 │ drink                  │
-│  2 │ sleep                  │
-└────┴────────────────────────┘
-
-2 rows in set. Elapsed: 0.001 sec. 
-
-# 获取数组元素个数
-os21 :) select id,bobby.size0 from datatype_array;
-
-SELECT
-    id,
-    bobby.size0
-FROM datatype_array
-
-Query id: aba57554-4248-4771-80bf-e3e9f2f68a24
-
-┌─id─┬─bobby.size0─┐
-│  1 │           3 │
-│  2 │           2 │
-└────┴─────────────┘
-
-2 rows in set. Elapsed: 0.001 sec. 
-```
-
-
-
-### 7.5 Nullable类型
-
-```markdown
-Nullable(T)
-Allows to store special marker (NULL) that denotes “missing value” alongside normal values allowed by T. For example, a Nullable(Int8) type column can store Int8 type values, and the rows that do not have a value will store NULL.
-
-T can’t be any of the composite data types Array, Map and Tuple but composite data types can contain Nullable type values, e.g. Array(Nullable(Int8)).
-
-A Nullable type field can’t be included in table indexes.
-
-NULL is the default value for any Nullable type, unless specified otherwise in the ClickHouse server configuration.
-
-Storage Features
-To store Nullable type values in a table column, ClickHouse uses a separate file with NULL masks in addition to normal file with values. Entries in masks file allow ClickHouse to distinguish between NULL and a default value of corresponding data type for each table row. Because of an additional file, Nullable column consumes additional storage space compared to a similar normal one.
-
-note
-Using Nullable almost always negatively affects performance, keep this in mind when designing your databases.
-使用NUll会对性能产生影响，特别注意。
-```
-
-
-
-### 7.6 Map类型
-
-```markdown
-Data type Map(K, V) stores key-value pairs.
-
-Unlike other databases, maps are not unique in ClickHouse, i.e. a map can contain two elements with the same key. (The reason for that is that maps are internally implemented as Array(Tuple(K, V)).)
-
-You can use use syntax m[k] to obtain the value for key k in map m. Also, m[k] scans the map, i.e. the runtime of the operation is linear in the size of the map.
+Decimal, Decimal(P), Decimal(P, S), Decimal32(S), Decimal64(S), Decimal128(S), Decimal256(S)
+Signed fixed-point numbers that keep precision during add, subtract and multiply operations. For division least significant digits are discarded (not rounded).
 
 Parameters
+P - precision. Valid range: [ 1 : 76 ]. Determines how many decimal digits number can have (including fraction). By default, the precision is 10.
+S - scale. Valid range: [ 0 : P ]. Determines how many decimal digits fraction can have.
+Decimal(P) is equivalent to Decimal(P, 0). Similarly, the syntax Decimal is equivalent to Decimal(10, 0).
 
-K — The type of the Map keys. Arbitrary type except Nullable and LowCardinality nested with Nullable types.
-V — The type of the Map values. Arbitrary type.
+Depending on P parameter value Decimal(P, S) is a synonym for:
+
+P from [ 1 : 9 ] - for Decimal32(S)
+P from [ 10 : 18 ] - for Decimal64(S)
+P from [ 19 : 38 ] - for Decimal128(S)
+P from [ 39 : 76 ] - for Decimal256(S)
+Decimal Value Ranges
+Decimal32(S) - ( -1 * 10^(9 - S), 1 * 10^(9 - S) )
+Decimal64(S) - ( -1 * 10^(18 - S), 1 * 10^(18 - S) )
+Decimal128(S) - ( -1 * 10^(38 - S), 1 * 10^(38 - S) )
+Decimal256(S) - ( -1 * 10^(76 - S), 1 * 10^(76 - S) )
+For example, Decimal32(4) can contain numbers from -99999.9999 to 99999.9999 with 0.0001 step.
+
+Internal Representation
+Internally data is represented as normal signed integers with respective bit width. Real value ranges that can be stored in memory are a bit larger than specified above, which are checked only on conversion from a string.
+
+Because modern CPUs do not support 128-bit and 256-bit integers natively, operations on Decimal128 and Decimal256 are emulated. Thus, Decimal128 and Decimal256 work significantly slower than Decimal32/Decimal64.
 ```
 
-样例
 
-```sql
-# 创建表
-create table datatype_map(data Map(String,UInt64)) engine=Memory;
 
-# 插入数据
-insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
 
-# 查询数据
-select data['key1'] from datatype_map;
 
-```
-
-样例：
-
-```sh
-# 创建表
-os21 :) create table datatype_map(data Map(String,UInt64)) engine=Memory;
-
-CREATE TABLE datatype_map
-(
-    `data` Map(String, UInt64)
-)
-ENGINE = Memory
-
-Query id: 9910343c-ae72-4b09-8a9c-81e26a21185d
-
-Ok.
-
-0 rows in set. Elapsed: 0.002 sec. 
-
-# 插入数据
-os21 :) insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
-
-INSERT INTO datatype_map FORMAT Values
-
-Query id: c18985a5-00dc-471f-a5a7-4e42bb459331
-
-Ok.
-
-3 rows in set. Elapsed: 0.001 sec. 
-
-# 查询一个不存在的KEY
-s21 :) select data['key'] from datatype_map;
-
-SELECT data['key']
-FROM datatype_map
-
-Query id: d584d685-5412-4fb6-a374-345ea6afc835
-
-┌─arrayElement(data, 'key')─┐
-│                         0 │
-│                         0 │
-│                         0 │
-└───────────────────────────┘
-
-3 rows in set. Elapsed: 0.001 sec. 
-
-# 查询存在的数据
-os21 :) select data['key1'] from datatype_map;
-
-SELECT data['key1']
-FROM datatype_map
-
-Query id: 098e88a8-3aa4-477e-935b-3f51669fe55b
-
-┌─arrayElement(data, 'key1')─┐
-│                          1 │
-│                          2 │
-│                          3 │
-└────────────────────────────┘
-
-3 rows in set. Elapsed: 0.001 sec. 
-
-os21 :) 
-```
-
-### 7.7 String类型与FixedString(N)
+### 7.5 String类型与FixedString(N)
 
 String
+
+字符串可以任意长度的。它可以包含任意的字符集，包含空字节。
 
 ```markdown
 String
@@ -1676,7 +1503,11 @@ Encodings
 ClickHouse does not have the concept of encodings. Strings can contain an arbitrary set of bytes, which are stored and output as-is. If you need to store texts, we recommend using UTF-8 encoding. At the very least, if your terminal uses UTF-8 (as recommended), you can read and write your values without making conversions. Similarly, certain functions for working with strings have separate variations that work under the assumption that the string contains a set of bytes representing a UTF-8 encoded text. For example, the length function calculates the string length in bytes, while the lengthUTF8 function calculates the string length in Unicode code points, assuming that the value is UTF-8 encoded.
 ```
 
-FixedString
+FixedString(N)
+
+固定长度N的字符串,N必须是严格的正自然数。当服务端读取长度小于N的字符串时候，通过在字符串末尾添加空字节来达到N字节长度。当服务端读取长度大于N的字符串时候，将返回错误消息。
+
+与String相比，极光会使用FixString，因为使用起来不是很方便。
 
 ```markdown
 FixedString(N)
@@ -1707,7 +1538,7 @@ Throws the Too large value for FixedString(N) exception if the string contains m
 样例:
 
 ```sql
-# 创建一个内存表
+# 创建一个类型表
 create table datatype_string(id UInt8,name String)engine=Memory;
 
 # 查看表结构
@@ -1940,7 +1771,1036 @@ Query id: 58032d0b-aef7-494b-a496-041faa31bedd
 
 
 
-## 8. ClickHouse内置函数
+
+
+### 7.6 枚举类型
+
+包括Enum8和Enum16类型。Enum保存String=interger的对应关系。
+
+Enum8用'String'=in8 描述
+
+Enum16 用'String'=int16 描述
+
+```sh
+Enumerated type consisting of named values.
+
+Named values can be declared as 'string' = integer pairs or 'string' names . ClickHouse stores only numbers, but supports operations with the values through their names.
+
+ClickHouse supports:
+
+8-bit Enum. It can contain up to 256 values enumerated in the [-128, 127] range.
+16-bit Enum. It can contain up to 65536 values enumerated in the [-32768, 32767] range.
+ClickHouse automatically chooses the type of Enum when data is inserted. You can also use Enum8 or Enum16 types to be sure in the size of storage.
+```
+
+用例演示
+
+```sh
+# 创建一个枚举Enum8（'nullnull'=1,'feifei'=2）的类型的列
+create table enum8_demo_1(
+enum_col Enum8('nullnull'=1,'feifei'=2)
+)
+ENGINE=TinyLog;
+
+# 插入数据，这个列只能插入'nullnull'或者'feifei'
+insert into enum8_demo_1 values('nullnull'),('feifei'),('nullnull');
+
+# 查询数据
+select * from enum8_demo_1;
+
+
+# 如果插入其他的值，Clickhouse则抛出异常
+insert into enum8_demo_1 values('null','fei');
+```
+
+样例输出:
+
+```sh
+a5e651989f3b :) create table enum8_demo_1(
+                enum_col Enum8('nullnull'=1,'feifei'=2)
+                )
+                ENGINE=TinyLog;
+
+CREATE TABLE enum8_demo_1
+(
+    `enum_col` Enum8('nullnull' = 1, 'feifei' = 2)
+)
+ENGINE = TinyLog
+
+Query id: 77363427-aecd-4124-a412-4b3cadbdc61c
+
+Ok.
+
+0 rows in set. Elapsed: 0.004 sec. 
+a5e651989f3b :) insert into enum8_demo_1 values('nullnull'),('feifei'),('nullnull');
+
+INSERT INTO enum8_demo_1 FORMAT Values
+
+Query id: 73d31663-2748-4765-b447-f1dbb49b79ce
+
+Ok.
+
+3 rows in set. Elapsed: 0.004 sec. 
+a5e651989f3b :) select * from enum8_demo_1;
+
+SELECT *
+FROM enum8_demo_1
+
+Query id: 3c4615b9-77c4-4044-9308-581bad2550e3
+
+┌─enum_col─┐
+│ nullnull │
+│ feifei   │
+│ nullnull │
+└──────────┘
+
+3 rows in set. Elapsed: 0.003 sec. 
+
+a5e651989f3b :) insert into enum8_demo_1 values('null','fei');
+
+INSERT INTO enum8_demo_1 FORMAT Values
+
+Query id: f1c25989-a81e-4153-9cf9-09d5ab8843c7
+
+Ok.
+Exception on client:
+Code: 36. DB::Exception: Unknown element 'null' for enum: While executing ValuesBlockInputFormat: data for INSERT was parsed from query. (BAD_ARGUMENTS)
+```
+
+
+
+### 7.7 时间类型
+
+Clickhouse有三种时间类型:
+
+- Date 接受年-月-日的字符串，比如：'2024-10-27'
+- DatetIme 接受 年-月-日 时:分:秒的字符串，比如: '2024-10-24 19:27:00'
+- Datetime64 接受 年-月-日 时:分:秒.亚秒 ，比如：'2024-10-24 19:06:00.002'
+
+日期类型，用两个字符串存储，表示从1970-01-01(无符号)到当前的日期值。
+
+
+
+### 7.8 数组类型
+
+官方参考
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/data-types/array
+```
+
+Array(T): 由T类型元素组成的数组。
+
+T可以是任意类型，包含数组类型。但不推荐使用多维数组，Clickhouse对多组数组的支持有限。例如，不能在MergeTree表中存储多组数组
+
+```markdown
+Array(T)
+An array of T-type items, with the starting array index as 1. T can be any data type, including an array.
+下标从1开始 .
+```
+
+使用数组
+
+```sh
+# 创建数组
+select array(1,2) as x,toTypeName(x);
+# 通过观察可以发现，数组的类型经过推导为UInt8
+
+# 第二种定义方式
+select [1,2] as x,toTypeName(x);
+
+# 在array中存在null的情况
+select array(1,2,null) as x ,toTypeName(x);
+
+
+# 建表测试
+create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
+desc datatype_array;
+
+insert into datatype_array values(1,['drink','eat','run']),(2,['sleep','game']);
+select * from datatype_array;
+# 数据下标从1开始，使用0会报错
+select id,bobby[0] from datatype_array;
+# 正确的获取方式
+select id,bobby[1] from datatype_array;
+# 获取数组元素个数
+select id,bobby.size0 from datatype_array;
+```
+
+```sh
+# 创建数组
+os21 :) select array(1,2) as x,toTypeName(x);
+
+SELECT
+    [1, 2] AS x,
+    toTypeName(x)
+
+Query id: 91907fa4-89d0-4af7-beda-310a68c1b847
+
+┌─x─────┬─toTypeName([1, 2])─┐
+│ [1,2] │ Array(UInt8)       │
+└───────┴────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 第二种定义方式
+os21 :) select [1,2] as x,toTypeName(x);
+
+SELECT
+    [1, 2] AS x,
+    toTypeName(x)
+
+Query id: b06d0d7c-24a6-4340-92be-5c76c6c994a8
+
+┌─x─────┬─toTypeName([1, 2])─┐
+│ [1,2] │ Array(UInt8)       │
+└───────┴────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 在array中存在null的情况
+os21 :) select array(1,2,null) as x ,toTypeName(x);
+
+SELECT
+    [1, 2, NULL] AS x,
+    toTypeName(x)
+
+Query id: ba4c52a0-eb4e-421e-b579-67af0b3a87aa
+
+┌─x──────────┬─toTypeName([1, 2, NULL])─┐
+│ [1,2,NULL] │ Array(Nullable(UInt8))   │
+└────────────┴──────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 建表测试
+os21 :) create table datatype_array(id UInt8,bobby Array(String)) engine=Memory;
+
+CREATE TABLE datatype_array
+(
+    `id` UInt8,
+    `bobby` Array(String)
+)
+ENGINE = Memory
+
+Query id: c71009b8-57bc-4ded-9c89-67500c6d0233
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+os21 :) desc datatype_array;
+
+DESCRIBE TABLE datatype_array
+
+Query id: 371d21c0-ac17-4035-90ce-4f8064c86812
+
+┌─name──┬─type──────────┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ id    │ UInt8         │              │                    │         │                  │                │
+│ bobby │ Array(String) │              │                    │         │                  │                │
+└───────┴───────────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.000 sec. 
+
+os21 :) select * from datatype_array;
+
+SELECT *
+FROM datatype_array
+
+Query id: 1b118634-363a-492d-822b-a120d6101731
+
+┌─id─┬─bobby─────────────────┐
+│  1 │ ['drink','eat','run'] │
+│  2 │ ['sleep','game']      │
+└────┴───────────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+os21 :) select id,bobby[0] from datatype_array;
+
+SELECT
+    id,
+    bobby[0]
+FROM datatype_array
+
+Query id: 11723a58-6b56-43ea-ac74-5dc7a71c1496
+
+
+0 rows in set. Elapsed: 0.026 sec. 
+
+Received exception from server (version 22.12.6):
+Code: 135. DB::Exception: Received from localhost:9000. DB::Exception: Array indices are 1-based. (ZERO_ARRAY_OR_TUPLE_INDEX)
+
+# 正确的获取方式
+os21 :) select id,bobby[1] from datatype_array;
+
+SELECT
+    id,
+    bobby[1]
+FROM datatype_array
+
+Query id: eb43d8e2-f495-45e1-8a43-4658f7fcc763
+
+┌─id─┬─arrayElement(bobby, 1)─┐
+│  1 │ drink                  │
+│  2 │ sleep                  │
+└────┴────────────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+# 获取数组元素个数
+os21 :) select id,bobby.size0 from datatype_array;
+
+SELECT
+    id,
+    bobby.size0
+FROM datatype_array
+
+Query id: aba57554-4248-4771-80bf-e3e9f2f68a24
+
+┌─id─┬─bobby.size0─┐
+│  1 │           3 │
+│  2 │           2 │
+└────┴─────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+```
+
+
+
+
+
+### 7.9  UUID类型
+
+```markdown
+UUID
+A Universally Unique Identifier (UUID) is a 16-byte value used to identify records. For detailed information about UUIDs, see Wikipedia.
+
+While different UUID variants exist (see here), ClickHouse does not validate that inserted UUIDs conform to a particular variant. UUIDs are internally treated as a sequence of 16 random bytes with 8-4-4-4-12 representation at SQL level.
+
+Example UUID value:
+
+61f0c404-5cb3-11e7-907b-a6006ad3dba0
+
+The default UUID is all-zero. It is used, for example, when a new record is inserted but no value for a UUID column is specified:
+
+00000000-0000-0000-0000-000000000000
+
+Due to historical reasons, UUIDs are sorted by their second half. UUIDs should therefore not be used directly in a primary key, sorting key, or partition key of a table.
+```
+
+样例
+
+```sh
+create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
+desc data_type_uuid;
+insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
+select * from data_type_uuid;
+
+# 如果不设置则使用00000000-0000-0000-0000-000000000000来填充
+insert into data_type_uuid(name) select 'nullnull2';
+select * from data_type_uuid;
+```
+
+输出：
+
+```sh
+os21 :) create table data_type_uuid(uuid UUID,name String) ENGINE = Memory();
+
+CREATE TABLE data_type_uuid
+(
+    `uuid` UUID,
+    `name` String
+)
+ENGINE = Memory
+
+Query id: e80f5d28-84b8-413a-9a61-4a8c0fd9a5c7
+
+Ok.
+
+0 rows in set. Elapsed: 0.004 sec. 
+
+os21 :) desc data_type_uuid;
+
+DESCRIBE TABLE data_type_uuid
+
+Query id: b9283419-df46-40ca-a3df-f03ab9f63e99
+
+┌─name─┬─type───┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ uuid │ UUID   │              │                    │         │                  │                │
+│ name │ String │              │                    │         │                  │                │
+└──────┴────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) insert into data_type_uuid(uuid,name) select generateUUIDv4() ,'nullnull';
+
+INSERT INTO data_type_uuid (uuid, name) SELECT
+    generateUUIDv4(),
+    'nullnull'
+
+Query id: 25a80683-4ee6-489b-a70b-569541bc636d
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) select * from data_type_uuid;
+
+SELECT *
+FROM data_type_uuid
+
+Query id: cbd73b8d-5cce-4753-90e2-a1f822bdd710
+
+┌─uuid─────────────────────────────────┬─name─────┐
+│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
+└──────────────────────────────────────┴──────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+os21 :) insert into data_type_uuid(name) select 'nullnull2';
+
+INSERT INTO data_type_uuid (name) SELECT 'nullnull2'
+
+Query id: f4199d1d-6dbc-4de6-8756-ef72b7698533
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) select * from data_type_uuid;
+
+SELECT *
+FROM data_type_uuid
+
+Query id: c9611e50-c762-4fac-8937-3dbc5062361d
+
+┌─uuid─────────────────────────────────┬─name─────┐
+│ c54ba77a-e845-413a-ad9e-a4d48343e9f4 │ nullnull │
+└──────────────────────────────────────┴──────────┘
+┌─uuid─────────────────────────────────┬─name──────┐
+│ 00000000-0000-0000-0000-000000000000 │ nullnull2 │
+└──────────────────────────────────────┴───────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+```
+
+
+
+### 7.10 Nullable类型
+
+```markdown
+Nullable(T)
+Allows to store special marker (NULL) that denotes “missing value” alongside normal values allowed by T. For example, a Nullable(Int8) type column can store Int8 type values, and the rows that do not have a value will store NULL.
+
+T can’t be any of the composite data types Array, Map and Tuple but composite data types can contain Nullable type values, e.g. Array(Nullable(Int8)).
+
+A Nullable type field can’t be included in table indexes.
+
+NULL is the default value for any Nullable type, unless specified otherwise in the ClickHouse server configuration.
+
+Storage Features
+To store Nullable type values in a table column, ClickHouse uses a separate file with NULL masks in addition to normal file with values. Entries in masks file allow ClickHouse to distinguish between NULL and a default value of corresponding data type for each table row. Because of an additional file, Nullable column consumes additional storage space compared to a similar normal one.
+
+note
+Using Nullable almost always negatively affects performance, keep this in mind when designing your databases.
+使用NUll会对性能产生影响，特别注意。
+```
+
+### 7.11 Map类型
+
+```markdown
+Data type Map(K, V) stores key-value pairs.
+
+Unlike other databases, maps are not unique in ClickHouse, i.e. a map can contain two elements with the same key. (The reason for that is that maps are internally implemented as Array(Tuple(K, V)).)
+
+You can use use syntax m[k] to obtain the value for key k in map m. Also, m[k] scans the map, i.e. the runtime of the operation is linear in the size of the map.
+
+Parameters
+
+K — The type of the Map keys. Arbitrary type except Nullable and LowCardinality nested with Nullable types.
+V — The type of the Map values. Arbitrary type.
+```
+
+样例
+
+```sql
+# 创建表
+create table datatype_map(data Map(String,UInt64)) engine=Memory;
+
+# 插入数据
+insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
+
+# 查询数据
+select data['key1'] from datatype_map;
+
+```
+
+样例：
+
+```sh
+# 创建表
+os21 :) create table datatype_map(data Map(String,UInt64)) engine=Memory;
+
+CREATE TABLE datatype_map
+(
+    `data` Map(String, UInt64)
+)
+ENGINE = Memory
+
+Query id: 9910343c-ae72-4b09-8a9c-81e26a21185d
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 插入数据
+os21 :) insert into datatype_map values({'key1':1,'key1':20}),({'key1':2,'key2':30}),({'key1':3,'key2':40});
+
+INSERT INTO datatype_map FORMAT Values
+
+Query id: c18985a5-00dc-471f-a5a7-4e42bb459331
+
+Ok.
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 查询一个不存在的KEY
+s21 :) select data['key'] from datatype_map;
+
+SELECT data['key']
+FROM datatype_map
+
+Query id: d584d685-5412-4fb6-a374-345ea6afc835
+
+┌─arrayElement(data, 'key')─┐
+│                         0 │
+│                         0 │
+│                         0 │
+└───────────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 查询存在的数据
+os21 :) select data['key1'] from datatype_map;
+
+SELECT data['key1']
+FROM datatype_map
+
+Query id: 098e88a8-3aa4-477e-935b-3f51669fe55b
+
+┌─arrayElement(data, 'key1')─┐
+│                          1 │
+│                          2 │
+│                          3 │
+└────────────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+os21 :) 
+```
+
+
+
+## 8 表引擎
+
+官方文档地址：
+
+```sh
+https://clickhouse.com/docs/en/engines/table-engines
+```
+
+
+
+### 8.1 MergeTree引擎家族
+
+表引擎使用的重点关注：
+
+1. 数据存储式方式和位置。写到哪里以及从哪里读取数据。
+2. 支持哪些查询以及如何支持。
+3. 并发数据访问。
+4. 索引的使用
+5. 是否可以执行多线程请求。
+6. 数据复制参数。
+
+表引擎的名称大小写敏感。
+
+
+
+### 8.1 TinyLog
+
+​	以列文件的形式保存在磁盘上，不支持索引，没有并发控制。一般保存少量数据的小表。生产环境上作用有限。可以用于平时练习测试用。少于100万的量级。
+
+```sh
+这些引擎是为了需要写入许多小数据量（少于一百万行）的表的场景而开发的。
+
+这系列的引擎有：
+
+StripeLog
+Log
+TinyLog
+共同属性
+引擎：
+
+数据存储在磁盘上。
+
+写入时将数据追加在文件末尾。
+
+不支持突变操作。
+
+不支持索引。
+
+这意味着 `SELECT` 在范围查询时效率不高。
+
+非原子地写入数据。
+
+如果某些事情破坏了写操作，例如服务器的异常关闭，你将会得到一张包含了损坏数据的表。
+```
+
+
+
+### 8.2 Memory
+
+​    内存引擎，数据未压缩的原始形式直接保存在内存当中，服务器重启数据就会消失。读写不会相互阻塞，不支持索引。简单查询下有非常非常高的性能表现（超过10G/S)
+
+​    一般用到它的地方不多，除了用来测试，就是需要非常高的性能，同时数据量又不太大（上限1亿行）的场景。
+
+### 8.3 MergeTree家族
+
+​    ClickHouse中最强大的表引擎当属MergeTree（合并树）引擎及该系统（*MergeTree）中的其他引擎，支持索引和分区。而且基于MergeTree引擎，还衍生了许多小弟，也是非常有特色的引擎。
+
+演示用例：
+
+```sql
+# 建表语句
+create table mt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine=MergeTree
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+# 插入数据
+insert into mt_user values
+(1,'001','空空1',20000,'2024-10-27 19:50:00'),
+(2,'001','空空2',20000,'2024-10-27 19:50:00'),
+(2,'002','空空3',20000,'2024-10-27 19:50:00'),
+(2,'002','空空4',20000,'2024-10-27 19:50:00'),
+(2,'001','空空5',20000,'2024-10-27 19:50:00'),
+(2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+
+# 查询数据
+select * from mt_user;
+```
+
+样例输出：
+
+```sh
+
+a5e651989f3b :) create table mt_user(
+                ^Iid UInt32,
+                    order_id String, 
+                    name String,
+                    money decimal(16,2),
+                    create_time Datetime    
+                )engine=MergeTree
+                partition by toYYYYMMDD(create_time)
+                primary key (id)
+                order by (id,order_id,create_time);
+
+CREATE TABLE mt_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+
+Query id: 507d13dc-200f-4bd6-9236-6acee9ad8ab5
+
+Ok.
+
+0 rows in set. Elapsed: 0.013 sec. 
+
+a5e651989f3b :) insert into mt_user values
+                (1,'001','空空1',20000,'2024-10-27 19:50:00'),
+                (2,'001','空空2',20000,'2024-10-27 19:50:00'),
+                (2,'002','空空3',20000,'2024-10-27 19:50:00'),
+                (2,'002','空空4',20000,'2024-10-27 19:50:00'),
+                (2,'001','空空5',20000,'2024-10-27 19:50:00'),
+                (2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+INSERT INTO mt_user FORMAT Values
+
+Query id: fea0192d-9b4b-4163-9d75-f5c7590382a4
+
+Ok.
+
+6 rows in set. Elapsed: 0.018 sec. 
+
+a5e651989f3b :) select * from mt_user;
+
+SELECT *
+FROM mt_user
+
+Query id: 6a7035b8-69d9-4b83-ac05-2a01c2dca978
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+6 rows in set. Elapsed: 0.005 sec. 
+
+a5e651989f3b :) 
+```
+
+
+
+#### partition（分区）
+
+**作用**
+
+分区的目的主要是降低扫描的范围，优化查询的速度，其实分区的作用就是将数据在磁盘上分目录。
+
+**如果不填**
+
+只会使用一个分区,那就只有一个分区all。
+
+**分区目录**
+
+MergeTree是以列文件+索引文件+表定义文件组成的，但如果设定了分区那么这些文件会保存到不同的分区目录中
+
+**并行**
+
+分区后，面对涉及跨分区的的查询，Clickhouse会以分区为单位进行并行处理。
+
+**数据写入与分区合并**
+
+任何一个批次的数据的写入都会产生一个临时分区，不会纳入任何一个已有的分区。写入后的某个时刻（大约10-15分钟），Clickhouse会自动执行合并操作（如果需要立即执行可以使用optimize执行）把临时分区的数据，合并到已有分区中。
+
+```sql
+optimize table xxx final;
+```
+
+插入，手动合并
+
+```sql
+
+# 插入数据
+insert into mt_user values
+(1,'001','空空1',20000,'2024-10-27 19:50:00'),
+(2,'001','空空2',20000,'2024-10-27 19:50:00'),
+(2,'002','空空3',20000,'2024-10-27 19:50:00'),
+(2,'002','空空4',20000,'2024-10-27 19:50:00'),
+(2,'001','空空5',20000,'2024-10-27 19:50:00'),
+(2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+# 查询数据
+select * from mt_user;
+
+# 手动执行optimize之后
+optimize table mt_user final;
+
+# 如果要只合并某个分区，使用语法
+optimize table mt_user parttion '20241025'  final;
+
+# 再次查询
+select * from mt_user;
+```
+
+日志样例：
+
+```sh
+# 查询之前的数据的情况
+# 可以看出分成了，两个分区，分别在25号与27号
+0a8870a03faa :) select * from mt_user;
+
+SELECT *
+FROM mt_user
+
+Query id: 5af2b8e5-9975-4201-a1d5-f03c5989e7a0
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+6 rows in set. Elapsed: 0.006 sec. 
+
+0a8870a03faa :) 
+0a8870a03faa :) insert into mt_user values
+(1,'001','空空1',20000,'2024-10-27 19:50:00'),
+(2,'001','空空2',20000,'2024-10-27 19:50:00'),
+(2,'002','空空3',20000,'2024-10-27 19:50:00'),
+(2,'002','空空4',20000,'2024-10-27 19:50:00'),
+(2,'001','空空5',20000,'2024-10-27 19:50:00'),
+(2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+INSERT INTO mt_user FORMAT Values
+
+Query id: 984361e6-1908-4427-9188-bfa06363d08e
+
+Ok.
+
+6 rows in set. Elapsed: 0.013 sec. 
+
+# 当再次插入完成后查询数据，可以发现
+# 新增加了两个分区，分别为25号的分区，以及27号的分区。
+0a8870a03faa :) select * from mt_user;
+
+SELECT *
+FROM mt_user
+
+Query id: 5ac735fb-8925-4b2e-8374-2b26274372f4
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+12 rows in set. Elapsed: 0.010 sec. 
+
+
+# 执行手动分区合并操作。
+0a8870a03faa :) optimize table mt_user final;
+
+OPTIMIZE TABLE mt_user FINAL
+
+Query id: 4de271b2-0ead-49fa-a79e-94dccb970ccc
+
+Ok.
+
+0 rows in set. Elapsed: 0.012 sec. 
+
+# 再次观察情况，发现分区已经被合并了。
+0a8870a03faa :) select * from mt_user;
+
+SELECT *
+FROM mt_user
+
+Query id: 5a11f8c5-9837-4ee6-ab11-893c262ae089
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+12 rows in set. Elapsed: 0.005 sec. 
+
+0a8870a03faa :) 
+```
+
+
+
+观察数据目录的变化
+
+```sh
+# 在未插入数据前的结构
+[root@mes01 70e4d6a0-0f56-40af-9878-4757a38f976d]# ll
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241025_2_2_0
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241027_1_1_0
+drwxr-x---. 2 101 101   6 Oct 27 23:33 detached
+-rw-r-----. 1 101 101   1 Oct 27 23:33 format_version.txt
+
+
+
+# 再次插入数据后的结构
+[root@mes01 70e4d6a0-0f56-40af-9878-4757a38f976d]# ll
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241025_2_2_0
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241025_4_4_0
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241027_1_1_0
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241027_3_3_0
+drwxr-x---. 2 101 101   6 Oct 27 23:33 detached
+-rw-r-----. 1 101 101   1 Oct 27 23:33 format_version.txt
+
+# 当执行分区合并后的变化
+[root@mes01 70e4d6a0-0f56-40af-9878-4757a38f976d]# ll
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241025_2_2_0
+drwxr-x---. 2 101 101 259 Oct 27 23:36 20241025_2_4_1
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241025_4_4_0
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241027_1_1_0
+drwxr-x---. 2 101 101 259 Oct 27 23:36 20241027_1_3_1
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241027_3_3_0
+drwxr-x---. 2 101 101   6 Oct 27 23:33 detached
+-rw-r-----. 1 101 101   1 Oct 27 23:33 format_version.txt
+
+# 通过观察后，发现，当插入数据是，是新增加了2个分区，分别是20241027_3_3_0和20241025_4_4_0，当执行分区合并后，又增加了两个分区，分别为20241027_1_3_1和20241025_2_4_1，数据完成了合并。
+
+
+# 当再经过一段时间后，会将原来之前的分区进行清除。保留最后合并的分区。 
+[root@mes01 6f281bfb-015f-4957-a58c-ee87927e1db7]# ll
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 22:44 20241025_2_4_1
+drwxr-x---. 2 101 101 259 Oct 27 22:44 20241027_1_3_1
+drwxr-x---. 2 101 101   6 Oct 27 22:43 detached
+-rw-r-----. 1 101 101   1 Oct 27 22:43 format_version.txt
+```
+
+文件的变化
+
+```sh
+[root@mes01 70e4d6a0-0f56-40af-9878-4757a38f976d]# ls -l -R
+.:
+total 4
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241025_2_2_0
+drwxr-x---. 2 101 101 259 Oct 27 23:36 20241025_2_4_1
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241025_4_4_0
+drwxr-x---. 2 101 101 259 Oct 27 23:33 20241027_1_1_0
+drwxr-x---. 2 101 101 259 Oct 27 23:36 20241027_1_3_1
+drwxr-x---. 2 101 101 259 Oct 27 23:35 20241027_3_3_0
+drwxr-x---. 2 101 101   6 Oct 27 23:33 detached
+-rw-r-----. 1 101 101   1 Oct 27 23:33 format_version.txt
+
+./20241025_2_2_0:
+total 44
+-rw-r-----. 1 101 101 333 Oct 27 23:33 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:33 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:33 count.txt
+-rw-r-----. 1 101 101 158 Oct 27 23:33 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:33 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:33 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:33 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:33 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:33 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:33 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 23:33 serialization.json
+
+./20241025_2_4_1:
+total 44
+-rw-r-----. 1 101 101 333 Oct 27 23:36 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:36 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:36 count.txt
+-rw-r-----. 1 101 101 186 Oct 27 23:36 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:36 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:36 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:36 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:36 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:36 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:36 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 23:36 serialization.json
+
+./20241025_4_4_0:
+total 44
+-rw-r-----. 1 101 101 333 Oct 27 23:35 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:35 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:35 count.txt
+-rw-r-----. 1 101 101 158 Oct 27 23:35 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:35 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:35 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:35 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:35 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:35 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:35 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 23:35 serialization.json
+
+./20241027_1_1_0:
+total 44
+-rw-r-----. 1 101 101 334 Oct 27 23:33 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:33 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:33 count.txt
+-rw-r-----. 1 101 101 211 Oct 27 23:33 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:33 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:33 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:33 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:33 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:33 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:33 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 23:33 serialization.json
+
+./20241027_1_3_1:
+total 44
+-rw-r-----. 1 101 101 334 Oct 27 23:36 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:36 columns.txt
+-rw-r-----. 1 101 101   2 Oct 27 23:36 count.txt
+-rw-r-----. 1 101 101 236 Oct 27 23:36 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:36 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:36 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:36 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:36 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:36 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:36 primary.cidx
+-rw-r-----. 1 101 101 355 Oct 27 23:36 serialization.json
+
+./20241027_3_3_0:
+total 44
+-rw-r-----. 1 101 101 334 Oct 27 23:35 checksums.txt
+-rw-r-----. 1 101 101 127 Oct 27 23:35 columns.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:35 count.txt
+-rw-r-----. 1 101 101 211 Oct 27 23:35 data.bin
+-rw-r-----. 1 101 101  70 Oct 27 23:35 data.cmrk3
+-rw-r-----. 1 101 101  10 Oct 27 23:35 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 Oct 27 23:35 metadata_version.txt
+-rw-r-----. 1 101 101   8 Oct 27 23:35 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 Oct 27 23:35 partition.dat
+-rw-r-----. 1 101 101  42 Oct 27 23:35 primary.cidx
+-rw-r-----. 1 101 101 350 Oct 27 23:35 serialization.json
+
+./detached:
+total 0
+[root@mes01 70e4d6a0-0f56-40af-9878-4757a38f976d]# 
+```
+
+
+
+
+
+
+
+## 9. ClickHouse内置函数
 
 
 
@@ -2743,6 +3603,50 @@ INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMA
 
 ### 9.9 分区操作
 
+```sh
+https://clickhouse.com/docs/en/sql-reference/statements/alter/partition
+```
+
+相关的操作
+
+```sh
+The following operations with partitions are available:
+
+# 卸载分区至detached目录,然后数据不能查询到
+DETACH PARTITION|PART — Moves a partition or part to the detached directory and forget it.
+# 删除卸载分区
+DROP PARTITION|PART — Deletes a partition or part.
+# 删除卸载的分区
+DROP DETACHED PRTITION|PART - Delete a part or all parts of a partition from detached.
+#
+FORGET PARTITION — Deletes a partition metadata from zookeeper if it's empty.
+# 装载分区
+ATTACH PARTITION|PART — Adds a partition or part from the detached directory to the table.
+ATTACH PARTITION FROM — Copies the data partition from one table to another and adds.
+# 复制分区,从一个表至另外一个表
+REPLACE PARTITION — Copies the data partition from one table to another and replaces.
+# 移动分区
+MOVE PARTITION TO TABLE — Moves the data partition from one table to another.
+# 清除分区
+CLEAR COLUMN IN PARTITION — Resets the value of a specified column in a partition.
+# 清除分区索引
+CLEAR INDEX IN PARTITION — Resets the specified secondary index in a partition.
+# 创建分区备份
+FREEZE PARTITION — Creates a backup of a partition.
+# 移除一个备份
+UNFREEZE PARTITION — Removes a backup of a partition.
+# 从另外一个服务器下载部分分区
+FETCH PARTITION|PART — Downloads a part or partition from another server.
+# 迁移分区或者数据至另外的磁盘或者券
+MOVE PARTITION|PART — Move partition/data part to another disk or volume.
+# 按条件更新分区
+UPDATE IN PARTITION — Update data inside the partition by condition.
+# 按条件删除分区
+DELETE IN PARTITION — Delete data inside the partition by condition.
+```
+
+
+
 分区在于减少查询读取数据的条数
 
 在ck中需要使用mergeTree引擎
@@ -2753,8 +3657,15 @@ INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMA
 # 分区装载
 ALTER TABLE ${tableName}  ATTACH PARTITION ${partition}
 
+
 # 分区卸载
+ALTER TABLE ${tableName}  DETACH PARTITION ${partition}
+
+# 分区删除
 ALTER TABLE ${tableName}   DROP PARTITION ${partition}
+
+# 复制分区
+alter table  ${tableName} REPLACE PARTITION ${partition} from  ${tableNameOther} 
 ```
 
 分区的样例,
@@ -2887,7 +3798,21 @@ a5e651989f3b :)
 
 
 
-## 10  多维数据分析
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 11  多维数据分析
 
 ```sql
 # 在传统的统计中，存在一种分析。比按A和B进行分组。
