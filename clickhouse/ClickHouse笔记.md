@@ -2837,6 +2837,195 @@ SETTINGS index_granularity = 8192;
 
 ​     
 
+#### 二级索引
+
+目前在Clickhouse官网上，二级索引功能在`v20.1.2.4`之前被标注为实验性质，在这个版本之后是默认开启的。
+
+```sh
+# 老版本需要添加参数,v20.1.2.4 开始，这个参数已被删除，默认开启
+set allow_experimental_data_skipping_indices=1;
+```
+
+实验SQL，二级索引
+
+```sql
+# 创建表
+create table nullnull.mt_user_2(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)engine=MergeTree
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time)
+SETTINGS index_granularity = 8192;
+# GRANULARITY N 是设定二级索引对于一级索引粒度的粒度。
+# INDEX a money TYPE minmax GRANULARITY 5
+# INDEX 添加索引的关键字
+# a 索引名称
+# money 库中的索引列
+# TYPE 用于指定索引的类型，一般有4种，
+
+
+# 插入数据
+insert into mt_user_2 values
+(1,'011','空空1',20000,'2024-10-25 19:50:00'),
+(1,'011','空空2',10000,'2024-10-25 19:50:00'),
+(2,'012','空空3',30000,'2024-10-27 19:50:00'),
+(2,'012','空空4',50000,'2024-10-27 19:50:00'),
+(2,'011','空空5',10000,'2024-10-27 19:50:00'),
+(2,'012','空空6',60000,'2024-10-27 19:50:00');
+
+
+# 查询数据
+ clickhouse-client --send_logs_level=trace <<< 'select * from nullnull.mt_user_2 where money > toDecimal32(20000,2)'
+
+```
+
+输出:
+
+```sh
+
+c68d406a3602 :) create table nullnull.mt_user_2(
+^Iid UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)engine=MergeTree
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time)
+SETTINGS index_granularity = 8192;
+
+CREATE TABLE nullnull.mt_user_2
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+SETTINGS index_granularity = 8192
+
+Query id: 23886122-213f-4ccc-9082-9218489f1bcc
+
+Ok.
+
+0 rows in set. Elapsed: 0.285 sec. 
+
+c68d406a3602 :) insert into mt_user_2 values
+(1,'011','空空1',20000,'2024-10-25 19:50:00'),
+(1,'011','空空2',10000,'2024-10-25 19:50:00'),
+(2,'012','空空3',30000,'2024-10-27 19:50:00'),
+(2,'012','空空4',50000,'2024-10-27 19:50:00'),
+(2,'011','空空5',10000,'2024-10-27 19:50:00'),
+(2,'012','空空6',60000,'2024-10-27 19:50:00');
+
+INSERT INTO mt_user_2 FORMAT Values
+
+Query id: 1c78e3f0-6f76-4da3-8508-3d6192033914
+
+Ok.
+
+6 rows in set. Elapsed: 0.004 sec. 
+
+c68d406a3602 :) exit
+Bye.
+root@c68d406a3602:/#  clickhouse-client --send_logs_level=trace <<< 'select * from nullnull.mt_user_2 where money > toDecimal32(20000,2)'
+[c68d406a3602] 2024.10.28 11:49:49.926069 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> executeQuery: (from 127.0.0.1:40076) select * from nullnull.mt_user_2 where money > toDecimal32(20000,2)  (stage: Complete)
+[c68d406a3602] 2024.10.28 11:49:49.926492 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> ContextAccess (default): Access granted: SELECT(id, order_id, name, money, create_time) ON nullnull.mt_user_2
+[c68d406a3602] 2024.10.28 11:49:49.926532 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> InterpreterSelectQuery: FetchColumns -> Complete
+[c68d406a3602] 2024.10.28 11:49:49.926674 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> QueryPlanOptimizePrewhere: The min valid primary key position for moving to the tail of PREWHERE is -1
+[c68d406a3602] 2024.10.28 11:49:49.926727 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): Key condition: unknown
+[c68d406a3602] 2024.10.28 11:49:49.926741 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): MinMax index condition: unknown
+[c68d406a3602] 2024.10.28 11:49:49.927245 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): Index `a` has dropped 1/2 granules.
+# Index `a` has dropped 1/2 granules. 此表示已经在2分之一的数据已经被剔除。
+[c68d406a3602] 2024.10.28 11:49:49.927264 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): Selected 2/2 parts by partition key, 1 parts by primary key, 2/2 marks by primary key, 1 marks to read from 1 ranges
+#  Selected 2/2 parts by partition key, 1 parts by primary key, 2/2 marks by primary key, 1 marks to read from 1 ranges
+[c68d406a3602] 2024.10.28 11:49:49.927273 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): Spreading mark ranges among streams (default reading)
+[c68d406a3602] 2024.10.28 11:49:49.927302 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> nullnull.mt_user_2 (175ddd49-fada-4e72-88aa-e3cbdb7b24d6) (SelectExecutor): Reading 1 ranges in order from part 20241027_2_2_0, approx. 4 rows starting from 0
+[c68d406a3602] 2024.10.28 11:49:49.927323 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Trace> MergeTreeSelectProcessor: PREWHERE condition was split into 1 steps: "greater(money, toDecimal32(20000, 2))"
+[c68d406a3602] 2024.10.28 11:49:49.928150 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> executeQuery: Read 4 rows, 176.00 B in 0.002144 sec., 1865.6716417910447 rows/sec., 80.17 KiB/sec.
+[c68d406a3602] 2024.10.28 11:49:49.928190 [ 48 ] {28a7c776-4d00-41ba-88a5-c304426fc3e4} <Debug> TCPHandler: Processed in 0.002397704 sec.
+2       012     空空3   30000   2024-10-27 19:50:00
+2       012     空空4   50000   2024-10-27 19:50:00
+2       012     空空6   60000   2024-10-27 19:50:00
+
+
+# 进入数据目录可以发现，多出来一个skp开头的两个索引文件。
+
+[root@mes-01 175ddd49-fada-4e72-88aa-e3cbdb7b24d6]# ll
+总用量 12
+drwxr-x---. 2 101 101 4096 10月 28 19:49 20241025_1_1_0
+drwxr-x---. 2 101 101 4096 10月 28 19:49 20241027_2_2_0
+drwxr-x---. 2 101 101    6 10月 28 19:49 detached
+-rw-r-----. 1 101 101    1 10月 28 19:49 format_version.txt
+[root@mes-01 175ddd49-fada-4e72-88aa-e3cbdb7b24d6]# cd 20241027_2_2_0/
+[root@mes-01 20241027_2_2_0]# ll
+总用量 52
+-rw-r-----. 1 101 101 425 10月 28 19:49 checksums.txt
+-rw-r-----. 1 101 101 127 10月 28 19:49 columns.txt
+-rw-r-----. 1 101 101   1 10月 28 19:49 count.txt
+-rw-r-----. 1 101 101 223 10月 28 19:49 data.bin
+-rw-r-----. 1 101 101  70 10月 28 19:49 data.cmrk3
+-rw-r-----. 1 101 101  10 10月 28 19:49 default_compression_codec.txt
+-rw-r-----. 1 101 101   1 10月 28 19:49 metadata_version.txt
+-rw-r-----. 1 101 101   8 10月 28 19:49 minmax_create_time.idx
+-rw-r-----. 1 101 101   4 10月 28 19:49 partition.dat
+-rw-r-----. 1 101 101  42 10月 28 19:49 primary.cidx
+-rw-r-----. 1 101 101 350 10月 28 19:49 serialization.json
+-rw-r-----. 1 101 101  50 10月 28 19:49 skp_idx_a.cmrk3
+-rw-r-----. 1 101 101  41 10月 28 19:49 skp_idx_a.idx2
+
+# 还可以通过SQL语句查看二级索引
+c68d406a3602 :) show create table mt_user_2;
+
+SHOW CREATE TABLE mt_user_2
+
+Query id: 73d64b68-c5c3-4dbe-9b98-47c5559ac6d4
+
+┌─statement──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ CREATE TABLE nullnull.mt_user_2
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` Decimal(16, 2),
+    `create_time` DateTime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+SETTINGS index_granularity = 8192 │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+c68d406a3602 :) 
+```
+
+
+
+
+
+#### TTL
+
+
+
+
+
 
 
 
