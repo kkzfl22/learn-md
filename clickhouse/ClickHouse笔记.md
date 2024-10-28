@@ -2473,7 +2473,7 @@ a5e651989f3b :)
 
 
 
-#### partition（分区）
+#### partition（分区）（可选）
 
 **作用**
 
@@ -2795,6 +2795,47 @@ total 0
 ```
 
 
+
+#### primary key（主键）（可选）
+
+​	Clickhouse的主键，和其他数据库不太一样，它只提供了数据的一线索引，但是却不是唯一约束，这就意味着是可以存储相同primary key的数据的。
+
+​    主键的设定主要是查询语句中的where条件。
+
+​	根据条件通过对主键进行某种形式的二分查找，能够快速定位到对应的index granularity，避免了全表扫描。
+
+​	index granularity: 直接翻译是索引粒度，指在稀疏索引中两个相邻索引对应数据的间隔，Clickhouse中的MergeTree默认是8192，官方不建议修改这个值，除非该列存在大量重复值，比一在一个分区中几万行才有一个不同数据。
+
+​	稀疏索引的好处就是可以用很少的索引数据，定位更多的数据，代价就是只能定位到索引粒度的第一行，然后再进行一点的扫描。
+
+```sh
+# 在建表语句中，通过primary key来指定主键，并且通过index_granularity来指定索引的间隔，默认就是8192，不建议修改。
+create table mt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine=MergeTree
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time)
+SETTINGS index_granularity = 8192;
+```
+
+
+
+#### order by （排序）(必选)
+
+​	order by 定义了分区内的数据按照哪些字段顺序进行有序保存。
+
+​	order by 是MergeTree中唯一一个必填项，甚至比Primary key还重要，因为当用户不设置主键的情况下，很多会依照order by的字段进行处理
+
+​    主键必须是order by字段中的前缀字段。
+
+​	比如: order by 字段是(id,mobile),那么主键必须是 id,或者id+mobile，不要单独的mobile,
+
+​     
 
 
 
@@ -3537,6 +3578,137 @@ Query id: 058be9d4-2454-4183-b22c-501cb0127fdc
 ```
 
 
+
+### 8.7 字符串函数
+
+官方地址：
+
+```javascript
+https://clickhouse.com/docs/en/sql-reference/functions/string-functions
+```
+
+
+
+### 8.8 时间函数
+
+官方地址:
+
+```java
+https://clickhouse.com/docs/en/sql-reference/functions/date-time-functions
+```
+
+样例：
+
+```sql
+# 时间输出:
+SELECT
+    toDateTime('2016-06-15 23:00:00') AS time,
+    toDate(time) AS date_local,
+    toDate(time, 'Asia/Yekaterinburg') AS date_yekat,
+    toString(time, 'US/Samoa') AS time_samoa
+    
+    
+   # 当时间时间戳 
+   select 
+   -- 当时时间
+   now(),
+   -- 当天的
+   today(),
+   yesterday();
+   
+   
+   # 抽取年份
+   select toDate('2024-10-21 12:56:55') dt,
+   -- 抽取年份
+   extract(year from dt),
+   toYear(dt)
+   
+   # 时间加1天
+   select toDate('2024-10-21 12:56:55') dt,
+   dt + INTERVAL 1 DAY as d1,
+   dt + INTERVAL 1 MONTH as m1,
+   dt + INTERVAL 1 year as y1
+   
+```
+
+
+
+输出
+
+```sql
+SELECT
+    toDateTime('2016-06-15 23:00:00') AS time,
+    toDate(time) AS date_local,
+    toDate(time, 'Asia/Yekaterinburg') AS date_yekat,
+    toString(time, 'US/Samoa') AS time_samoa
+
+Query id: 42ef8595-b53a-437c-9acd-800045fa7e77
+
+┌────────────────time─┬─date_local─┬─date_yekat─┬─time_samoa──────────┐
+│ 2016-06-15 23:00:00 │ 2016-06-15 │ 2016-06-16 │ 2016-06-15 12:00:00 │
+└─────────────────────┴────────────┴────────────┴─────────────────────┘
+
+1 row in set. Elapsed: 0.011 sec. 
+
+
+mwrpt-clickhouse :)    select 
+   -- 当时时间
+   now(),
+   -- 当天的
+   today(),
+   yesterday()
+
+SELECT
+    now(),
+    today(),
+    yesterday()
+
+Query id: 016f4d35-7a4e-40f4-a695-f4415c576940
+
+┌───────────────now()─┬────today()─┬─yesterday()─┐
+│ 2024-10-21 04:54:04 │ 2024-10-21 │  2024-10-20 │
+└─────────────────────┴────────────┴─────────────┘
+
+
+mwrpt-clickhouse :)   select toDate('2024-10-21 12:56:55') dt,
+   -- 抽取年份
+   extract(year from dt),
+   toYear(dt)
+
+SELECT
+    toDate('2024-10-21 12:56:55') AS dt,
+    toYear(dt),
+    toYear(dt)
+
+Query id: f2db0790-ef5c-43d9-aa77-bbff7b458f36
+
+┌─────────dt─┬─toYear(toDate('2024-10-21 12:56:55'))─┬─toYear(toDate('2024-10-21 12:56:55'))─┐
+│ 2024-10-21 │                                  2024 │                                  2024 │
+└────────────┴───────────────────────────────────────┴───────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+
+
+mwrpt-clickhouse :) select toDate('2024-10-21 12:56:55') dt,
+   dt + INTERVAL 1 DAY as d1,
+   dt + INTERVAL 1 MONTH as m1,
+   dt + INTERVAL 1 year as y1
+
+SELECT
+    toDate('2024-10-21 12:56:55') AS dt,
+    dt + toIntervalDay(1) AS d1,
+    dt + toIntervalMonth(1) AS m1,
+    dt + toIntervalYear(1) AS y1
+
+Query id: 35d396b8-a64c-4eee-9376-838f5092d0c2
+
+┌─────────dt─┬─────────d1─┬─────────m1─┬─────────y1─┐
+│ 2024-10-21 │ 2024-10-22 │ 2024-11-21 │ 2025-10-21 │
+└────────────┴────────────┴────────────┴────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+```
 
 
 
