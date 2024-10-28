@@ -2835,6 +2835,12 @@ SETTINGS index_granularity = 8192;
 
 ​	比如: order by 字段是(id,mobile),那么主键必须是 id,或者id+mobile，不要单独的mobile,
 
+稀疏索引：
+
+![image-20241028231421383](.\image-20241028231421383.png)
+
+稀疏索引的好处就是可以用很少的索引数据，定位更多的数据，代价就是只能定位到索引粒度的第一第，希捷再进行一点扫描。
+
 ​     
 
 #### 二级索引
@@ -3022,7 +3028,176 @@ c68d406a3602 :)
 
 #### TTL
 
+官方地址
 
+```javascript
+https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree
+```
+
+
+
+TTL即Time To LIve,MergeTree提供了可以管理数据表或者列的生命周期。
+
+```sql
+# 创建一个表，其中一个列带TTL
+drop table mt_user_ttl;
+drop table nullnull.mt_user_ttl;
+
+create table mt_user_ttl(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2) TTL create_time + interval 10 SECOND,
+    create_time Datetime
+)engine=MergeTree
+primary key (id)
+order by (id,order_id);
+
+
+# 插入数据
+insert into mt_user_ttl values
+(1,'010','空空1',20000,'2024-10-28 23:51:40'),
+(2,'011','空空2',10000,'2024-10-28 23:51:50'),
+(3,'012','空空3',30000,'2024-10-28 23:51:30');
+
+
+# 查询数据
+select * from mt_user_ttl;
+
+
+# 进行触发合并操作
+optimize table mt_user_ttl final;
+
+
+# 查询数据
+select * from mt_user_ttl;
+# 此时还可以看见数据，最快速的办法是重启下数据库
+
+
+# 修改TTL
+ALTER TABLE tab  MODIFY TTL d + INTERVAL 1 DAY;
+
+# 还可以对表做TTL，并且可以过期后做数据的移动操作。
+CREATE TABLE tab
+(
+    d DateTime,
+    a Int
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(d)
+ORDER BY d
+TTL d + INTERVAL 1 MONTH DELETE,
+    d + INTERVAL 1 WEEK TO VOLUME 'aaa',
+    d + INTERVAL 2 WEEK TO DISK 'bbb';
+```
+
+TTL过期后的操作
+
+```sh
+Type of TTL rule may follow each TTL expression. It affects an action which is to be done once the expression is satisfied (reaches current time):
+
+DELETE - delete expired rows (default action);
+RECOMPRESS codec_name - recompress data part with the codec_name;
+TO DISK 'aaa' - move part to the disk aaa;
+TO VOLUME 'bbb' - move part to the disk bbb;
+GROUP BY - aggregate expired rows.
+```
+
+
+
+日志输出：
+
+```sh
+0a8870a03faa :) create table mt_user_ttl(
+^Iid UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2) TTL create_time + interval 20 second,
+    create_time Datetime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)engine=MergeTree
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time)
+SETTINGS index_granularity = 8192;
+
+
+CREATE TABLE mt_user_ttl
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2) TTL create_time + toIntervalSecond(20),
+    `create_time` Datetime,
+    INDEX a money TYPE minmax GRANULARITY 5
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+SETTINGS index_granularity = 8192
+
+Query id: cca7f9bd-555a-4ce9-904b-62d326775af4
+
+Ok.
+
+0 rows in set. Elapsed: 0.016 sec. 
+
+0a8870a03faa :) insert into mt_user_ttl values
+(1,'010','空空1',20000,'2024-10-28 23:28:50'),
+(2,'011','空空2',10000,'2024-10-28 23:28:50'),
+(3,'012','空空3',30000,'2024-10-28 23:28:50');
+
+INSERT INTO mt_user_ttl FORMAT Values
+
+Query id: 766c242f-c794-4672-b35c-3ec0380a2eaf
+
+Ok.
+
+3 rows in set. Elapsed: 0.023 sec. 
+
+0a8870a03faa :) select * from mt_user_ttl
+
+SELECT *
+FROM mt_user_ttl
+
+Query id: 066d5c9e-42d1-4677-b693-f2be12476f79
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-28 23:28:50 │
+│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-28 23:28:50 │
+│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-28 23:28:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.005 sec. 
+
+
+0a8870a03faa :) optimize table mt_user_ttl final;
+
+OPTIMIZE TABLE mt_user_ttl FINAL
+
+Query id: ae7d4045-bafd-41b4-a24f-5734bf459e66
+
+Ok.
+
+0 rows in set. Elapsed: 0.009 sec. 
+
+0a8870a03faa :) select * from mt_user_ttl
+
+SELECT *
+FROM mt_user_ttl
+
+Query id: c08f0033-1bb3-440b-a348-884da1f7cb7e
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-28 23:28:50 │
+│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-28 23:28:50 │
+│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-28 23:28:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.005 sec. 
+
+```
 
 
 
