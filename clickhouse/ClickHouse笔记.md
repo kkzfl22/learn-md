@@ -3034,15 +3034,27 @@ c68d406a3602 :)
 https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree
 ```
 
-
-
 TTL即Time To LIve,MergeTree提供了可以管理数据表或者列的生命周期。
+
+涉及到判断TTL的字段必须是Date或者DateTime类型
+
+可以使用时间周期：
+
+```sh
+- SECOND 秒
+- MINUTE  分
+- HOUR   小时
+- DAY    天
+- WEEK   周
+- MONTH  月
+- QUARTER 季度
+- YEAR    年
+```
+
+
 
 ```sql
 # 创建一个表，其中一个列带TTL
-drop table mt_user_ttl;
-drop table nullnull.mt_user_ttl;
-
 create table mt_user_ttl(
 	id UInt32,
     order_id String, 
@@ -3056,9 +3068,9 @@ order by (id,order_id);
 
 # 插入数据
 insert into mt_user_ttl values
-(1,'010','空空1',20000,'2024-10-28 23:51:40'),
-(2,'011','空空2',10000,'2024-10-28 23:51:50'),
-(3,'012','空空3',30000,'2024-10-28 23:51:30');
+(1,'010','空空1',20000,'2024-10-29 12:08:40'),
+(2,'011','空空2',10000,'2024-10-29 12:08:50'),
+(3,'012','空空3',30000,'2024-10-29 12:08:30');
 
 
 # 查询数据
@@ -3072,6 +3084,11 @@ optimize table mt_user_ttl final;
 # 查询数据
 select * from mt_user_ttl;
 # 此时还可以看见数据，最快速的办法是重启下数据库
+
+# 然后再次手动执行查合并分区操作，查看数据
+optimize table mt_user_ttl final;
+
+
 
 
 # 修改TTL
@@ -3108,100 +3125,383 @@ GROUP BY - aggregate expired rows.
 日志输出：
 
 ```sh
-0a8870a03faa :) create table mt_user_ttl(
-^Iid UInt32,
-    order_id String, 
-    name String,
-    money decimal(16,2) TTL create_time + interval 20 second,
-    create_time Datetime,
-    INDEX a money TYPE minmax GRANULARITY 5
-)engine=MergeTree
-partition by toYYYYMMDD(create_time)
-primary key (id)
-order by (id,order_id,create_time)
-SETTINGS index_granularity = 8192;
-
+ck :) create table mt_user_ttl(
+      ^Iid UInt32,
+          order_id String, 
+          name String,
+          money decimal(16,2) TTL create_time + interval 10 SECOND,
+          create_time Datetime
+      )engine=MergeTree
+      primary key (id)
+      order by (id,order_id);
 
 CREATE TABLE mt_user_ttl
 (
     `id` UInt32,
     `order_id` String,
     `name` String,
-    `money` decimal(16, 2) TTL create_time + toIntervalSecond(20),
-    `create_time` Datetime,
-    INDEX a money TYPE minmax GRANULARITY 5
+    `money` decimal(16, 2) TTL create_time + toIntervalSecond(10),
+    `create_time` Datetime
 )
 ENGINE = MergeTree
-PARTITION BY toYYYYMMDD(create_time)
 PRIMARY KEY id
-ORDER BY (id, order_id, create_time)
-SETTINGS index_granularity = 8192
+ORDER BY (id, order_id)
 
-Query id: cca7f9bd-555a-4ce9-904b-62d326775af4
+Query id: 55e747a9-a010-4de6-bccf-53aeb3625f66
 
 Ok.
 
-0 rows in set. Elapsed: 0.016 sec. 
+0 rows in set. Elapsed: 0.036 sec. 
 
-0a8870a03faa :) insert into mt_user_ttl values
-(1,'010','空空1',20000,'2024-10-28 23:28:50'),
-(2,'011','空空2',10000,'2024-10-28 23:28:50'),
-(3,'012','空空3',30000,'2024-10-28 23:28:50');
+ck :) insert into mt_user_ttl values
+      (1,'010','空空1',20000,'2024-10-29 12:08:40'),
+      (2,'011','空空2',10000,'2024-10-29 12:08:50'),
+      (3,'012','空空3',30000,'2024-10-29 12:07:30');
 
 INSERT INTO mt_user_ttl FORMAT Values
 
-Query id: 766c242f-c794-4672-b35c-3ec0380a2eaf
+Query id: 845fe662-8bf4-4aa2-ae5f-ad3a429a70c5
 
 Ok.
 
-3 rows in set. Elapsed: 0.023 sec. 
+3 rows in set. Elapsed: 0.002 sec. 
 
-0a8870a03faa :) select * from mt_user_ttl
+ck :) select * from mt_user_ttl;
 
 SELECT *
 FROM mt_user_ttl
 
-Query id: 066d5c9e-42d1-4677-b693-f2be12476f79
+Query id: 0acce45a-0e6f-4e32-a294-b123124faebd
 
 ┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
-│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-28 23:28:50 │
-│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-28 23:28:50 │
-│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-28 23:28:50 │
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-29 12:08:40 │
+│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-29 12:07:30 │
 └────┴──────────┴───────┴───────┴─────────────────────┘
 
-3 rows in set. Elapsed: 0.005 sec. 
+3 rows in set. Elapsed: 0.001 sec. 
 
-
-0a8870a03faa :) optimize table mt_user_ttl final;
+ck :) optimize table mt_user_ttl final;
 
 OPTIMIZE TABLE mt_user_ttl FINAL
 
-Query id: ae7d4045-bafd-41b4-a24f-5734bf459e66
+Query id: b87383d2-72e5-4d6b-8c59-d5226d54a3c2
 
 Ok.
 
-0 rows in set. Elapsed: 0.009 sec. 
+0 rows in set. Elapsed: 0.002 sec. 
 
-0a8870a03faa :) select * from mt_user_ttl
+ck :) select * from mt_user_ttl;
 
 SELECT *
 FROM mt_user_ttl
 
-Query id: c08f0033-1bb3-440b-a348-884da1f7cb7e
+Query id: 13b225a0-4668-4fc6-9fdb-d4f58e2d6a79
 
 ┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
-│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-28 23:28:50 │
-│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-28 23:28:50 │
-│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-28 23:28:50 │
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-29 12:08:40 │
+│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  3 │ 012      │ 空空3 │ 30000 │ 2024-10-29 12:07:30 │
 └────┴──────────┴───────┴───────┴─────────────────────┘
 
-3 rows in set. Elapsed: 0.005 sec. 
+3 rows in set. Elapsed: 0.001 sec. 
 
+
+# 重启数据库，再次检查TTL
+
+ck :) optimize table mt_user_ttl final;
+
+OPTIMIZE TABLE mt_user_ttl FINAL
+
+Query id: b3af4de2-cfc6-4b0f-afc6-f284d7aff03f
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+ck :) select * from mt_user_ttl;
+
+SELECT *
+FROM mt_user_ttl
+
+Query id: 2624d620-b4fc-490f-920e-4188cdda43fa
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-29 12:08:40 │
+│  2 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  3 │ 012      │ 空空3 │     0 │ 2024-10-29 12:07:30 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.001 sec. 
+
+# 可以发现空空3的数据已经过期。
 ```
 
 
 
+### 8.4 ReplacingMergeTree
 
+#### 介绍
+
+​	ReplacingMergeTree是MergeTree的一个变种，它存储特性完全继承MergeTree，只是多了一个去重的功能。尽管MergeTree可以设置主键，但是primary Key其实并没有唯一约束的功能，如果想处理掉重复的数据，可以借助这个ReplacingMergeTree。
+
+ 	1）去重时机
+
+​	数据去重只会在合并的过程中出现。合并会在未知的时间在后台进行，所以无法预先作出计划，有一些数据可能仍未被处理。
+
+​	2） 去重的范围
+
+​	如果表经过了分区，去重只会在分区内部进行去重，不能执行跨分区的去重。
+
+​	所以ReplacingMergeTree能力有限，ReplacingMergeTree适用于在后台清除重复的数据以节省空间，但是它不保证没有重复的数据出现。
+
+#### 样例：
+
+```sql
+create table rmt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime
+)engine=ReplacingMergeTree(create_time)
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id);
+-- ReplacingMergeTree() 填入的参数为版本号字段，重复数据保留版本字段值最大的。如果不填字段，默认认按照插入顺序保留最后一条。
+
+-- 插入数据
+insert into rmt_user values
+(1,'010','空空1',20000,'2024-10-28 12:08:40'),
+(1,'010','空空2',20000,'2024-10-28 12:08:40'),
+(3,'011','空空2',10000,'2024-10-29 12:08:50'),
+(3,'011','空空3',30000,'2024-10-29 12:08:30'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(7,'014','空空5',60000,'2024-10-29 12:08:50'),
+(7,'014','空空6',50000,'2024-10-29 12:08:30');
+-- 数据存在两两重复
+
+-- 执行查询，以检查数据
+select * from rmt_user;
+-- 通过观察查询结果可以发现，插入数据已经将重复数据给合并，可再次执行数据插入，以获得重复数据
+
+insert into rmt_user values
+(1,'010','空空1',20000,'2024-10-28 12:08:40'),
+(1,'010','空空2',20000,'2024-10-28 12:08:40'),
+(3,'011','空空2',10000,'2024-10-29 12:08:50'),
+(3,'011','空空3',30000,'2024-10-29 12:08:30'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(7,'014','空空5',60000,'2024-10-29 12:08:50'),
+(7,'014','空空6',50000,'2024-10-29 12:08:30');
+
+-- 执行查询，以检查数据
+select * from rmt_user;
+
+-- 执行手动合并分区操作
+optimize table rmt_user;
+
+-- 执行查询，以检查数据
+select * from rmt_user;
+
+```
+
+输出
+
+```sh
+ck :) create table rmt_user(
+      ^Iid UInt32,
+          order_id String, 
+          name String,
+          money decimal(16,2),
+          create_time Datetime
+      )engine=ReplacingMergeTree(create_time)
+      partition by toYYYYMMDD(create_time)
+      primary key (id)
+      order by (id,order_id);
+
+CREATE TABLE rmt_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = ReplacingMergeTree(create_time)
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id)
+
+Query id: 5b31b71a-fafa-4c16-b326-f1f4092ab0dd
+
+Ok.
+
+0 rows in set. Elapsed: 0.017 sec. 
+
+# 插入数据
+ck :) insert into rmt_user values
+      (1,'010','空空1',20000,'2024-10-28 12:08:40'),
+      (1,'010','空空2',20000,'2024-10-28 12:08:40'),
+      (3,'011','空空2',10000,'2024-10-29 12:08:50'),
+      (3,'011','空空3',30000,'2024-10-29 12:08:30'),
+      (5,'013','空空4',40000,'2024-10-28 12:08:40'),
+      (5,'013','空空4',40000,'2024-10-28 12:08:40'),
+      (7,'014','空空5',60000,'2024-10-29 12:08:50'),
+      (7,'014','空空6',50000,'2024-10-29 12:08:30');
+
+INSERT INTO rmt_user FORMAT Values
+
+Query id: 396e43dd-8a2a-421a-aaf7-8b6fb28a5a56
+
+Ok.
+
+8 rows in set. Elapsed: 0.002 sec. 
+
+# 查看重复的数据
+ck :) select * from rmt_user;
+
+SELECT *
+FROM rmt_user
+
+Query id: 9a1e7622-d3a9-4acc-908d-6aa919682502
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空2 │ 20000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空4 │ 40000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.001 sec. 
+
+# 再次录入重复的数据
+ck :) insert into rmt_user values
+      (1,'010','空空1',20000,'2024-10-28 12:08:40'),
+      (1,'010','空空2',20000,'2024-10-28 12:08:40'),
+      (3,'011','空空2',10000,'2024-10-29 12:08:50'),
+      (3,'011','空空3',30000,'2024-10-29 12:08:30'),
+      (5,'013','空空4',40000,'2024-10-28 12:08:40'),
+      (5,'013','空空4',40000,'2024-10-28 12:08:40'),
+      (7,'014','空空5',60000,'2024-10-29 12:08:50'),
+      (7,'014','空空6',50000,'2024-10-29 12:08:30');
+
+INSERT INTO rmt_user FORMAT Values
+
+Query id: 194fde9f-eb84-4165-a208-224fe883b233
+
+Ok.
+
+8 rows in set. Elapsed: 0.002 sec. 
+
+
+# 查询数据，发现重复数据已经录入
+ck :) select * from rmt_user;
+
+SELECT *
+FROM rmt_user
+
+Query id: 05501ee2-1bdf-49c5-a239-ca36ffeabd0e
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空2 │ 20000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空4 │ 40000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空2 │ 20000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空4 │ 40000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+8 rows in set. Elapsed: 0.002 sec. 
+
+# 手动合并分区操作
+ck :) optimize table rmt_user;
+
+OPTIMIZE TABLE rmt_user
+
+Query id: 11135d71-17ba-4ec5-9c33-98cc4b829139
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 查询数据，发现一个分区一个被合并，还有一个未被合并
+ck :) select * from rmt_user;
+
+SELECT *
+FROM rmt_user
+
+Query id: 2010c5a8-8b50-4754-98d0-7cd9ba6c18f7
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空2 │ 20000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空4 │ 40000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+6 rows in set. Elapsed: 0.002 sec. 
+
+# 再次执行手动合并分区操作
+ck :) optimize table rmt_user;
+
+OPTIMIZE TABLE rmt_user
+
+Query id: d51a6413-9d1d-479b-a58c-732c6d50a485
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 查询数据，所有重复数据已经被合并，
+ck :) select * from rmt_user;
+
+SELECT *
+FROM rmt_user
+
+Query id: e92460c3-bbd5-4765-a350-bde7ec0871fa
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空2 │ 20000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空4 │ 40000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空2 │ 10000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空5 │ 60000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.001 sec. 
+
+ck :) 
+
+```
+
+经过样例的测试，此ReplacingMergeTree只保证最终的数据是去重的，中间数据不保证不存在重复，需要特别注意。
+
+#### 结论：
+
+- 使用order by 字段作为唯一的键。
+- 去重不能跨分区
+- 只有同一批次插入的数据或者合并分区时才会进行去重
+- 认定重复的数据保留版本字段值最大的，未指定版本字段按插入先后顺序
+- 字段相同则插入顺序保留最后一笔。
 
 
 
