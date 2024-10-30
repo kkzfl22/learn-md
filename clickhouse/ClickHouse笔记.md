@@ -3505,6 +3505,51 @@ ck :)
 
 
 
+### 8.5 SummingMergeTree
+
+​    对于不查询明细，只关心以维度进行聚合结果的场景。如果只使用普通的MergeTree的话，无论是存储空间的开销，还是查询时临时聚合的开销都比较大。
+
+​	Clickhouse为了这种场景，提供了一种能够“预聚合”的引擎SummingMergeTree
+
+案例
+
+```sql
+create table smt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime
+)engine=SummingMergeTree(money)
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id);
+-- SummingMergeTree() 填入聚合的的数据字段
+
+
+-- 插入数据
+insert into smt_user values
+(1,'010','空空1',20000,'2024-10-28 12:08:40'),
+(1,'010','空空2',20000,'2024-10-28 12:08:40'),
+(3,'011','空空2',10000,'2024-10-29 12:08:50'),
+(3,'011','空空3',30000,'2024-10-29 12:08:30'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(5,'013','空空4',40000,'2024-10-28 12:08:40'),
+(7,'014','空空5',60000,'2024-10-29 12:08:50'),
+(7,'014','空空6',50000,'2024-10-29 12:08:30');
+```
+
+
+
+输出
+
+```sql
+```
+
+
+
+
+
 ## 9. ClickHouse内置函数
 
 
