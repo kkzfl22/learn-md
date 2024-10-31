@@ -164,6 +164,9 @@ sudo clickhouse start
 # 连接数据库 
 clickhouse-client --password
 
+firewall-cmd --permanent --zone=public --add-port=8123/tcp
+firewall-cmd --reload
+
 ```
 
 
@@ -4763,3 +4766,4 @@ order by `总行数`
 
 ## 结束
 
+wps

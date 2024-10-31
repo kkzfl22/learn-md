@@ -72,6 +72,8 @@ reboot
 
 ### 使用阿里云进行升级解决网络慢的问题
 
+包已经移除，无法使用
+
 ```sh
 vi /etc/yum.repos.d/elrepo.repo
 #编辑内容：
@@ -80,6 +82,7 @@ name=elrepo
 baseurl=https://mirrors.aliyun.com/elrepo/archive/kernel/el7/x86_64
 gpgcheck=0
 enabled=1
+
 
 #清空和刷新yum源元数据缓存
 yum clean all && yum makecache
@@ -90,6 +93,8 @@ yum clean all && yum makecache
 yum --enablerepo="elrepo" list --showduplicates | sort -r | grep kernel-ml.x86_64
 #查看 lt 长期支持版本
 yum --enablerepo="elrepo" list --showduplicates | sort -r | grep kernel-lt.x86_64
+yum --enablerepo="epel" list --showduplicates | sort -r | grep kernel-lt.x86_64
+
 
 
 yum --enablerepo=elrepo install -y kernel-lt
@@ -101,6 +106,47 @@ grub2-set-default 0
 # 重启以让其版本生效
 reboot
 ```
+
+
+
+### 离线安装方法
+
+```sh
+# 下载安装包,版本：5.4.278
+kernel-lt-5.4.278-1.el7.elrepo.x86_64.rpm          
+kernel-lt-tools-5.4.278-1.el7.elrepo.x86_64.rpm
+kernel-lt-tools-libs-5.4.278-1.el7.elrepo.x86_64.rpm
+
+# 公网下载地址：
+https://mirrors.coreix.net/elrepo-archive-archive/kernel/el7/x86_64/RPMS/
+
+
+
+# 1. 安装内核包
+rpm -Uvh kernel-lt-5.4.278-1.el7.elrepo.x86_64.rpm 
+
+
+# 2.卸载之前的内核工具依赖包，同时会自动根据依赖关系卸载内核工具包
+ yum remove kernel-tools-libs.x86_64 kernel-tools-libs.x86_64 -y
+ 
+
+# 3. 重新安装内核工具依赖包
+yum install  kernel-lt-tools-libs-5.4.278-1.el7.elrepo.x86_64.rpm
+
+
+# 4. 安装新版本的内核工具包
+yum install  kernel-lt-tools-5.4.278-1.el7.elrepo.x86_64.rpm
+
+
+# 5. 查看启动顺序
+awk -F\' '$1=="menuentry " {print $2}' /etc/grub2.cfg
+
+# 6 默认启动的顺序是从0开始，选择第0个，也就是我们新安装的【5.4.278】作为默认内核。
+grub2-set-default 0  
+
+```
+
+
 
 
 
