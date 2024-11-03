@@ -167,6 +167,10 @@ clickhouse-client --password
 firewall-cmd --permanent --zone=public --add-port=8123/tcp
 firewall-cmd --reload
 
+
+
+firewall-cmd --permanent --zone=public --add-port=9000/tcp
+firewall-cmd --reload
 ```
 
 
@@ -3728,11 +3732,863 @@ Query id: 170635d2-6c9b-46b2-956b-85a23d0c02f2
 
 
 
-## 9. ClickHouse内置函数
+
+
+## 9. ClickHouseDDL
+
+### 9.1 插入数据
+
+关于CK的数据格式：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/formats
+```
 
 
 
-### 8.1 算术函数
+创建的表
+
+```sql
+CREATE TABLE ddl_user
+(
+    `id` UInt8,
+    `name` String,
+    `address` String
+)
+ENGINE = TinyLog
+```
+
+
+
+方式1：普通的SQL插入
+
+```sql
+insert into ddl_user(id,name,address)
+values(1,'张三','上海'),
+(2,'李四','北京'),
+(3,'王五','深圳');
+```
+
+
+
+方式2： 使用CSV文件导入
+
+```sql
+-- 1.准备数据文件 data.csv
+10,小刘,上海
+20,小曾,上海
+30,小辰,上海
+
+-- 使用命令导入
+cat  data.csv | clickhouse-client --query "INSERT INTO nullnull.ddl_user FORMAT CSV" --max_insert_block_size=100000 --user maxwell --password 
+```
+
+方式3：
+
+当大批量导出时，推荐此方式
+
+```sql
+INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMAT Native;
+```
+
+
+
+
+
+### 9.2  分区操作
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/statements/alter/partition
+```
+
+相关的操作
+
+```sh
+The following operations with partitions are available:
+
+# 卸载分区至detached目录,然后数据不能查询到
+DETACH PARTITION|PART — Moves a partition or part to the detached directory and forget it.
+# 删除卸载分区
+DROP PARTITION|PART — Deletes a partition or part.
+# 删除卸载的分区
+DROP DETACHED PRTITION|PART - Delete a part or all parts of a partition from detached.
+#
+FORGET PARTITION — Deletes a partition metadata from zookeeper if it's empty.
+# 装载分区
+ATTACH PARTITION|PART — Adds a partition or part from the detached directory to the table.
+ATTACH PARTITION FROM — Copies the data partition from one table to another and adds.
+# 复制分区,从一个表至另外一个表
+REPLACE PARTITION — Copies the data partition from one table to another and replaces.
+# 移动分区
+MOVE PARTITION TO TABLE — Moves the data partition from one table to another.
+# 清除分区
+CLEAR COLUMN IN PARTITION — Resets the value of a specified column in a partition.
+# 清除分区索引
+CLEAR INDEX IN PARTITION — Resets the specified secondary index in a partition.
+# 创建分区备份
+FREEZE PARTITION — Creates a backup of a partition.
+# 移除一个备份
+UNFREEZE PARTITION — Removes a backup of a partition.
+# 从另外一个服务器下载部分分区
+FETCH PARTITION|PART — Downloads a part or partition from another server.
+# 迁移分区或者数据至另外的磁盘或者券
+MOVE PARTITION|PART — Move partition/data part to another disk or volume.
+# 按条件更新分区
+UPDATE IN PARTITION — Update data inside the partition by condition.
+# 按条件删除分区
+DELETE IN PARTITION — Delete data inside the partition by condition.
+```
+
+
+
+分区在于减少查询读取数据的条数
+
+在ck中需要使用mergeTree引擎
+
+分区操作的命令
+
+```sh
+# 分区装载
+ALTER TABLE ${tableName}  ATTACH PARTITION ${partition}
+
+
+# 分区卸载
+ALTER TABLE ${tableName}  DETACH PARTITION ${partition}
+
+# 分区删除
+ALTER TABLE ${tableName}   DROP PARTITION ${partition}
+
+# 复制分区
+alter table  ${tableName} REPLACE PARTITION ${partition} from  ${tableNameOther} 
+```
+
+分区的样例,
+
+分区表的创建与加载数据
+
+```sh
+# 创建分区表
+create table nullnull_partition_01(
+	id UInt8,
+	name String,
+	birthday DateTime
+)engine = MergeTree()
+partition by toDate(birthday)
+order by id;
+
+# 插入数据
+insert into nullnull_partition_01(id,name,birthday)
+values(1,'小刘','2024-10-25 12:46:00'),
+(2,'小曾','2024-10-23 12:46:00'),
+(3,'小丽','2024-10-22 12:46:00');
+
+
+# 查询数据
+select * from nullnull_partition_01;
+
+```
+
+日志输出：
+
+```sh
+mwrpt-clickhouse :) create table nullnull_partition_01(
+^Iid UInt8,
+^Iname String,
+^Ibirthday DateTime
+)engine = MergeTree()
+partition by toDate(birthday)
+order by id;
+
+CREATE TABLE nullnull_partition_01
+(
+    `id` UInt8,
+    `name` String,
+    `birthday` DateTime
+)
+ENGINE = MergeTree
+PARTITION BY toDate(birthday)
+ORDER BY id
+
+Query id: 779d4e41-8850-4746-adb9-32651a150c2a
+
+Ok.
+
+0 rows in set. Elapsed: 0.019 sec. 
+
+mwrpt-clickhouse :) insert into nullnull_partition_01(id,name,birthday)
+values(1,'小刘','2024-10-25 12:46:00'),
+(2,'小曾','2024-10-23 12:46:00'),
+(3,'小丽','2024-10-22 12:46:00');
+
+INSERT INTO nullnull_partition_01 (id, name, birthday) FORMAT Values
+
+Query id: b6f680c3-76e5-4070-a963-e3b3650a9571
+
+Ok.
+
+3 rows in set. Elapsed: 0.003 sec. 
+
+mwrpt-clickhouse :) select * from nullnull_partition_01;
+
+SELECT *
+FROM nullnull_partition_01
+
+Query id: ea7664a4-cd46-4e47-a51c-7cc1ad2c3340
+
+┌─id─┬─name─┬────────────birthday─┐
+│  3 │ 小丽 │ 2024-10-22 12:46:00 │
+└────┴──────┴─────────────────────┘
+┌─id─┬─name─┬────────────birthday─┐
+│  1 │ 小刘 │ 2024-10-25 12:46:00 │
+└────┴──────┴─────────────────────┘
+┌─id─┬─name─┬────────────birthday─┐
+│  2 │ 小曾 │ 2024-10-23 12:46:00 │
+└────┴──────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.002 sec. 
+
+mwrpt-clickhouse :) 
+```
+
+
+
+分区表信息
+
+```sql
+select * from system.parts;
+```
+
+详细的分区信息
+
+```sql
+a5e651989f3b :) select database,table,name,partition_id from system.parts where table ='nullnull_partition_01'
+
+SELECT
+    database,
+    table,
+    name,
+    partition_id
+FROM system.parts
+WHERE table = 'nullnull_partition_01'
+
+Query id: 9d3b9be5-d2b8-4189-b979-1e81546e4fa2
+
+┌─database─┬─table─────────────────┬─name───────────┬─partition_id─┐
+│ default  │ nullnull_partition_01 │ 20241022_3_3_0 │ 20241022     │
+│ default  │ nullnull_partition_01 │ 20241023_2_2_0 │ 20241023     │
+│ default  │ nullnull_partition_01 │ 20241025_1_1_0 │ 20241025     │
+└──────────┴───────────────────────┴────────────────┴──────────────┘
+
+3 rows in set. Elapsed: 0.004 sec. 
+
+a5e651989f3b :) 
+
+```
+
+
+
+### 9.3 Update和Delete操作
+
+​	ClickHouse提供了Delete和Update的能力，这类操作称为Mutation查询，它可以看做Alter的一种。
+
+​	虽然可以实现修改和删除，但是和一般的OLTP数据库不一样，Mutation语句是一种很“重”的操作，而且不支持事务。
+
+​	“重”的原因主要是每次修改或者删除都会导致放弃目标数据的原有分区，重建新分区。所以尽量做批量的变更，不要进行频繁小数据操作。
+
+​	（1）删除操作
+
+```sql
+alter table ddl_user delete where id = 1;
+```
+
+​	（2）修改操作
+
+```sql
+alter table ddl_user update name='New1',money=toDecimal32(2000.01,2),create_time=now64() where id = 3 and order_id= '011'
+```
+
+样例：
+
+```sh
+create table ddl_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime
+)engine=MergeTree()
+primary key (id)
+order by (id,order_id);
+
+
+-- 插入数据
+insert into ddl_user values
+(1,'010','空空1',20000,'2024-10-28 12:08:40'),
+(3,'011','空空3',10000,'2024-10-29 12:08:50'),
+(5,'013','空空5',40000,'2024-10-28 12:08:40'),
+(7,'014','空空8',50000,'2024-10-29 12:08:30');
+
+-- 查询
+select * from ddl_user;
+
+-- 删除操作
+alter table ddl_user delete where id = 1;
+
+-- 查询
+select * from ddl_user;
+
+
+-- 修改操作
+alter table ddl_user update name='New1',money=toDecimal32(2000.01,2),create_time=now64() where id = 3 and order_id= '011';
+
+-- 查询
+select * from ddl_user;
+
+```
+
+输出：
+
+```sql
+ck :) create table ddl_user(
+      ^Iid UInt32,
+          order_id String, 
+          name String,
+          money decimal(16,2),
+          create_time Datetime
+      )engine=MergeTree()
+      primary key (id)
+      order by (id,order_id);
+
+CREATE TABLE ddl_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = MergeTree
+PRIMARY KEY id
+ORDER BY (id, order_id)
+
+Query id: 761c45fa-ee5b-4a3b-91dc-4d489198a9dc
+
+Ok.
+
+0 rows in set. Elapsed: 0.063 sec. 
+
+ck :) insert into ddl_user values
+      (1,'010','空空1',20000,'2024-10-28 12:08:40'),
+      (3,'011','空空3',10000,'2024-10-29 12:08:50'),
+      (5,'013','空空5',40000,'2024-10-28 12:08:40'),
+      (7,'014','空空8',50000,'2024-10-29 12:08:30');
+
+INSERT INTO ddl_user FORMAT Values
+
+Query id: bc66292e-7933-4d58-b863-ee06ef342fce
+
+Ok.
+
+4 rows in set. Elapsed: 0.003 sec. 
+
+# 查询插入后的数据
+ck :) select * from ddl_user;
+
+SELECT *
+FROM ddl_user
+
+Query id: 7cd5ef49-85f9-4716-a8f4-901803f0c019
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 20000 │ 2024-10-28 12:08:40 │
+│  3 │ 011      │ 空空3 │ 10000 │ 2024-10-29 12:08:50 │
+│  5 │ 013      │ 空空5 │ 40000 │ 2024-10-28 12:08:40 │
+│  7 │ 014      │ 空空8 │ 50000 │ 2024-10-29 12:08:30 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.004 sec. 
+
+# 删除操作
+ck :) alter table ddl_user delete where id = 1;
+
+ALTER TABLE ddl_user
+    DELETE WHERE id = 1
+
+Query id: 48707750-39e7-43ee-91be-893c77653a61
+
+Ok.
+
+0 rows in set. Elapsed: 0.005 sec. 
+
+# 查询后数据已经被删除
+ck :) select * from ddl_user;
+
+SELECT *
+FROM ddl_user
+
+Query id: f5bccb80-2a7f-4952-a02f-64811cbbf8ab
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  3 │ 011      │ 空空3 │ 10000 │ 2024-10-29 12:08:50 │
+│  5 │ 013      │ 空空5 │ 40000 │ 2024-10-28 12:08:40 │
+│  7 │ 014      │ 空空8 │ 50000 │ 2024-10-29 12:08:30 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.004 sec. 
+
+# 修改操作
+ck :) alter table ddl_user update name='New1',money=toDecimal32(2000.01,2),create_time=now64() where id = 3 and order_id= '011'
+
+ALTER TABLE ddl_user
+    UPDATE name = 'New1', money = toDecimal32(2000.01, 2), create_time = now64() WHERE (id = 3) AND (order_id = '011')
+
+Query id: 1375d582-ccbc-43e5-b934-8d04d1fa27f2
+
+Ok.
+
+0 rows in set. Elapsed: 0.031 sec. 
+
+# 数据已经被更新到最新
+ck :) select * from ddl_user;
+
+SELECT *
+FROM ddl_user
+
+Query id: 5b0a4097-3377-48bf-9b89-9abcada67dea
+
+┌─id─┬─order_id─┬─name──┬───money─┬─────────create_time─┐
+│  3 │ 011      │ New1  │ 2000.01 │ 2024-11-03 10:19:08 │
+│  5 │ 013      │ 空空5 │   40000 │ 2024-10-28 12:08:40 │
+│  7 │ 014      │ 空空8 │   50000 │ 2024-10-29 12:08:30 │
+└────┴──────────┴───────┴─────────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.003 sec. 
+
+ck :) 
+```
+
+### 9.4 查询操作
+
+ClickHouse与标准SQL差别不大
+
+	1. 支持子查询
+	1. 支持CTE(Common Table Expression 公用表达式 with 子句)
+	1. 支持各种Join，但是Join操作无法使用缓存，所以即使两次相同 的Join语句，ClickHouse也会视为两条新SQL。
+	1. 窗口函数（https://clickhouse.com/docs/en/sql-reference/window-functions）
+	1. 不支持自定义函数
+	1. Group By操作增加了 With rollup \ with cube \ with total 用来计算小计和总和
+
+#### 多维函数分析
+
+```sql
+# 建表
+create table ddl_with_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime
+)engine=MergeTree()
+primary key (id)
+order by (id,order_id);
+
+
+# 插入数据
+insert into ddl_with_user values
+(1,'011','空空1',20000,'2024-10-28 12:08:40'),
+(1,'011','空空2',20000,'2024-10-28 12:08:42'),
+(2,'012','空空3',10000,'2024-10-29 12:08:50'),
+(2,'012','空空4',10000,'2024-10-29 12:08:52'),
+(3,'013','空空5',40000,'2024-10-28 12:08:40'),
+(3,'015','空空6',40000,'2024-10-28 12:08:46'),
+(4,'016','空空8',50000,'2024-10-29 12:08:30');
+
+
+# 查询数据
+select * from ddl_with_user;
+
+
+# 维度a,b
+# with rollUp: 从右至左去掉维度进行小计
+# rollup 上卷，从每一个维度开始，不能跳过
+	# group by  统计所有
+	# group by a
+	# group by a,b
+select id,order_id,sum(money) 
+from ddl_with_user
+group by id,order_id
+with rollup;
+
+
+
+# with cube : 从右至左去掉维度进行小计，再从左至右进行维度小计
+# cube : 多维分析,所有情况都会有
+	# group by a,b
+	# group by a
+	# group by b
+	# group by  统计所有
+select id,order_id,sum(money) 
+from ddl_with_user
+group by id,order_id
+with cube;
+
+# with totals: 只算合计
+# total ： 总计 
+	# group by a,b
+	# group by  统计所有
+select id,order_id,sum(money) 
+from ddl_with_user
+group by id,order_id
+with totals;
+
+```
+
+样例：
+
+```sql
+# with rollUp: 从右至左去掉维度进行小计
+ck :) select id,order_id,sum(money) 
+      from ddl_with_user
+      group by id,order_id
+      with rollup;
+
+SELECT
+    id,
+    order_id,
+    sum(money)
+FROM ddl_with_user
+GROUP BY
+    id,
+    order_id
+    WITH ROLLUP
+
+Query id: 364a8abc-67a9-49af-9090-8ecd8b64e136
+
+┌─id─┬─order_id─┬─sum(money)─┐
+│  3 │ 015      │      40000 │
+│  3 │ 013      │      40000 │
+│  1 │ 011      │      40000 │
+│  4 │ 016      │      50000 │
+│  2 │ 012      │      20000 │
+└────┴──────────┴────────────┘
+┌─id─┬─order_id─┬─sum(money)─┐
+│  4 │          │      50000 │
+│  1 │          │      40000 │
+│  2 │          │      20000 │
+│  3 │          │      80000 │
+└────┴──────────┴────────────┘
+┌─id─┬─order_id─┬─sum(money)─┐
+│  0 │          │     190000 │
+└────┴──────────┴────────────┘
+
+10 rows in set. Elapsed: 0.005 sec. 
+
+
+with cube : 从右至左去掉维度进行小计，再从左至右进行维度小计
+ck :) select id,order_id,sum(money) 
+      from ddl_with_user
+      group by id,order_id
+      with cube;
+
+SELECT
+    id,
+    order_id,
+    sum(money)
+FROM ddl_with_user
+GROUP BY
+    id,
+    order_id
+    WITH CUBE
+
+Query id: 78854bf4-96f0-4cbe-9e4c-9613054259f9
+
+┌─id─┬─order_id─┬─sum(money)─┐
+│  3 │ 015      │      40000 │
+│  3 │ 013      │      40000 │
+│  1 │ 011      │      40000 │
+│  4 │ 016      │      50000 │
+│  2 │ 012      │      20000 │
+└────┴──────────┴────────────┘
+┌─id─┬─order_id─┬─sum(money)─┐
+│  4 │          │      50000 │
+│  1 │          │      40000 │
+│  2 │          │      20000 │
+│  3 │          │      80000 │
+└────┴──────────┴────────────┘
+┌─id─┬─order_id─┬─sum(money)─┐
+│  0 │ 015      │      40000 │
+│  0 │ 016      │      50000 │
+│  0 │ 013      │      40000 │
+│  0 │ 011      │      40000 │
+│  0 │ 012      │      20000 │
+└────┴──────────┴────────────┘
+┌─id─┬─order_id─┬─sum(money)─┐
+│  0 │          │     190000 │
+└────┴──────────┴────────────┘
+
+15 rows in set. Elapsed: 0.006 sec. 
+
+# with totals: 只算合计
+ck :) select id,order_id,sum(money) 
+      from ddl_with_user
+      group by id,order_id
+      with totals;
+
+SELECT
+    id,
+    order_id,
+    sum(money)
+FROM ddl_with_user
+GROUP BY
+    id,
+    order_id
+    WITH TOTALS
+
+Query id: 4e4d65b8-0cc1-43e2-bef1-a95c6a044b96
+
+┌─id─┬─order_id─┬─sum(money)─┐
+│  3 │ 015      │      40000 │
+│  3 │ 013      │      40000 │
+│  1 │ 011      │      40000 │
+│  4 │ 016      │      50000 │
+│  2 │ 012      │      20000 │
+└────┴──────────┴────────────┘
+
+Totals:
+┌─id─┬─order_id─┬─sum(money)─┐
+│  0 │          │     190000 │
+└────┴──────────┴────────────┘
+
+5 rows in set. Elapsed: 0.021 sec. 
+
+ck :) 
+```
+
+
+
+
+
+### 9.5 ALTER操作操作
+
+参考官方文档：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/statements/alter
+```
+
+常用操作
+
+```sh
+# 1. 新加字段
+ALTER TABLE  tableName ADD COLUMN IF NOT EXISTS newColumnName String COMMENT '描述' after coll;
+
+
+# 2. 修改字段
+ALTER TABLE  tableName modify COLUMN IF EXISTS newColumnName String COMMENT '描述';
+
+
+# 3. 删除字段
+ALTER TABLE  tableName DROP COLUMN IF EXISTS newColumnName ;
+```
+
+样例
+
+```sql
+# 使用多给分析的表继续操作
+# 添加字段
+ALTER TABLE  ddl_with_user ADD COLUMN IF NOT EXISTS address String COMMENT '地址' after money;
+
+# 查询
+select * from ddl_with_user;
+
+# 插入
+insert into ddl_with_user values
+(10,'111','空空11',20000,'上海','2024-11-01 12:08:40');
+
+# 查询
+select * from ddl_with_user;
+
+# 2. 修改字段
+ALTER TABLE  ddl_with_user modify COLUMN IF EXISTS address String COMMENT '地址信息';
+
+
+# 查询
+desc ddl_with_user;
+
+
+# 删除字段
+ALTER TABLE  ddl_with_user DROP COLUMN IF EXISTS address ;
+
+
+# 查询
+desc ddl_with_user;
+```
+
+输出:
+
+```sh
+# 添加字段
+ck :) ALTER TABLE  ddl_with_user ADD COLUMN IF NOT EXISTS address String COMMENT '地址' after money;
+
+ALTER TABLE ddl_with_user
+    ADD COLUMN IF NOT EXISTS `address` String COMMENT '地址' AFTER money
+
+Query id: d8566c57-9a7d-4a6b-9b5f-06c9f67dc1a1
+
+Ok.
+
+0 rows in set. Elapsed: 0.025 sec. 
+
+# 查询
+ck :) select * from ddl_with_user;
+
+SELECT *
+FROM ddl_with_user
+
+Query id: e0c2beba-c84e-4f13-875b-a331bfb3c2fa
+
+┌─id─┬─order_id─┬─name──┬─money─┬─address─┬─────────create_time─┐
+│  1 │ 011      │ 空空1 │ 20000 │         │ 2024-10-28 12:08:40 │
+│  1 │ 011      │ 空空2 │ 20000 │         │ 2024-10-28 12:08:42 │
+│  2 │ 012      │ 空空3 │ 10000 │         │ 2024-10-29 12:08:50 │
+│  2 │ 012      │ 空空4 │ 10000 │         │ 2024-10-29 12:08:52 │
+│  3 │ 013      │ 空空5 │ 40000 │         │ 2024-10-28 12:08:40 │
+│  3 │ 015      │ 空空6 │ 40000 │         │ 2024-10-28 12:08:46 │
+│  4 │ 016      │ 空空8 │ 50000 │         │ 2024-10-29 12:08:30 │
+└────┴──────────┴───────┴───────┴─────────┴─────────────────────┘
+
+7 rows in set. Elapsed: 0.004 sec. 
+
+#修改字段
+ck :) ALTER TABLE  ddl_with_user modify COLUMN IF EXISTS address String COMMENT '地址信息';
+
+ALTER TABLE ddl_with_user
+    MODIFY COLUMN IF EXISTS `address` String COMMENT '地址信息'
+
+Query id: eb89eee7-e132-4c4b-9105-536e0621da04
+
+Ok.
+
+0 rows in set. Elapsed: 0.025 sec. 
+
+ck :) 
+ck :) # 查询
+      select * from ddl_with_user;
+
+SELECT *
+FROM ddl_with_user
+
+Query id: 028efb5b-488b-46b5-a2c2-66e816b5d502
+
+┌─id─┬─order_id─┬─name───┬─money─┬─address─┬─────────create_time─┐
+│ 10 │ 111      │ 空空11 │ 20000 │ 上海    │ 2024-11-01 12:08:40 │
+└────┴──────────┴────────┴───────┴─────────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─address─┬─────────create_time─┐
+│  1 │ 011      │ 空空1 │ 20000 │         │ 2024-10-28 12:08:40 │
+│  1 │ 011      │ 空空2 │ 20000 │         │ 2024-10-28 12:08:42 │
+│  2 │ 012      │ 空空3 │ 10000 │         │ 2024-10-29 12:08:50 │
+│  2 │ 012      │ 空空4 │ 10000 │         │ 2024-10-29 12:08:52 │
+│  3 │ 013      │ 空空5 │ 40000 │         │ 2024-10-28 12:08:40 │
+│  3 │ 015      │ 空空6 │ 40000 │         │ 2024-10-28 12:08:46 │
+│  4 │ 016      │ 空空8 │ 50000 │         │ 2024-10-29 12:08:30 │
+└────┴──────────┴───────┴───────┴─────────┴─────────────────────┘
+
+8 rows in set. Elapsed: 0.017 sec. 
+
+ck :) desc ddl_with_user;
+
+DESCRIBE TABLE ddl_with_user
+
+Query id: a3336215-8c07-4587-82fc-650942714d82
+
+┌─name────────┬─type───────────┬─default_type─┬─default_expression─┬─comment──┬─codec_expression─┬─ttl_expression─┐
+│ id          │ UInt32         │              │                    │          │                  │                │
+│ order_id    │ String         │              │                    │          │                  │                │
+│ name        │ String         │              │                    │          │                  │                │
+│ money       │ Decimal(16, 2) │              │                    │          │                  │                │
+│ address     │ String         │              │                    │ 地址信息 │                  │                │
+│ create_time │ DateTime       │              │                    │          │                  │                │
+└─────────────┴────────────────┴──────────────┴────────────────────┴──────────┴──────────────────┴────────────────┘
+
+6 rows in set. Elapsed: 0.001 sec. 
+
+
+# 删除字段
+ck :) ALTER TABLE  ddl_with_user DROP COLUMN IF EXISTS address ;
+
+ALTER TABLE ddl_with_user
+    DROP COLUMN IF EXISTS address
+
+Query id: 81f7b406-6602-491c-9f92-bf5d91935097
+
+Ok.
+
+0 rows in set. Elapsed: 0.018 sec. 
+
+ck :) # 查询
+      desc ddl_with_user;
+
+DESCRIBE TABLE ddl_with_user
+
+Query id: 7df216c7-ecb6-46be-8c07-e303c8666fb3
+
+┌─name────────┬─type───────────┬─default_type─┬─default_expression─┬─comment─┬─codec_expression─┬─ttl_expression─┐
+│ id          │ UInt32         │              │                    │         │                  │                │
+│ order_id    │ String         │              │                    │         │                  │                │
+│ name        │ String         │              │                    │         │                  │                │
+│ money       │ Decimal(16, 2) │              │                    │         │                  │                │
+│ create_time │ DateTime       │              │                    │         │                  │                │
+└─────────────┴────────────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
+
+5 rows in set. Elapsed: 0.003 sec. 
+
+ck :) 
+```
+
+
+
+
+
+### 9.6 导出数据
+
+可参考数据格式：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/formats
+```
+
+导出数据
+
+```sql
+clickhouse-client --password --query "select * from nullnull.ddl_with_user where create_time >= '2024-10-28 12:00:00' and create_time <= '2024-10-29 12:00:00'" --format CSVWithNames > /opt/data/export/user.csv
+```
+
+输出：
+
+```markdown
+[root@ck export]# clickhouse-client --password --query "select * from nullnull.ddl_with_user where create_time >= '2024-10-28 12:00:00' and create_time <= '2024-10-29 12:00:00'" --format CSVWithNames > /opt/data/export/user.csv
+Password for user (default): 
+[root@ck export]# ll
+总用量 4
+-rw-r--r--. 1 root root 229 11月  3 11:35 user.csv
+[root@ck export]# cat user.csv 
+"id","order_id","name","money","create_time"
+1,"011","空空1",20000,"2024-10-28 12:08:40"
+1,"011","空空2",20000,"2024-10-28 12:08:42"
+3,"013","空空5",40000,"2024-10-28 12:08:40"
+3,"015","空空6",40000,"2024-10-28 12:08:46"
+[root@ck export]# 
+```
+
+
+
+
+
+## 10. ClickHouse内置函数
+
+
+
+### 10.1 算术函数
 
 ```sh
 https://clickhouse.com/docs/en/sql-reference/functions/arithmetic-functions
@@ -3987,7 +4843,9 @@ os21 :)
 
 
 
-### 8.2 比较函数
+
+
+### 10.2 比较函数
 
 ```sh
 https://clickhouse.com/docs/en/sql-reference/functions/comparison-functions
@@ -4086,7 +4944,9 @@ Query id: feaef79c-e64b-4b7d-a40f-68c9670d8c25
 
 
 
-### 8.3 逻辑函数
+
+
+### 10.3 逻辑函数
 
 ```sh
 https://clickhouse.com/docs/en/sql-reference/functions/logical-functions
@@ -4178,7 +5038,9 @@ Query id: a6b7a741-bfcb-45c7-8fae-4ace642919dc
 
 
 
-### 8.4 取整函数
+
+
+### 10.4 取整函数
 
 官网API地址：
 
@@ -4257,7 +5119,9 @@ Query id: cfbe37ec-1a9c-402b-b2c9-5e0b4eb50b33
 
 
 
-### 8.5 转换函数
+
+
+### 10.5 转换函数
 
 官网地址:
 
@@ -4361,7 +5225,9 @@ os21 :)
 
 
 
-### 8.6 逻辑函数
+
+
+### 10.6 逻辑函数
 
 ```sh
 https://clickhouse.com/docs/en/sql-reference/functions/conditional-functions
@@ -4466,7 +5332,9 @@ Query id: 058be9d4-2454-4183-b22c-501cb0127fdc
 
 
 
-### 8.7 字符串函数
+
+
+### 10.7 字符串函数
 
 官方地址：
 
@@ -4476,7 +5344,7 @@ https://clickhouse.com/docs/en/sql-reference/functions/string-functions
 
 
 
-### 8.8 时间函数
+### 10.8 时间函数
 
 官方地址:
 
@@ -4599,256 +5467,77 @@ Query id: 35d396b8-a64c-4eee-9376-838f5092d0c2
 
 
 
-## 9. ClickHouseDDL
+## 11 副本
 
-### 9.1 插入数据
-
-关于CK的数据格式：
+副本的主要目的是保障数据的高可用性，即使一台ClickHouse节点宕机，那么也可以从其他服务器获得相同的数据：
 
 ```sh
-https://clickhouse.com/docs/en/sql-reference/formats
+https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication
+```
+
+副本写入流程
+
+```mermaid
+graph LR;
+	A[client]-->|1-写入数据| B[clickhouse-a]
+	B-->|2-提交写入日志| C[zookeeper-cluster]
+	C-->|3-收到写入日志| D[zookeeper-b]
+	B-->|4-从目标副本下载数据| D[zookeeper-b]
 ```
 
 
 
-创建的表
+![image-20241103130519343](.\images\image-20241103130519343.png)
 
-```sql
-CREATE TABLE ddl_user
-(
-    `id` UInt8,
-    `name` String,
-    `address` String
-)
-ENGINE = TinyLog
+配制步骤
+
+1. 启动zookeeper集群
+2. 
+
+
+
+```properties
+# server.A=B:C:D
+# A标识机器序列号不重复就行判断myid文件
+# B填写集群中机器IP或域名
+# C是集群中Follower与Leader服务器交换信息的端口
+# D是万一集群中的Leader服务器挂了，需要一个端口来重新进行选举，选出一个新的Leader，用来执行选举时服务器相互通信的端口
+server.1=192.168.5.11:2182:2183
+server.2=192.168.5.12:2182:2183
+server.3=192.168.5.13:2182:2183
+
+#开放防火墙
+firewall-cmd --permanent --zone=public --add-port=2182/tcp
+firewall-cmd --permanent --zone=public --add-port=2183/tcp
+firewall-cmd --reload
+
 ```
 
+进行配制
 
-
-方式1：普通的SQL插入
-
-```sql
-insert into ddl_user(id,name,address)
-values(1,'张三','上海'),
-(2,'李四','北京'),
-(3,'王五','深圳');
+```xml
+<?xml version="1.0"?>
+<yandex>
+	<zookeeper-servers>
+		<node index="1">
+			<host>o11</host>
+			<port>2181</port>
+		</node>
+		<node index="2">
+			<host>os12</host>
+			<port>2181</port>
+		</node>
+		<node index="3">
+			<host>os13</host>
+			<port>2181</port>
+		</node>
+	</zookeeper-servers>
+</yandex>
 ```
 
-
-
-方式2： 使用CSV文件导入
-
-```sql
--- 1.准备数据文件 data.csv
-10,小刘,上海
-20,小曾,上海
-30,小辰,上海
-
--- 使用命令导入
-cat  data.csv | clickhouse-client --query "INSERT INTO nullnull.ddl_user FORMAT CSV" --max_insert_block_size=100000 --user maxwell --password 
-```
-
-方式3：
-
-当大批量导出时，推荐此方式
-
-```sql
-INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMAT Native;
-```
-
-
-
-
-
-### 9.9 分区操作
+配制host
 
 ```sh
-https://clickhouse.com/docs/en/sql-reference/statements/alter/partition
-```
-
-相关的操作
-
-```sh
-The following operations with partitions are available:
-
-# 卸载分区至detached目录,然后数据不能查询到
-DETACH PARTITION|PART — Moves a partition or part to the detached directory and forget it.
-# 删除卸载分区
-DROP PARTITION|PART — Deletes a partition or part.
-# 删除卸载的分区
-DROP DETACHED PRTITION|PART - Delete a part or all parts of a partition from detached.
-#
-FORGET PARTITION — Deletes a partition metadata from zookeeper if it's empty.
-# 装载分区
-ATTACH PARTITION|PART — Adds a partition or part from the detached directory to the table.
-ATTACH PARTITION FROM — Copies the data partition from one table to another and adds.
-# 复制分区,从一个表至另外一个表
-REPLACE PARTITION — Copies the data partition from one table to another and replaces.
-# 移动分区
-MOVE PARTITION TO TABLE — Moves the data partition from one table to another.
-# 清除分区
-CLEAR COLUMN IN PARTITION — Resets the value of a specified column in a partition.
-# 清除分区索引
-CLEAR INDEX IN PARTITION — Resets the specified secondary index in a partition.
-# 创建分区备份
-FREEZE PARTITION — Creates a backup of a partition.
-# 移除一个备份
-UNFREEZE PARTITION — Removes a backup of a partition.
-# 从另外一个服务器下载部分分区
-FETCH PARTITION|PART — Downloads a part or partition from another server.
-# 迁移分区或者数据至另外的磁盘或者券
-MOVE PARTITION|PART — Move partition/data part to another disk or volume.
-# 按条件更新分区
-UPDATE IN PARTITION — Update data inside the partition by condition.
-# 按条件删除分区
-DELETE IN PARTITION — Delete data inside the partition by condition.
-```
-
-
-
-分区在于减少查询读取数据的条数
-
-在ck中需要使用mergeTree引擎
-
-分区操作的命令
-
-```sh
-# 分区装载
-ALTER TABLE ${tableName}  ATTACH PARTITION ${partition}
-
-
-# 分区卸载
-ALTER TABLE ${tableName}  DETACH PARTITION ${partition}
-
-# 分区删除
-ALTER TABLE ${tableName}   DROP PARTITION ${partition}
-
-# 复制分区
-alter table  ${tableName} REPLACE PARTITION ${partition} from  ${tableNameOther} 
-```
-
-分区的样例,
-
-分区表的创建与加载数据
-
-```sh
-
-# 创建分区表
-create table nullnull_partition_01(
-	id UInt8,
-	name String,
-	birthday DateTime
-)engine = MergeTree()
-partition by toDate(birthday)
-order by id;
-
-# 插入数据
-insert into nullnull_partition_01(id,name,birthday)
-values(1,'小刘','2024-10-25 12:46:00'),
-(2,'小曾','2024-10-23 12:46:00'),
-(3,'小丽','2024-10-22 12:46:00');
-
-
-# 查询数据
-select * from nullnull_partition_01;
-
-```
-
-日志输出：
-
-```sh
-mwrpt-clickhouse :) create table nullnull_partition_01(
-^Iid UInt8,
-^Iname String,
-^Ibirthday DateTime
-)engine = MergeTree()
-partition by toDate(birthday)
-order by id;
-
-CREATE TABLE nullnull_partition_01
-(
-    `id` UInt8,
-    `name` String,
-    `birthday` DateTime
-)
-ENGINE = MergeTree
-PARTITION BY toDate(birthday)
-ORDER BY id
-
-Query id: 779d4e41-8850-4746-adb9-32651a150c2a
-
-Ok.
-
-0 rows in set. Elapsed: 0.019 sec. 
-
-mwrpt-clickhouse :) insert into nullnull_partition_01(id,name,birthday)
-values(1,'小刘','2024-10-25 12:46:00'),
-(2,'小曾','2024-10-23 12:46:00'),
-(3,'小丽','2024-10-22 12:46:00');
-
-INSERT INTO nullnull_partition_01 (id, name, birthday) FORMAT Values
-
-Query id: b6f680c3-76e5-4070-a963-e3b3650a9571
-
-Ok.
-
-3 rows in set. Elapsed: 0.003 sec. 
-
-mwrpt-clickhouse :) select * from nullnull_partition_01;
-
-SELECT *
-FROM nullnull_partition_01
-
-Query id: ea7664a4-cd46-4e47-a51c-7cc1ad2c3340
-
-┌─id─┬─name─┬────────────birthday─┐
-│  3 │ 小丽 │ 2024-10-22 12:46:00 │
-└────┴──────┴─────────────────────┘
-┌─id─┬─name─┬────────────birthday─┐
-│  1 │ 小刘 │ 2024-10-25 12:46:00 │
-└────┴──────┴─────────────────────┘
-┌─id─┬─name─┬────────────birthday─┐
-│  2 │ 小曾 │ 2024-10-23 12:46:00 │
-└────┴──────┴─────────────────────┘
-
-3 rows in set. Elapsed: 0.002 sec. 
-
-mwrpt-clickhouse :) 
-```
-
-
-
-分区表信息
-
-```sql
-select * from system.parts;
-```
-
-详细的分区信息
-
-```sql
-a5e651989f3b :) select database,table,name,partition_id from system.parts where table ='nullnull_partition_01'
-
-SELECT
-    database,
-    table,
-    name,
-    partition_id
-FROM system.parts
-WHERE table = 'nullnull_partition_01'
-
-Query id: 9d3b9be5-d2b8-4189-b979-1e81546e4fa2
-
-┌─database─┬─table─────────────────┬─name───────────┬─partition_id─┐
-│ default  │ nullnull_partition_01 │ 20241022_3_3_0 │ 20241022     │
-│ default  │ nullnull_partition_01 │ 20241023_2_2_0 │ 20241023     │
-│ default  │ nullnull_partition_01 │ 20241025_1_1_0 │ 20241025     │
-└──────────┴───────────────────────┴────────────────┴──────────────┘
-
-3 rows in set. Elapsed: 0.004 sec. 
-
-a5e651989f3b :) 
-
 ```
 
 
@@ -4864,43 +5553,6 @@ a5e651989f3b :)
 
 
 
-
-
-
-
-
-
-
-## 11  多维数据分析
-
-```sql
-# 在传统的统计中，存在一种分析。比按A和B进行分组。
-select XXX from xxx group by a,b
-union all 
-select XXX from xxx group by a
-union all
-select xxx from xxx group by b
-union all
-select xxx from xxx
-# 将这种4种场景聚合在一起进行分析。
-
-# 维度a,b
-# rollup 上卷，从每一个维度开始，不能跳过
-	# group by  统计所有
-	# group by a
-	# group by a,b
-# cube : 多维分析,所有情况都会有
-	# group by a,b
-	# group by a
-	# group by b
-	# group by  统计所有
-# total ： 总计 
-	# group by a,b
-	# group by  统计所有
-	
-	
-	
-```
 
 
 
