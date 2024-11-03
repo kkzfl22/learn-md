@@ -3510,11 +3510,16 @@ ck :)
 
 ### 8.5 SummingMergeTree
 
+#### 介绍
+
 ​    对于不查询明细，只关心以维度进行聚合结果的场景。如果只使用普通的MergeTree的话，无论是存储空间的开销，还是查询时临时聚合的开销都比较大。
 
 ​	Clickhouse为了这种场景，提供了一种能够“预聚合”的引擎SummingMergeTree
 
-案例
+1.  分区内聚合
+2. 分片合并时做合并
+
+#### 案例
 
 ```sql
 create table smt_user(
@@ -3527,19 +3532,45 @@ create table smt_user(
 partition by toYYYYMMDD(create_time)
 primary key (id)
 order by (id,order_id);
--- SummingMergeTree() 填入聚合的的数据字段
+-- SummingMergeTree() 填入聚合的的数据字段，
+-- 按order by的字段进行预聚合操作。
 
 
 -- 插入数据
 insert into smt_user values
 (1,'010','空空1',20000,'2024-10-28 12:08:40'),
 (1,'010','空空2',20000,'2024-10-28 12:08:40'),
-(3,'011','空空2',10000,'2024-10-29 12:08:50'),
-(3,'011','空空3',30000,'2024-10-29 12:08:30'),
-(5,'013','空空4',40000,'2024-10-28 12:08:40'),
-(5,'013','空空4',40000,'2024-10-28 12:08:40'),
-(7,'014','空空5',60000,'2024-10-29 12:08:50'),
-(7,'014','空空6',50000,'2024-10-29 12:08:30');
+(3,'011','空空3',10000,'2024-10-29 12:08:50'),
+(3,'011','空空4',30000,'2024-10-29 12:08:30'),
+(5,'013','空空5',40000,'2024-10-28 12:08:40'),
+(5,'013','空空6',40000,'2024-10-28 12:08:40'),
+(7,'014','空空7',60000,'2024-10-29 12:08:50'),
+(7,'014','空空8',50000,'2024-10-29 12:08:30');
+
+
+# 经过插入后，原来的8条数据，现在只剩下了4条。说明已经将数据做了预聚合。
+# 通过观察发现 数据时间取的是最早插入的那条记录。
+select * from smt_user;
+
+
+# 在同一个分区内，再次插入数据
+insert into smt_user values
+(1,'010','空空1',20001,'2024-10-28 15:08:40');
+
+
+# 再次观察数据
+# 可以发现，在新的分区内，又插入了一条记录
+select * from smt_user;
+
+
+# 手动执行合并操作
+optimize table smt_user final;
+
+
+# 检查数据预聚合的合并树
+select * from smt_user;
+
+
 ```
 
 
@@ -3547,9 +3578,153 @@ insert into smt_user values
 输出
 
 ```sql
+ck :) create table smt_user(
+      ^Iid UInt32,
+          order_id String, 
+          name String,
+          money decimal(16,2),
+          create_time Datetime
+      )engine=SummingMergeTree(money)
+      partition by toYYYYMMDD(create_time)
+      primary key (id)
+      order by (id,order_id);
+
+CREATE TABLE smt_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = SummingMergeTree(money)
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id)
+
+Query id: 19f2f47f-287c-4c44-bfa1-14463ddc7a3f
+
+Ok.
+
+0 rows in set. Elapsed: 0.015 sec. 
+
+ck :) insert into smt_user values
+      (1,'010','空空1',20000,'2024-10-28 12:08:40'),
+      (1,'010','空空2',20000,'2024-10-28 12:08:40'),
+      (3,'011','空空3',10000,'2024-10-29 12:08:50'),
+      (3,'011','空空4',30000,'2024-10-29 12:08:30'),
+      (5,'013','空空5',40000,'2024-10-28 12:08:40'),
+      (5,'013','空空6',40000,'2024-10-28 12:08:40'),
+      (7,'014','空空7',60000,'2024-10-29 12:08:50'),
+      (7,'014','空空8',50000,'2024-10-29 12:08:30');
+
+INSERT INTO smt_user FORMAT Values
+
+Query id: fcc57e6a-8e98-4b09-b4c6-513ab8b95b59
+
+Ok.
+
+8 rows in set. Elapsed: 0.002 sec. 
+
+# 经过插入后，原来的8条数据，现在只剩下了4条。说明已经将数据做了预聚合。
+# 通过观察发现 数据时间取的是最早插入的那条记录。
+
+ck :) select * from smt_user;
+
+SELECT *
+FROM smt_user
+
+Query id: 65ac0a38-3f61-41b9-aa58-9c21002328c5
+
+┌─id─┬─order_id─┬─name──┬──money─┬─────────create_time─┐
+│  3 │ 011      │ 空空3 │  40000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空7 │ 110000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴────────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 40000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空5 │ 80000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.002 sec.
+
+
+# 在同一个分区内，再次插入数据
+ck :) insert into smt_user values
+      (1,'010','空空1',20001,'2024-10-28 15:08:40');
+
+INSERT INTO smt_user FORMAT Values
+
+Query id: 8f262825-78e4-4a2e-bbd4-f1767bc9f407
+
+Ok.
+
+1 row in set. Elapsed: 0.002 sec. 
+
+
+# 再次观察数据
+# 可以发现，在新的分区内，又插入了一条记录
+ck :) select * from smt_user;
+
+SELECT *
+FROM smt_user
+
+Query id: ebd55e06-5a2f-44eb-bf35-ef1961a307fe
+
+┌─id─┬─order_id─┬─name──┬──money─┬─────────create_time─┐
+│  3 │ 011      │ 空空3 │  40000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空7 │ 110000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴────────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 40000 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空5 │ 80000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 20001 │ 2024-10-28 15:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+5 rows in set. Elapsed: 0.002 sec. 
+
+# 手动执行合并操作
+ck :) optimize table smt_user final;
+
+OPTIMIZE TABLE smt_user FINAL
+
+Query id: ff6e4bd7-da61-4ee2-94cb-efcfc10d55eb
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+# 观察数据，
+# 刚插入的010，数据已经被合并，money已经被相加，时间还是第一次插入的时间，不是使用最新的。
+ck :) select * from smt_user;
+
+SELECT *
+FROM smt_user
+
+Query id: 170635d2-6c9b-46b2-956b-85a23d0c02f2
+
+┌─id─┬─order_id─┬─name──┬──money─┬─────────create_time─┐
+│  3 │ 011      │ 空空3 │  40000 │ 2024-10-29 12:08:50 │
+│  7 │ 014      │ 空空7 │ 110000 │ 2024-10-29 12:08:50 │
+└────┴──────────┴───────┴────────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 010      │ 空空1 │ 60001 │ 2024-10-28 12:08:40 │
+│  5 │ 013      │ 空空5 │ 80000 │ 2024-10-28 12:08:40 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.002 sec. 
 ```
 
+#### 结论：
 
+1. 以SummingMergeTree（）指定的列作为汇总数据列
+2. 可以填写多列必须数字列，如果不填，以所有非维度列且数字列的字段汇总数据。
+3. 以order by的列为准，作为维度列。
+4. 其他列按插入顺序保留第一行。
+5. 不在一个分区的数据不会被聚合。
+6. 只有在同一批次（新版本）或者分区合并时才会进行聚合。
+7. 在查询时，需要指定sum,因为存在没有合并的情况，为保证数据的正确性，需要带上sum
 
 
 
