@@ -5467,7 +5467,9 @@ Query id: 35d396b8-a64c-4eee-9376-838f5092d0c2
 
 
 
-## 11 副本
+## 11 副本与分片集群
+
+### 11.1 副本
 
 副本的主要目的是保障数据的高可用性，即使一台ClickHouse节点宕机，那么也可以从其他服务器获得相同的数据：
 
@@ -5489,9 +5491,9 @@ graph LR;
 
 ![image-20241103130519343](.\images\image-20241103130519343.png)
 
-配制步骤
+#### 配制步骤
 
-1. 启动zookeeper集群
+启动zookeeper集群
 
 ```properties
 # zookeeper中的每台机器都需要安装与配制
@@ -5511,7 +5513,7 @@ firewall-cmd --permanent --zone=public --add-port=2182/tcp
 firewall-cmd --permanent --zone=public --add-port=2183/tcp
 firewall-cmd --reload
 
-
+# 此端口用于数据访问
 firewall-cmd --permanent --zone=public --add-port=9009/tcp
 firewall-cmd --reload
 ```
@@ -5644,7 +5646,7 @@ clickhouse restart
 
 ```sql
 # os11上的建表语句
-drop table nullnull.replicatemt_user;
+# drop table nullnull.replicatemt_user;
 create table nullnull.replicatemt_user(
 	id UInt32,
     order_id String, 
@@ -5703,7 +5705,7 @@ insert into nullnull.replicatemt_user values
 select * from nullnull.replicatemt_user;
 ```
 
-操作
+#### 数据查看
 
 ```sh
 # os1创建表
@@ -5938,19 +5940,305 @@ Query id: c8e27adc-d1a5-4ba2-b9a8-452278998083
 # 至此双向同步已经成功的完成。
 ```
 
+### 11.2 分片集群
+
+副本虽然能够提高数据的可用性，降低丢失风险，但是每台机器实际上必须容纳全量数据，对数据的横向扩容没有解决。
+
+要解决数据水平切分的问题，需要引入分片的概念，通过分片把一份完整的数据进行切分。不同的分片分布到不同的节点上，再通过Distributed表引擎把数据拼接起来一起使用。 
+
+Distributed表本身不存储数据，作为一种中间件来使用，通过分布式逻辑表来写入、分发、路由来操作多台节点不同分片的分布式数据。
+
+注意：Clickhouse的集群是表级别的，实际企业中，大部分做了高可用，但是没有分片，避免降低查询性能以及操作集群的复杂性。
+
+
+
+#### 11.2.1 集群写入流程
+
+
+
+![image-20241104225346468](.\images\image-20241104225346468.png)
 
 
 
 
 
+#### 11.2.2 集群读取流程 
+
+![image-20241104225953656](.\images\image-20241104225953656.png)
 
 
 
 
 
+#### 配制4个节点的分片
 
+![image-20241105000230996](.\images\image-20241105000230996.png)
 
+os11
 
+```xml
+<macros>
+	<shard>01</shard>
+	<replica>rep_1_1</replica>
+</macros>
+```
+
+os12
+
+```xml
+<macros>
+	<shard>02</shard>
+	<replica>rep_2_2</replica>
+</macros>
+```
+
+os13
+
+```xml
+<macros>
+	<shard>03</shard>
+	<replica>rep_3_3</replica>
+</macros>
+```
+
+#### 集群分片的配制文件
+
+使用外部文件的方式，内置文件同副本方式中的一样。
+
+os11上的配制
+
+```xml
+# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+<?xml version="1.0"?>
+<yandex>
+    <remote_servers>
+        <nullnull_cluster>
+            <!-- 集群名称-->
+            <shard>
+                <!--集群的第一个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第二个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第三个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </nullnull_cluster>
+    </remote_servers>
+    <zookeeper-servers>
+        <node index="1">
+            <host>os11</host>
+            <port>2181</port>
+        </node>
+        <node index="2">
+            <host>os12</host>
+            <port>2181</port>
+        </node>
+        <node index="3">
+            <host>os13</host>
+            <port>2181</port>
+        </node>
+    </zookeeper-servers>
+    <macros>
+        <!--宏标签，建表时需要引入的参数。名称可以随便定义-->
+        <shard>01</shard>
+        <replica>rep_1_1</replica>
+        <!--不同机器放的副本数不一样-->
+    </macros>
+</yandex>
+```
+
+os12配制
+
+```xml
+# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+<?xml version="1.0"?>
+<yandex>
+    <remote_servers>
+        <nullnull_cluster>
+            <!-- 集群名称-->
+            <shard>
+                <!--集群的第一个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第二个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第三个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </nullnull_cluster>
+    </remote_servers>
+    <zookeeper-servers>
+        <node index="1">
+            <host>os11</host>
+            <port>2181</port>
+        </node>
+        <node index="2">
+            <host>os12</host>
+            <port>2181</port>
+        </node>
+        <node index="3">
+            <host>os13</host>
+            <port>2181</port>
+        </node>
+    </zookeeper-servers>
+    <macros>
+        <shard>02</shard>
+        <!--不同机器放的分片数不一样-->
+        <replica>rep_2_2</replica>
+        <!--不同机器放的副本数不一样-->
+    </macros>
+</yandex>
+```
+
+os13配制
+
+```xml
+# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+<?xml version="1.0"?>
+<yandex>
+    <remote_servers>
+        <nullnull_cluster>
+            <!-- 集群名称-->
+            <shard>
+                <!--集群的第一个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第二个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os12</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+            <shard>
+                <!--集群的第三个分片-->
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <!--该分片的第一个副本-->
+                    <host>os13</host>
+                    <port>9000</port>
+                </replica>
+                 <replica>
+                    <!--该分片的第二个副本-->
+                    <host>os11</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </nullnull_cluster>
+    </remote_servers>
+    <zookeeper-servers>
+        <node index="1">
+            <host>os11</host>
+            <port>2181</port>
+        </node>
+        <node index="2">
+            <host>os12</host>
+            <port>2181</port>
+        </node>
+        <node index="3">
+            <host>os13</host>
+            <port>2181</port>
+        </node>
+    </zookeeper-servers>
+    <macros>
+        <shard>03</shard>
+        <!--不同机器放的分片数不一样-->
+        <replica>rep_3_3</replica>
+        <!--不同机器放的副本数不一样-->
+    </macros>
+</yandex>
+```
+
+修改/etc/clickhouse-server/config.xml
+
+```xml
+<zookeeper incl="zookeeper-servers" optional="true" />
+<include_from>/etc/clickhouse-server/config.d/metrika-cluster.xml</include_from>
+```
 
 
 
@@ -5984,6 +6272,13 @@ order by `总行数`
 ```
 
 
+
+```xml
+<macros>
+	<shard>01</shard>
+	<replica>rep_1_1</replica>
+</macros>
+```
 
 
 
