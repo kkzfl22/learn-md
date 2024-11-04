@@ -5492,11 +5492,10 @@ graph LR;
 配制步骤
 
 1. 启动zookeeper集群
-2. 
-
-
 
 ```properties
+# zookeeper中的每台机器都需要安装与配制
+
 # server.A=B:C:D
 # A标识机器序列号不重复就行判断myid文件
 # B填写集群中机器IP或域名
@@ -5507,20 +5506,75 @@ server.2=192.168.5.12:2182:2183
 server.3=192.168.5.13:2182:2183
 
 #开放防火墙
+firewall-cmd --permanent --zone=public --add-port=2181/tcp
 firewall-cmd --permanent --zone=public --add-port=2182/tcp
 firewall-cmd --permanent --zone=public --add-port=2183/tcp
 firewall-cmd --reload
 
+
+firewall-cmd --permanent --zone=public --add-port=9009/tcp
+firewall-cmd --reload
 ```
 
-进行配制
+2. 对Clickhouse配制zookeeper(每个CK副本节点都需要修改)
+
+使用外部文件方式
+
+```sh
+# 编辑
+/etc/clickhouse-server/config.xml
+
+# 找到文件中此内容
+<!-- If element has 'incl' attribute, then for it's value will be used corresponding substitution from another file.
+         By default, path to file with substitutions is /etc/metrika.xml. It could be changed in config in 'include_from' element.
+         Values for substitutions are specified in /clickhouse/name_of_substitution elements in that file.
+      -->
+
+    <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
+         Optional. If you don't use replicated tables, you could omit that.
+
+         See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/
+      -->
+
+    <!--
+    <zookeeper>
+        <node>
+            <host>example1</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>example2</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>example3</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+    -->
+    
+# 添加以下内容
+<zookeeper incl="zookeeper-servers" optional="true" />
+<include_from>/etc/clickhouse-server/config.d/metrika.xml</include_from>
+
+
+
+# 文件为外部文件
+/etc/clickhouse-server/config.d/metrika.xml
+
+# 注意需要修改文件所尾的组为clickhouse
+chown clickhouse:clickhouse metrika.xml 
+
+```
+
+metrika.xml内容
 
 ```xml
 <?xml version="1.0"?>
 <yandex>
 	<zookeeper-servers>
 		<node index="1">
-			<host>o11</host>
+			<host>os11</host>
 			<port>2181</port>
 		</node>
 		<node index="2">
@@ -5535,9 +5589,353 @@ firewall-cmd --reload
 </yandex>
 ```
 
-配制host
+使用内置文件
 
 ```sh
+# 编辑
+/etc/clickhouse-server/config.xml
+
+# 找到文件中此内容
+<!-- If element has 'incl' attribute, then for it's value will be used corresponding substitution from another file.
+         By default, path to file with substitutions is /etc/metrika.xml. It could be changed in config in 'include_from' element.
+         Values for substitutions are specified in /clickhouse/name_of_substitution elements in that file.
+      -->
+
+    <!-- ZooKeeper is used to store metadata about replicas, when using Replicated tables.
+         Optional. If you don't use replicated tables, you could omit that.
+
+         See https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/replication/
+      -->
+
+    <zookeeper>
+        <node>
+            <host>os11</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>os12</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>os13</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+
+```
+
+3. 配制host
+
+```sh
+cat >> /etc/hosts << EOF
+192.168.5.11 os11
+192.168.5.12 os12
+192.168.5.13 os13
+EOF
+```
+
+4. 重启Clickhouse节点。
+
+```sh
+clickhouse restart
+```
+
+5. 在Clickhouse的节点上进行分别的建表数据查询操作。
+
+```sql
+# os11上的建表语句
+drop table nullnull.replicatemt_user;
+create table nullnull.replicatemt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine==ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user','rep_11')
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+# os12上的建表语句
+create table nullnull.replicatemt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine==ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user','rep_12')
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+
+# 至CK节点查看数据信息 
+zkCli.sh
+ls -R  /clickhouse/table/nullnull/r1/replicatemt_user
+
+
+
+# 在os11上 插入数据
+insert into nullnull.replicatemt_user values
+(1,'001','空空1',20000,'2024-10-27 19:50:00'),
+(2,'001','空空2',20000,'2024-10-27 19:50:00'),
+(2,'002','空空3',20000,'2024-10-27 19:50:00'),
+(2,'002','空空4',20000,'2024-10-27 19:50:00'),
+(2,'001','空空5',20000,'2024-10-27 19:50:00'),
+(2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+
+# os12查询数据
+select * from nullnull.replicatemt_user;
+
+
+# os12插入数据
+insert into nullnull.replicatemt_user values
+(10,'011','空空1',20000,'2024-10-28 19:50:00'),
+(20,'011','空空2',20000,'2024-10-28 19:50:00'),
+(21,'012','空空3',20000,'2024-10-28 19:50:00'),
+(22,'012','空空4',20000,'2024-10-28 19:50:00'),
+(23,'011','空空5',20000,'2024-10-28 19:50:00'),
+(24,'012','空空6',20000,'2024-10-29 19:50:00');
+
+
+# os12查询数据
+select * from nullnull.replicatemt_user;
+```
+
+操作
+
+```sh
+# os1创建表
+os11 :) create table nullnull.replicatemt_user(
+        ^Iid UInt32,
+            order_id String, 
+            name String,
+            money decimal(16,2),
+            create_time Datetime    
+        )engine==ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user','rep_11')
+        partition by toYYYYMMDD(create_time)
+        primary key (id)
+        order by (id,order_id,create_time);
+
+CREATE TABLE nullnull.replicatemt_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user', 'rep_11')
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+
+Query id: b7b7849e-17e5-4962-bd8b-fc9a86a06243
+
+Ok.
+
+0 rows in set. Elapsed: 0.060 sec. 
+
+
+
+# os12创建表
+os12 :) create table nullnull.replicatemt_user(
+        ^Iid UInt32,
+            order_id String, 
+            name String,
+            money decimal(16,2),
+            create_time Datetime    
+        )engine==ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user','rep_12')
+        partition by toYYYYMMDD(create_time)
+        primary key (id)
+        order by (id,order_id,create_time);
+
+CREATE TABLE nullnull.replicatemt_user
+(
+    `id` UInt32,
+    `order_id` String,
+    `name` String,
+    `money` decimal(16, 2),
+    `create_time` Datetime
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/table/nullnull/r1/replicatemt_user', 'rep_12')
+PARTITION BY toYYYYMMDD(create_time)
+PRIMARY KEY id
+ORDER BY (id, order_id, create_time)
+
+Query id: 3c3fdafe-4a24-4a21-ab1c-e38bbb9805b9
+
+Ok.
+
+0 rows in set. Elapsed: 0.053 sec.
+
+
+
+# 查看Ck中的数据信息
+zkCli.sh
+[zk: localhost:2181(CONNECTED) 20] ls -R  /clickhouse/table/nullnull/r1/replicatemt_user
+/clickhouse/table/nullnull/r1/replicatemt_user
+/clickhouse/table/nullnull/r1/replicatemt_user/alter_partition_version
+/clickhouse/table/nullnull/r1/replicatemt_user/async_blocks
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks
+/clickhouse/table/nullnull/r1/replicatemt_user/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/leader_election
+/clickhouse/table/nullnull/r1/replicatemt_user/log
+/clickhouse/table/nullnull/r1/replicatemt_user/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/mutations
+/clickhouse/table/nullnull/r1/replicatemt_user/nonincrement_block_numbers
+/clickhouse/table/nullnull/r1/replicatemt_user/part_moves_shard
+/clickhouse/table/nullnull/r1/replicatemt_user/pinned_part_uuids
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas
+/clickhouse/table/nullnull/r1/replicatemt_user/table_shared_id
+/clickhouse/table/nullnull/r1/replicatemt_user/temp
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241025
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241027
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241025_13015592445632956282_4562001324984579865
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241027_4578369839963845089_13189989263489756522
+/clickhouse/table/nullnull/r1/replicatemt_user/leader_election/leader_election-0
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000000
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000001
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/failed_parts
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/last_part
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/parallel
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/host
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/is_active
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/is_lost
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/log_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/max_processed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/metadata_version
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/min_unprocessed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/mutation_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/queue
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241025_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241027_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/flags
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/host
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/is_active
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/is_lost
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/log_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/max_processed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/metadata_version
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/min_unprocessed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/mutation_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/queue
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241025_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241027_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/temp/abandonable_lock-insert
+/clickhouse/table/nullnull/r1/replicatemt_user/temp/abandonable_lock-other
+
+
+
+# os11 插入数据
+os11 :) insert into nullnull.replicatemt_user values
+        (1,'001','空空1',20000,'2024-10-27 19:50:00'),
+        (2,'001','空空2',20000,'2024-10-27 19:50:00'),
+        (2,'002','空空3',20000,'2024-10-27 19:50:00'),
+        (2,'002','空空4',20000,'2024-10-27 19:50:00'),
+        (2,'001','空空5',20000,'2024-10-27 19:50:00'),
+        (2,'002','空空6',20000,'2024-10-25 19:50:00');
+
+INSERT INTO nullnull.replicatemt_user FORMAT Values
+
+Query id: a858753c-8ded-4518-be8b-2575db2633ae
+
+Ok.
+
+6 rows in set. Elapsed: 0.030 sec. 
+
+
+
+
+# os12查询数据
+os12 :) select * from replicatemt_user;
+
+SELECT *
+FROM replicatemt_user
+
+Query id: bc2b910b-d0b6-4c33-9591-6654fb7006db
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+6 rows in set. Elapsed: 0.002 sec. 
+
+os12 :) 
+# 可以发现数据已经同步完成
+
+
+
+# os12插入数据
+os12 :) insert into nullnull.replicatemt_user values
+        (10,'011','空空1',20000,'2024-10-28 19:50:00'),
+        (20,'011','空空2',20000,'2024-10-28 19:50:00'),
+        (21,'012','空空3',20000,'2024-10-28 19:50:00'),
+        (22,'012','空空4',20000,'2024-10-28 19:50:00'),
+        (23,'011','空空5',20000,'2024-10-28 19:50:00'),
+        (24,'012','空空6',20000,'2024-10-29 19:50:00');
+
+INSERT INTO nullnull.replicatemt_user FORMAT Values
+
+Query id: 68820529-2429-4718-8c39-11329a364be8
+
+Ok.
+
+6 rows in set. Elapsed: 0.024 sec.
+
+
+# os11查询数据 
+os11 :) select * from nullnull.replicatemt_user;
+
+SELECT *
+FROM nullnull.replicatemt_user
+
+Query id: c8e27adc-d1a5-4ba2-b9a8-452278998083
+
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  2 │ 002      │ 空空6 │ 20000 │ 2024-10-25 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│  1 │ 001      │ 空空1 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空2 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 001      │ 空空5 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空3 │ 20000 │ 2024-10-27 19:50:00 │
+│  2 │ 002      │ 空空4 │ 20000 │ 2024-10-27 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│ 10 │ 011      │ 空空1 │ 20000 │ 2024-10-28 19:50:00 │
+│ 20 │ 011      │ 空空2 │ 20000 │ 2024-10-28 19:50:00 │
+│ 21 │ 012      │ 空空3 │ 20000 │ 2024-10-28 19:50:00 │
+│ 22 │ 012      │ 空空4 │ 20000 │ 2024-10-28 19:50:00 │
+│ 23 │ 011      │ 空空5 │ 20000 │ 2024-10-28 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+┌─id─┬─order_id─┬─name──┬─money─┬─────────create_time─┐
+│ 24 │ 012      │ 空空6 │ 20000 │ 2024-10-29 19:50:00 │
+└────┴──────────┴───────┴───────┴─────────────────────┘
+
+12 rows in set. Elapsed: 0.004 sec. 
+
+
+# 至此双向同步已经成功的完成。
 ```
 
 
