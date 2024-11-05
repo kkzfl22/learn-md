@@ -31,11 +31,11 @@ Column-oriented databases are better suited to OLAP scenarios: they are at least
 
 **Row-oriented DBMS**
 
-![Row-oriented](D:\work\learn\learn-md\clickhouse\row-oriented-3e6fd5aa48e3075202d242b4799da8fa.gif)
+![Row-oriented](.\images\row-oriented-3e6fd5aa48e3075202d242b4799da8fa.gif)
 
 **Column-oriented DBMS**
 
-![Column-oriented](D:\work\learn\learn-md\clickhouse\column-oriented-d082e49b7743d4ded32c7952bfdb028f.gif)
+![Column-oriented](.\images\column-oriented-d082e49b7743d4ded32c7952bfdb028f.gif)
 
 See the difference?
 
@@ -5970,7 +5970,7 @@ Distributed表本身不存储数据，作为一种中间件来使用，通过分
 
 
 
-#### 配制4个节点的分片
+#### 11.2.3 案例：配制3个节点2副本的分片
 
 ![image-20241105000230996](.\images\image-20241105000230996.png)
 
@@ -6001,14 +6001,17 @@ os13
 </macros>
 ```
 
-#### 集群分片的配制文件
+##### 11.2.3.1 集群分片的配制文件
 
 使用外部文件的方式，内置文件同副本方式中的一样。
 
 os11上的配制
 
+在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+
+vi /etc/clickhouse-server/config.d/metrika-cluster.xml
+
 ```xml
-# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
 <?xml version="1.0"?>
 <yandex>
     <remote_servers>
@@ -6019,11 +6022,13 @@ os11上的配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
                 <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
@@ -6033,11 +6038,13 @@ os11上的配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
@@ -6047,11 +6054,13 @@ os11上的配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
@@ -6074,17 +6083,21 @@ os11上的配制
     </zookeeper-servers>
     <macros>
         <!--宏标签，建表时需要引入的参数。名称可以随便定义-->
-        <shard>01</shard>
-        <replica>rep_1_1</replica>
-        <!--不同机器放的副本数不一样-->
+        <shard01>01</shard01>
+        <replica01>rep_1_1</replica01>
+	    <shard02>03</shard02>
+	    <replica02>rep_3_2</replica02>
     </macros>
 </yandex>
 ```
 
 os12配制
 
+在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+
+vi /etc/clickhouse-server/config.d/metrika-cluster.xml
+
 ```xml
-# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
 <?xml version="1.0"?>
 <yandex>
     <remote_servers>
@@ -6095,11 +6108,13 @@ os12配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
                 <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
@@ -6109,11 +6124,13 @@ os12配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
@@ -6123,11 +6140,13 @@ os12配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
@@ -6149,18 +6168,22 @@ os12配制
         </node>
     </zookeeper-servers>
     <macros>
-        <shard>02</shard>
-        <!--不同机器放的分片数不一样-->
-        <replica>rep_2_2</replica>
-        <!--不同机器放的副本数不一样-->
-    </macros>
+        <!--宏标签，建表时需要引入的参数。名称可以随便定义-->
+        <shard01>01</shard01>
+        <replica01>rep_1_2</replica01>
+	    <shard02>03</shard02>
+	    <replica02>rep_2_1</replica02>
+	</macros>
 </yandex>
 ```
 
 os13配制
 
+在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
+
+vi /etc/clickhouse-server/config.d/metrika-cluster.xml
+
 ```xml
-# 在/etc/clickhouse-server/config.d/ 下创建metrika-cluster.xml
 <?xml version="1.0"?>
 <yandex>
     <remote_servers>
@@ -6171,11 +6194,13 @@ os13配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
                 <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull01</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
@@ -6185,11 +6210,13 @@ os13配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os12</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull02</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
@@ -6199,11 +6226,13 @@ os13配制
                 <internal_replication>true</internal_replication>
                 <replica>
                     <!--该分片的第一个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os13</host>
                     <port>9000</port>
                 </replica>
                  <replica>
                     <!--该分片的第二个副本-->
+                    <default_database>nullnull03</default_database>
                     <host>os11</host>
                     <port>9000</port>
                 </replica>
@@ -6225,20 +6254,198 @@ os13配制
         </node>
     </zookeeper-servers>
     <macros>
-        <shard>03</shard>
-        <!--不同机器放的分片数不一样-->
-        <replica>rep_3_3</replica>
-        <!--不同机器放的副本数不一样-->
-    </macros>
+        <!--宏标签，建表时需要引入的参数。名称可以随便定义-->
+        <shard01>01</shard01>
+        <replica01>rep_2_2</replica01>
+		<shard02>03</shard02>
+		<replica02>rep_3_1</replica02>
+	</macros>
 </yandex>
 ```
 
-修改/etc/clickhouse-server/config.xml
+修改/etc/clickhouse-server/config.xml（每台机器都需要修改）
+
+vi /etc/clickhouse-server/config.xml
 
 ```xml
 <zookeeper incl="zookeeper-servers" optional="true" />
 <include_from>/etc/clickhouse-server/config.d/metrika-cluster.xml</include_from>
 ```
+
+注意： /etc/clickhouse-server/config.d/metrika-cluster.xml 文件所属的用户和组，需要为clickhouse
+
+```sh
+chown clickhouse:clickhouse /etc/clickhouse-server/config.d/metrika-cluster.xml
+```
+
+重启clickhouse节点
+
+```sh
+clickhouse restart
+```
+
+
+
+开放端口
+
+```sh
+firewall-cmd --permanent --zone=public --add-port=8123/tcp
+firewall-cmd --permanent --zone=public --add-port=9000/tcp
+firewall-cmd --permanent --zone=public --add-port=9009/tcp
+firewall-cmd --reload
+```
+
+
+
+
+
+##### 11.2.3.2 集群分片的表创建
+
+参考：
+
+https://zhuanlan.zhihu.com/p/461792873?utm_id=0
+
+https://www.cnblogs.com/wan-ming-zhu/p/18095576
+
+```sql
+# os11上的建表语句
+# 1. 集群会自动在os12和os13上创建表。
+# 2. 集群名称要和配制文件中的一致。
+# 3. 分片和副本名称从配制文件中的宏定义中获取
+
+# 查看宏信息
+SELECT * FROM system.macros;
+# 查看集群集群
+select * from system.clusters;
+
+
+
+CREATE DATABASE IF NOT EXISTS nullnull01;
+CREATE DATABASE IF NOT EXISTS nullnull02;
+CREATE DATABASE IF NOT EXISTS nullnull03;
+
+
+# drop table nullnull.cluster_user;
+# os1 上创建分表表1
+create table nullnull01.cluster_user on cluster nullnull_cluster(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine=ReplicatedMergeTree('/clickhouse/cluster/table/{shard01}/r1/cluster_user','{replica01}')
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+# os1上创建的分片表2
+create table nullnull03.cluster_user on cluster nullnull_cluster(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine=ReplicatedMergeTree('/clickhouse/cluster/table/{shard02}/r1/cluster_user','{replica02}')
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+
+
+
+
+# os12和os13上检查表是否创建成功。
+select * from nullnull.cluster_user;
+
+
+
+# 在os11上创建分页式表，用于数据查询分发的管理。
+create table nullnull.cluster_user_distribute on cluster nullnull_cluster(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine==Distributed(nullnull_cluster,nullnull,cluster_user,hiveHash(order_id));
+
+
+
+# 查看数据
+select * from nullnull.cluster_user_distribute;
+
+
+# 查看zookeeper中的信息
+zkCli.sh
+ls -R  /clickhouse/cluster/table/
+
+
+# 插入数据测试
+insert into nullnull.cluster_user_distribute values
+(1,'001','空空1',20000,'2024-10-27 19:50:00'),
+(2,'002','空空2',20000,'2024-10-27 19:50:00'),
+(3,'003','空空3',20000,'2024-10-27 19:50:00'),
+(4,'004','空空4',20000,'2024-10-28 19:50:00'),
+(5,'005','空空5',20000,'2024-10-28 19:50:00'),
+(6,'006','空空6',20000,'2024-10-28 19:50:00');
+
+
+# 查询分布式表
+select * from nullnull.cluster_user_distribute;
+
+
+# 至每台机器查询本地表。查看分片信息
+#os11
+select * from nullnull.cluster_user;
+#os12
+select * from nullnull.cluster_user;
+#os13
+select * from nullnull.cluster_user;
+
+```
+
+输出：
+
+```sh
+# 查看集群
+os11 :) select * from system.clusters;
+
+SELECT *
+FROM system.clusters
+
+Query id: 49ede318-b9e4-4cc9-904e-7f7093b4549d
+
+┌─cluster─────────────────────────────────────────┬─shard_num─┬─shard_weight─┬─replica_num─┬─host_name─┬─host_address─┬─port─┬─is_local─┬─user────┬─default_database─┬─errors_count─┬─slowdowns_count─┬─estimated_recovery_time─┐
+│ nullnull_cluster                                │         1 │            1 │           1 │ os11      │ 192.168.5.11 │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ nullnull_cluster                                │         1 │            1 │           2 │ os12      │ 192.168.5.12 │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ nullnull_cluster                                │         2 │            1 │           1 │ os12      │ 192.168.5.12 │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ nullnull_cluster                                │         2 │            1 │           2 │ os13      │ 192.168.5.13 │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ nullnull_cluster                                │         3 │            1 │           1 │ os13      │ 192.168.5.13 │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ nullnull_cluster                                │         3 │            1 │           2 │ os11      │ 192.168.5.11 │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_one_shard_three_replicas_localhost │         1 │            1 │           1 │ 127.0.0.1 │ 127.0.0.1    │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_one_shard_three_replicas_localhost │         1 │            1 │           2 │ 127.0.0.2 │ 127.0.0.2    │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_one_shard_three_replicas_localhost │         1 │            1 │           3 │ 127.0.0.3 │ 127.0.0.3    │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards                         │         1 │            1 │           1 │ 127.0.0.1 │ 127.0.0.1    │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards                         │         2 │            1 │           1 │ 127.0.0.2 │ 127.0.0.2    │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards_internal_replication    │         1 │            1 │           1 │ 127.0.0.1 │ 127.0.0.1    │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards_internal_replication    │         2 │            1 │           1 │ 127.0.0.2 │ 127.0.0.2    │ 9000 │        0 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards_localhost               │         1 │            1 │           1 │ localhost │ ::1          │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_cluster_two_shards_localhost               │         2 │            1 │           1 │ localhost │ ::1          │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_shard_localhost                            │         1 │            1 │           1 │ localhost │ ::1          │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_shard_localhost_secure                     │         1 │            1 │           1 │ localhost │ ::1          │ 9440 │        0 │ default │                  │            0 │               0 │                       0 │
+│ test_unavailable_shard                          │         1 │            1 │           1 │ localhost │ ::1          │ 9000 │        1 │ default │                  │            0 │               0 │                       0 │
+│ test_unavailable_shard                          │         2 │            1 │           1 │ localhost │ ::1          │    1 │        0 │ default │                  │            0 │               0 │                       0 │
+└─────────────────────────────────────────────────┴───────────┴──────────────┴─────────────┴───────────┴──────────────┴──────┴──────────┴─────────┴──────────────────┴──────────────┴─────────────────┴─────────────────────────┘
+
+19 rows in set. Elapsed: 0.001 sec. 
+
+os11 :) 
+```
+
+
+
+
+
+
 
 
 
