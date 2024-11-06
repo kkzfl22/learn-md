@@ -220,6 +220,50 @@ sudo "clickhouse-client-$LATEST_VERSION/install/doinst.sh"
 
 For production environments, it’s recommended to use the latest `stable`-version. You can find its number on GitHub page https://github.com/ClickHouse/ClickHouse/tags with postfix `-stable`.
 
+clickhouse TGZ安装方式卸载
+
+```sh
+# 1．停止ClickHouse服务
+sudo service clickhouse-server stop
+
+# 2．删除所有的数据和日志文件
+sudo rm -rf /var/lib/clickhouse/
+sudo rm -rf /var/log/clickhouse-server/
+
+# 3．如果你使用的是systemd来管理服务，你可以通过以下命令来停止并删除服务
+sudo systemctl stop clickhouse-server
+sudo systemctl disable clickhouse-server
+sudo systemctl daemon-reload
+
+# 4．删除所有的配置文件
+sudo rm -rf /etc/clickhouse-server/
+sudo rm -rf /etc/clickhouse-client/
+sudo rm -rf /etc/systemd/system/clickhouse-server.service
+
+# 5．删除所有的启动文件
+sudo rm -rf  /usr/bin/clickhouse*
+sudo rm -rf  /usr/share/bash-completion/completions/clickhouse*
+sudo rm -rf  /usr/share/doc/clickhouse*
+
+# 6．清理残留的用户和用户组
+sudo userdel -r clickhouse
+sudo groupdel clickhouse
+
+# 7．查找是否卸载干净（这一步很关键，否则重装可能无法启动）
+sudo  find  / -name clickhouse*
+
+
+rm -rf /run/lock/clickhouse-server
+rm -rf /etc/rc.d/init.d/clickhouse-server
+rm -rf /etc/security/limits.d/clickhouse.conf
+rm -rf /usr/lib/debug/usr/bin/clickhouse-library-bridge.debug
+rm -rf /usr/lib/debug/usr/bin/clickhouse.debug
+rm -rf /usr/lib/debug/usr/bin/clickhouse-odbc-bridge.debug
+rm -rf /usr/lib/systemd/system/clickhouse-server.service
+```
+
+
+
 
 
 
@@ -5952,25 +5996,38 @@ Distributed表本身不存储数据，作为一种中间件来使用，通过分
 
 
 
-#### 11.2.1 集群写入流程
+集群可查看《配制3个节点2副本的分片.md》
+
+## 12 执行计划
+
+在clickhouse 20.6版本之前要查看SQL语句的执行计划，需要设置日志级别为trace才能看到，并且只能真正执行SQL，在执行日志里里查看。在20.6 版本引入了原生的执行计划。20.6.3版本成为正式版本的功能。
+
+​	本文档版本：21.7.3.14
+
+官方文档地址：
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/statements/explain
+```
+
+基本的语法：
+
+```sh
+EXPLAIN [AST | SYNTAX | QUERY TREE | PLAN | PIPELINE | ESTIMATE | TABLE OVERRIDE] [setting = value, ...]
+    [
+      SELECT ... |
+      tableFunction(...) [COLUMNS (...)] [ORDER BY ...] [PARTITION BY ...] [PRIMARY KEY] [SAMPLE BY ...] [TTL ...]
+    ]
+    [FORMAT ...]
+```
 
 
 
-![image-20241104225346468](.\images\image-20241104225346468.png)
 
 
 
 
 
-#### 11.2.2 集群读取流程 
-
-![image-20241104225953656](.\images\image-20241104225953656.png)
-
-
-
-
-
-#### 11.2.3 案例：
 
 
 
