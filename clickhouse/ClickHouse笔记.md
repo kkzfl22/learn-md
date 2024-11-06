@@ -6021,11 +6021,16 @@ EXPLAIN [AST | SYNTAX | QUERY TREE | PLAN | PIPELINE | ESTIMATE | TABLE OVERRIDE
     [FORMAT ...]
 ```
 
-
-
-
-
-
+- plan : 用户于查看执行计算，默认。
+  - header            : 打印计划中各个步骤的head说明，默认关闭，默认值为0
+  - description      : 打印计划中各个步骤的描述，默认开启，默认值为1
+  - actions            : 打印计划中各个步骤的详细信息，默认关闭。
+- AST ： 用于查看语法树
+- SYNTAX： 用于优化语法
+- PIPELINE： 用于查看PIPELINE计划
+  - header           ： 打印计划中各个步骤的header说明，默认关闭
+  - graph              :   用DOT图形语言描述管道图，默认关闭，需要查看相关的图形需要配合graphviz查看。
+  - actions            ： 如果开启了graph，紧凑打印打，默认开启。
 
 
 
