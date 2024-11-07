@@ -6032,6 +6032,412 @@ EXPLAIN [AST | SYNTAX | QUERY TREE | PLAN | PIPELINE | ESTIMATE | TABLE OVERRIDE
   - graph              :   用DOT图形语言描述管道图，默认关闭，需要查看相关的图形需要配合graphviz查看。
   - actions            ： 如果开启了graph，紧凑打印打，默认开启。
 
+### 12.1  EXPLAIN
+
+ 1） 查看plain
+
+```sql
+# 简单SQL
+
+# 从0到9整数
+select number as x from numbers(10);
+
+# 查看执行计划
+explain plan select number as x from numbers(10);
+
+# 复杂SQL的统计，查看各表的空间占用情况
+explain SELECT
+	sum(rows) AS `总行数`,
+	sum(data_uncompressed_bytes) AS `原始大小-Byes`,
+	formatReadableSize(sum(data_uncompressed_bytes)) AS `原始大小`,
+	sum(data_compressed_bytes) AS `压缩大小-bytes`,
+	formatReadableSize(sum(data_compressed_bytes)) AS `压缩大小`,
+	round((sum(data_compressed_bytes) / sum(data_uncompressed_bytes)) * 100,
+	0) AS `压缩率`,
+	`table` AS `表名`
+FROM
+	system.parts
+group by
+	`table`
+order by `总行数`
+
+# 打开执行计划的全部参数
+explain  header=1,actions=1,description=1 SELECT
+	`table` AS `表名`,
+	sum(rows) AS `总行数`
+FROM
+	system.parts
+group by
+	`table`
+order by `总行数`
+```
+
+输出 
+
+```sql
+ck :) select number as x from numbers(10);
+
+SELECT number AS x
+FROM numbers(10)
+
+Query id: 482a4ccc-ebad-42d1-b3f0-2bfab65ff2fd
+
+┌─x─┐
+│ 0 │
+│ 1 │
+│ 2 │
+│ 3 │
+│ 4 │
+│ 5 │
+│ 6 │
+│ 7 │
+│ 8 │
+│ 9 │
+└───┘
+
+
+ck :) explain plan select number as x from numbers(10);
+
+EXPLAIN
+SELECT number AS x
+FROM numbers(10)
+
+Query id: b7c2422d-0edc-4105-921d-f393095df5b1
+
+┌─explain───────────────────────────────────────────────────────────────────┐
+│ Expression ((Projection + Before ORDER BY))                               │
+│   SettingQuotaAndLimits (Set limits and quota after reading from storage) │
+│     ReadFromStorage (SystemNumbers)                                       │
+└───────────────────────────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.002 sec. 
+
+ck :) 
+
+# 复杂SQL的统计，查看各表的空间占用情况
+ck :) explain SELECT
+:-] sum(rows) AS `总行数`,
+:-] sum(data_uncompressed_bytes) AS `原始大小-Byes`,
+:-] formatReadableSize(sum(data_uncompressed_bytes)) AS `原始大小`,
+:-] sum(data_compressed_bytes) AS `压缩大小-bytes`,
+:-] formatReadableSize(sum(data_compressed_bytes)) AS `压缩大小`,
+:-] round((sum(data_compressed_bytes) / sum(data_uncompressed_bytes)) * 100,
+:-] 0) AS `压缩率`,
+:-] `table` AS `表名`
+:-] FROM
+:-] system.parts
+:-] group by
+:-] `table`
+:-] order by `总行数`
+
+EXPLAIN
+SELECT
+    sum(rows) AS `总行数`,
+    sum(data_uncompressed_bytes) AS `原始大小-Byes`,
+    formatReadableSize(sum(data_uncompressed_bytes)) AS `原始大小`,
+    sum(data_compressed_bytes) AS `压缩大小-bytes`,
+    formatReadableSize(sum(data_compressed_bytes)) AS `压缩大小`,
+    round((sum(data_compressed_bytes) / sum(data_uncompressed_bytes)) * 100, 0) AS `压缩率`,
+    table AS `表名`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+
+Query id: 3c5f1e7e-bade-41e9-9d11-b967bfa70ee0
+
+┌─explain───────────────────────────────────────────────────────────────────────────────┐
+│ Expression (Projection)                                                               │
+│   MergingSorted (Merge sorted streams for ORDER BY)                                   │
+│     MergeSorting (Merge sorted blocks for ORDER BY)                                   │
+│       PartialSorting (Sort each block for ORDER BY)                                   │
+│         Expression (Before ORDER BY)                                                  │
+│           Aggregating                                                                 │
+│             Expression (Before GROUP BY)                                              │
+│               SettingQuotaAndLimits (Set limits and quota after reading from storage) │
+│                 ReadFromStorage (SystemParts)                                         │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+9 rows in set. Elapsed: 0.002 sec. 
+
+
+# 打开全部参数
+ck :) explain  header=1,actions=1,description=1 SELECT
+:-] `table` AS `表名`,
+:-] sum(rows) AS `总行数`
+:-] FROM
+:-] system.parts
+:-] group by
+:-] `table`
+:-] order by `总行数`
+
+EXPLAIN header = 1, actions = 1, description = 1
+SELECT
+    table AS `表名`,
+    sum(rows) AS `总行数`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+
+Query id: b3a3b3f6-62d0-4354-aa54-1da27e54d340
+
+┌─explain───────────────────────────────────────────────────────────────────────────────┐
+│ Expression (Projection)                                                               │
+│ Header: 表名 String                                                                   │
+│         总行数 UInt64                                                                 │
+│ Actions: INPUT : 0 -> table String : 0                                                │
+│          INPUT : 1 -> sum(rows) UInt64 : 1                                            │
+│          ALIAS table :: 0 -> 表名 String : 2                                          │
+│          ALIAS sum(rows) :: 1 -> 总行数 UInt64 : 0                                    │
+│ Positions: 2 0                                                                        │
+│   MergingSorted (Merge sorted streams for ORDER BY)                                   │
+│   Header: table String                                                                │
+│           sum(rows) UInt64                                                            │
+│   Sort description: sum(rows) ASC                                                     │
+│     MergeSorting (Merge sorted blocks for ORDER BY)                                   │
+│     Header: table String                                                              │
+│             sum(rows) UInt64                                                          │
+│     Sort description: sum(rows) ASC                                                   │
+│       PartialSorting (Sort each block for ORDER BY)                                   │
+│       Header: table String                                                            │
+│               sum(rows) UInt64                                                        │
+│       Sort description: sum(rows) ASC                                                 │
+│         Expression (Before ORDER BY)                                                  │
+│         Header: table String                                                          │
+│                 sum(rows) UInt64                                                      │
+│         Actions: INPUT :: 0 -> table String : 0                                       │
+│                  INPUT :: 1 -> sum(rows) UInt64 : 1                                   │
+│         Positions: 0 1                                                                │
+│           Aggregating                                                                 │
+│           Header: table String                                                        │
+│                   sum(rows) UInt64                                                    │
+│           Keys: table                                                                 │
+│           Aggregates:                                                                 │
+│               sum(rows)                                                               │
+│                 Function: sum(UInt64) → UInt64                                        │
+│                 Arguments: rows                                                       │
+│                 Argument positions: 0                                                 │
+│             Expression (Before GROUP BY)                                              │
+│             Header: rows UInt64                                                       │
+│                     table String                                                      │
+│             Actions: INPUT :: 0 -> rows UInt64 : 0                                    │
+│                      INPUT :: 1 -> table String : 1                                   │
+│             Positions: 0 1                                                            │
+│               SettingQuotaAndLimits (Set limits and quota after reading from storage) │
+│               Header: rows UInt64                                                     │
+│                       table String                                                    │
+│                 ReadFromStorage (SystemParts)                                         │
+│                 Header: rows UInt64                                                   │
+│                         table String                                                  │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+47 rows in set. Elapsed: 0.002 sec. 
+
+ck :) 
+```
+
+2) 查看AST语法树
+
+```sql
+EXPLAIN AST SELECT
+    table AS `表名`,
+    sum(rows) AS `总行数`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+```
+
+输出：
+
+```sql
+ck :) EXPLAIN AST SELECT
+:-]     table AS `表名`,
+:-]     sum(rows) AS `总行数`
+:-] FROM system.parts
+:-] GROUP BY table
+:-] ORDER BY `总行数` ASC
+
+EXPLAIN AST
+SELECT
+    table AS `表名`,
+    sum(rows) AS `总行数`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+
+Query id: 00e1f763-a729-4b35-ab17-14d01a80be8e
+
+┌─explain──────────────────────────────────────┐
+│ SelectWithUnionQuery (children 1)            │
+│  ExpressionList (children 1)                 │
+│   SelectQuery (children 4)                   │
+│    ExpressionList (children 2)               │
+│     Identifier table (alias 表名)            │
+│     Function sum (alias 总行数) (children 1) │
+│      ExpressionList (children 1)             │
+│       Identifier rows                        │
+│    TablesInSelectQuery (children 1)          │
+│     TablesInSelectQueryElement (children 1)  │
+│      TableExpression (children 1)            │
+│       TableIdentifier system.parts           │
+│    ExpressionList (children 1)               │
+│     Identifier table                         │
+│    ExpressionList (children 1)               │
+│     OrderByElement (children 1)              │
+│      Identifier 总行数                       │
+└──────────────────────────────────────────────┘
+
+17 rows in set. Elapsed: 0.001 sec. 
+
+ck :) 
+```
+
+3) SYNTAX语法优化
+
+```sql
+# 先做一次查询
+select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3)  
+# 查看优化后的语法树
+EXPLAIN SYNTAX select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3) 
+# 开启三元运算符优化
+SET optimize_if_chain_to_multiif = 1;
+# 再次执行，查看优化后的语法
+EXPLAIN SYNTAX select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3) 
+ SELECT multiIf(number = 1, 'hello nullnull', number = 2, 'feifei', '1234') │
+│ FROM numbers(3) 
+```
+
+输出
+
+```sql
+ck :) select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3)  
+
+SELECT if(number = 1, 'hello nullnull', if(number = 2, 'feifei', '1234'))
+FROM numbers(3)
+
+Query id: 500e07d2-952e-453f-8dbf-fe6b8d0e4bb3
+
+┌─if(equals(number, 1), 'hello nullnull', if(equals(number, 2), 'feifei', '1234'))─┐
+│ 1234                                                                             │
+│ hello nullnull                                                                   │
+│ feifei                                                                           │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.011 sec. 
+
+ck :) EXPLAIN SYNTAX select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3)  
+
+EXPLAIN SYNTAX
+SELECT if(number = 1, 'hello nullnull', if(number = 2, 'feifei', '1234'))
+FROM numbers(3)
+
+Query id: 3511cd72-24ad-4380-946a-79e25c85a478
+
+┌─explain───────────────────────────────────────────────────────────────────┐
+│ SELECT if(number = 1, 'hello nullnull', if(number = 2, 'feifei', '1234')) │
+│ FROM numbers(3)                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
+
+2 rows in set. Elapsed: 0.003 sec. 
+
+ck :) SET optimize_if_chain_to_multiif = 1;
+
+SET optimize_if_chain_to_multiif = 1
+
+Query id: 1678ff66-fe35-4a3b-8c32-2a7a32c50dcc
+
+Ok.
+
+0 rows in set. Elapsed: 0.001 sec. 
+
+ck :) EXPLAIN SYNTAX select number = 1 ? 'hello nullnull' : (number = 2  ? 'feifei' : '1234') from numbers(3) 
+
+EXPLAIN SYNTAX
+SELECT if(number = 1, 'hello nullnull', if(number = 2, 'feifei', '1234'))
+FROM numbers(3)
+
+Query id: 1e544a1f-f9f1-4e8d-8fc7-252a6b359c23
+
+┌─explain────────────────────────────────────────────────────────────────────┐
+│ SELECT multiIf(number = 1, 'hello nullnull', number = 2, 'feifei', '1234') │
+│ FROM numbers(3)                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+2 rows in set. Elapsed: 0.001 sec. 
+
+ck :) 
+```
+
+查看PIPELINE
+
+```sql
+EXPLAIN PIPELINE SELECT
+    table AS `表名`,
+    sum(rows) AS `总行数`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+```
+
+输出：
+
+```sql
+ck :) EXPLAIN PIPELINE SELECT
+:-]     table AS `表名`,
+:-]     sum(rows) AS `总行数`
+:-] FROM system.parts
+:-] GROUP BY table
+:-] ORDER BY `总行数` ASC
+
+EXPLAIN PIPELINE
+SELECT
+    table AS `表名`,
+    sum(rows) AS `总行数`
+FROM system.parts
+GROUP BY table
+ORDER BY `总行数` ASC
+
+Query id: fe1aec86-8b4f-4fc3-8184-aa73a55ad879
+
+┌─explain───────────────────────────────────────┐
+│ (Expression)                                  │
+│ ExpressionTransform                           │
+│   (MergingSorted)                             │
+│     (MergeSorting)                            │
+│     MergeSortingTransform                     │
+│       (PartialSorting)                        │
+│       LimitsCheckingTransform                 │
+│         PartialSortingTransform               │
+│           (Expression)                        │
+│           ExpressionTransform                 │
+│             (Aggregating)                     │
+│             AggregatingTransform              │
+│               (Expression)                    │
+│               ExpressionTransform             │
+│                 (SettingQuotaAndLimits)       │
+│                   (ReadFromStorage)           │
+│                   SourceFromSingleChunk 0 → 1 │
+└───────────────────────────────────────────────┘
+
+17 rows in set. Elapsed: 0.002 sec.
+```
+
+老版本查看执行计划
+
+```sql
+clickhouse-client -h 127.0.0.1 --send_logs_level=trace <<< " select number as x from numbers(10);" > /dev/null
+```
+
+输出：
+
+```sql
+[root@ck ~]# clickhouse-client -h 127.0.0.1 --send_logs_level=trace <<< " select number as x from numbers(10);" > /dev/null
+[ck] 2024.11.07 23:55:38.759547 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Debug> executeQuery: (from 127.0.0.1:58488, using production parser)  select number as x from numbers(10); 
+[ck] 2024.11.07 23:55:38.759658 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Trace> ContextAccess (default): Access granted: CREATE TEMPORARY TABLE ON *.*
+[ck] 2024.11.07 23:55:38.759782 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Trace> InterpreterSelectQuery: FetchColumns -> Complete
+[ck] 2024.11.07 23:55:38.760165 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Information> executeQuery: Read 10 rows, 80.00 B in 0.000588194 sec., 17001 rows/sec., 132.82 KiB/sec.
+[ck] 2024.11.07 23:55:38.760182 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Debug> MemoryTracker: Peak memory usage (for query): 0.00 B.
+```
+
 
 
 
