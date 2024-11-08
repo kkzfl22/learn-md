@@ -5998,7 +5998,9 @@ Distributed表本身不存储数据，作为一种中间件来使用，通过分
 
 集群可查看《配制3个节点2副本的分片.md》
 
-## 12 执行计划
+
+
+## 12 CK优化相关
 
 在clickhouse 20.6版本之前要查看SQL语句的执行计划，需要设置日志级别为trace才能看到，并且只能真正执行SQL，在执行日志里里查看。在20.6 版本引入了原生的执行计划。20.6.3版本成为正式版本的功能。
 
@@ -6032,7 +6034,7 @@ EXPLAIN [AST | SYNTAX | QUERY TREE | PLAN | PIPELINE | ESTIMATE | TABLE OVERRIDE
   - graph              :   用DOT图形语言描述管道图，默认关闭，需要查看相关的图形需要配合graphviz查看。
   - actions            ： 如果开启了graph，紧凑打印打，默认开启。
 
-### 12.1  EXPLAIN
+### 12.1  EXPLAIN （执行计划）
 
  1） 查看plain
 
@@ -6367,15 +6369,21 @@ Query id: 1e544a1f-f9f1-4e8d-8fc7-252a6b359c23
 ck :) 
 ```
 
-查看PIPELINE
+查看PIPELINE,查看执行的流水线
 
 ```sql
+# 数据汇聚查询
 EXPLAIN PIPELINE SELECT
     table AS `表名`,
     sum(rows) AS `总行数`
 FROM system.parts
 GROUP BY table
 ORDER BY `总行数` ASC
+
+# 
+EXPLAIN PIPELINE SELECT sum(number) from numbers_mt(10000) group by number % 20;
+
+
 ```
 
 输出：
@@ -6437,6 +6445,203 @@ clickhouse-client -h 127.0.0.1 --send_logs_level=trace <<< " select number as x 
 [ck] 2024.11.07 23:55:38.760165 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Information> executeQuery: Read 10 rows, 80.00 B in 0.000588194 sec., 17001 rows/sec., 132.82 KiB/sec.
 [ck] 2024.11.07 23:55:38.760182 [ 1361 ] {ae0b07a7-f0ca-4d0d-a932-f39fda69f254} <Debug> MemoryTracker: Peak memory usage (for query): 0.00 B.
 ```
+
+
+
+### 12.2 数据类型
+
+**建表时的时间字段**
+
+```sql
+# 建表语句
+create table mt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time INT32    
+)engine=MergeTree
+partition by toYYYYMMDD(toDate(create_time))     -- 如果使用了int类型，还需要做一次转换。
+primary key (id)
+order by (id,order_id,create_time);
+```
+
+建表时能用数值型或者日期时间型表示的字段就不要用字符串。
+
+虽然Clickhouse底层将DateTime存储为时间戳Long类型，但不建议存储Long类型，因为DateTime不需要经过函数转换，执行效率高，可读取性好。
+
+
+
+**空值存储类型**
+
+```sh
+https://clickhouse.com/docs/en/sql-reference/data-types/nullable
+
+Note
+Using Nullable almost always negatively affects performance, keep this in mind when designing your databases.
+```
+
+在Clickhouse的官方已经指出，Nullable类型会拖累性能。
+
+具体的原因为2点：
+
+1. 存储Nullable列时需要创建一个额外的文件存储Null的标记。
+2. Nullablle 列无法被索引。
+
+除非极其特殊的情况，使用Null，否则应该直接使用字段的默认值表示空，或者自行指定一个业务中无意义的值（例如数字-1）
+
+```sql
+create database null_demo;
+create table null_demo.user_null(x Int8, y Nullable(Int8)) engine=TinyLog;
+insert into null_demo.user_null values(5,null),(6,2);
+select x + y from null_demo.user_null;
+```
+
+输出:
+
+```sql
+# 建库
+ck :) create database null_demo;
+
+CREATE DATABASE null_demo
+
+Query id: 9a8170f5-56ec-4979-b70f-936d2f759e89
+
+Ok.
+
+0 rows in set. Elapsed: 0.017 sec. 
+
+
+# 建表
+ck :) create table null_demo.user_null(x Int8, y Nullable(Int8)) engine=TinyLog;
+
+CREATE TABLE null_demo.user_null
+(
+    `x` Int8,
+    `y` Nullable(Int8)
+)
+ENGINE = TinyLog
+
+Query id: df13ae46-de81-4336-87b0-fabec08f1d7b
+
+Ok.
+
+0 rows in set. Elapsed: 0.016 sec. 
+
+# 插入数据
+ck :) insert into null_demo.user_null values(5,null),(6,2);
+
+INSERT INTO null_demo.user_null VALUES
+
+Query id: cffc13c5-ac5f-43d1-97c9-5a5e27788a55
+
+Ok.
+
+2 rows in set. Elapsed: 0.002 sec. 
+
+# 查询
+ck :) select x + y from null_demo.user_null;
+
+SELECT x + y
+FROM null_demo.user_null
+
+Query id: a465b916-e440-49a6-b056-40f1283df19c
+
+┌─plus(x, y)─┐
+│       ᴺᵁᴸᴸ │
+│          8 │
+└────────────┘
+
+2 rows in set. Elapsed: 0.002 sec. 
+
+
+# 至存储目录查看文件,可以发现，null值多了一个列来专门存储。
+[root@ck user_null]# cd /var/lib/clickhouse/data/null_demo/user_null
+[root@ck user_null]# ls -l
+总用量 16
+-rw-r-----. 1 clickhouse clickhouse 91 11月  8 09:09 sizes.json
+-rw-r-----. 1 clickhouse clickhouse 28 11月  8 09:09 x.bin
+-rw-r-----. 1 clickhouse clickhouse 28 11月  8 09:09 y.bin
+-rw-r-----. 1 clickhouse clickhouse 28 11月  8 09:09 y.null.bin
+```
+
+
+
+### 12.3 分区与索引
+
+分区粒度根据业务特点决定。不宜过粗或者过细。一般选择按天分区，也可以指定为Tuple(), 以单表1亿数据为例，分区大小控制在10-30个为最佳。
+
+必须指定索引列。Clickhouse中的索引列，即排序列，通过order by指定，一般在查询条件中经常被用来充当筛选条件的属性被纳入进来；可以是单一维度，也可以是组合的索引；通常需要满足高级列在前、查询频率大的在前的原则；还有基数特别大的不适合做索引列， 如用户表的userId字段；通常筛选后的数据满足在百万以内为最佳。
+
+**索引参数**
+
+```sql
+SETTINGS index_granularity = 8192;
+```
+
+index_granularity是用来控制索引粒度的，默认就是8192，Clickhouse为跳数索引，每次遍历按此粒度跳过8192个数据，以快速定位数据。如非必须不建议调整。
+
+### 12.4 写入与删除优化
+
+1) 尽量不要执行单条或者小批量删除和插入操作，这样会产生小分区文件，给后台Merge带来巨大压力。
+2) 不要一次写入太多分区，或者数据写入太快，数据写入太快会导致Merge速度跟不上而报错，一般建议每秒钟发起2-3次写入操作，每次操作写入2W-5W数据（依服务器性能而定）
+
+写入过快的报错：
+
+```sh
+1. Code: 252, e.displayText() = DB::Exception: Too many parts(304). 
+Merges are processing significantly slower than inserts
+
+2. Code: 241, e.displayText() = DB::Exception: Memory limit (for query) 
+exceeded:would use 9.37 GiB (attempt to allocate chunk of 301989888 
+bytes), maximum: 9.31 GiB
+```
+
+处理方式：
+
+"Too many parts"
+
+使用预写日志，提高写入性能。将参数：in_memory_parts_enable_wal 设置为true
+
+在服务器内存充足的情况下，增加内存配额，一般通过max_memory_usage来实现
+
+在服务器内存不充足的情况下，建议将超出部分内容分配到系统硬盘上，但会降低执行速度，一般通过max_bytes_before_external_group_by、max_bytes_before_external_sort 参数 来实现。
+
+
+
+
+
+### 12.4 常用配制
+
+配置项主要在config.xml或者user.xml中，基本都在user.xml中
+
+config.xml的配制项
+
+```javascript
+https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings
+```
+
+user.xml的配制项：
+
+```sh
+https://clickhouse.com/docs/en/operations/settings/settings
+```
+
+#### 12.4.1 CPU
+
+
+
+#### 12.4.2 内存
+
+
+
+#### 12.4.3 硬盘
+
+
+
+
+
+
 
 
 
