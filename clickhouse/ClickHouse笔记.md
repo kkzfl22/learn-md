@@ -6629,19 +6629,38 @@ https://clickhouse.com/docs/en/operations/settings/settings
 
 #### 12.4.1 CPU
 
+| 配制                                      | 描述                                                         |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| background_pool_size                      | 后台线程池的大小，merge线程就是在该线程池中执行，该线程池不仅仅给merge线程用，默认16，允许的前提下建议改成CPU核数的2倍 |
+| background_schedule_pool_size             | 执行后台任务（复制表、kafka流、DNS缓存更新）的线程数，默认128， |
+| background_distributed_schedule_pool_size | 设置为分布式发送执行后台任务的线程数，默认为16，建议改成CPU核数*2 |
+| max_concurrent_queries                    | 最大并发处理的请求数（包含select,insert等）默认值100，推荐150，最大300 |
+| max_thread                                | 设置凌晨个查询所能使用的最大的CPU个数，默认就是CPU核数。     |
+
+优先在user.xml文件中配制。
+
 
 
 #### 12.4.2 内存
+
+| 配制                               | 描述                                                         |
+| ---------------------------------- | ------------------------------------------------------------ |
+| max_memroy_usage                   | 此参数在users.xml表示单次query占用内存最大值，该值可以设置的比较大，这样可以提升集群查询的上限。保留一点给OS，比如128G的内存，设置为100GB |
+| max_bytes_before_external_group_by | 一般按照max_memory_usage的一半设置内存，当group使用内存超过阈值后，会刷新到磁盘进行。               因为clickhouse聚合分为两阶段。查询并及建立中间数据、合并中间数据，结合上一项，建议50GB。 |
+| max_bytes_before_external_sort     | 当order by已经使用max_bytes_before_external_sort内存进行溢写磁盘（基于磁盘排序），如果不设置该值，那么当内存不够直接抛错，设置了该值order by可以正常完成，但是速度正对来说肯定要慢点（实则慢非常多） |
+| max_table_size_to_drop             | 此参数在config.xml中，应用于需要删除表或者分区的情况，默认是50GB，意思是如果删除50GB以上的分区表就会失败，建议修改为0，这样不管多大的分区表都可以删除。 |
 
 
 
 #### 12.4.3 硬盘
 
+​	clickhouse不支持设置多数据目录，为了提升数据IO性能，可以挂载虚拟券组，一个券组绑定多块物理磁盘提升读写性能，多数据查询SSD会比普通机械快2-3倍。
 
 
 
 
 
+### 12.5 查询优化。
 
 
 
