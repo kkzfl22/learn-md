@@ -868,6 +868,7 @@ https://datasets.clickhouse.com/visits/tsv/visits_v1.tsv.xz (405MB)
 装载hits_v1表
 
 ```sh
+mkdir -p /opt/nullnull/example/webAnalyticsData
 cd /opt/nullnull/example/webAnalyticsData
 # 解压数据 
 unxz --threads=`nproc` -c hits_v1.tsv.xz   > hits_v1.tsv
@@ -6000,7 +6001,7 @@ Distributed表本身不存储数据，作为一种中间件来使用，通过分
 
 
 
-## 12 CK优化相关
+## 12 CK优化相关(系统)
 
 在clickhouse 20.6版本之前要查看SQL语句的执行计划，需要设置日志级别为trace才能看到，并且只能真正执行SQL，在执行日志里里查看。在20.6 版本引入了原生的执行计划。20.6.3版本成为正式版本的功能。
 
@@ -6611,7 +6612,7 @@ bytes), maximum: 9.31 GiB
 
 
 
-### 12.4 常用配制
+### 12.5 常用配制
 
 配置项主要在config.xml或者user.xml中，基本都在user.xml中
 
@@ -6656,11 +6657,475 @@ https://clickhouse.com/docs/en/operations/settings/settings
 
 ​	clickhouse不支持设置多数据目录，为了提升数据IO性能，可以挂载虚拟券组，一个券组绑定多块物理磁盘提升读写性能，多数据查询SSD会比普通机械快2-3倍。
 
+## 13 查询优化
+
+### 13.1 单表优化
+
+#### 13.1.1 **count优化**
+
+在调用count时如果使用的是count()或者count(*),或者count(1),且没有where条件，则会直接使用system.tables的total_rows
+
+如果count指定具体的列，则不会优化此项。
+
+```sh
+# 不指定具体的列
+EXPLAIN select count() from datasets.hits_v1;
+EXPLAIN select count(*) from datasets.hits_v1;
+EXPLAIN select count(1) from datasets.hits_v1;
+
+# 指定具体的列，优化措施，将失效
+EXPLAIN select count(CounterID) from datasets.hits_v1;
+```
+
+输出:
+
+```sh
+# 不指定具体的列，将会使用优化措施
+ck :) EXPLAIN select count() from datasets.hits_v1;
+
+EXPLAIN
+SELECT count()
+FROM datasets.hits_v1
+
+Query id: c00b86cf-b3e3-463c-9ec6-232512a6c2cf
+
+┌─explain──────────────────────────────────────────────┐
+│ Expression ((Projection + Before ORDER BY))          │
+│   MergingAggregated                                  │
+│     ReadFromPreparedSource (Optimized trivial count) │
+└──────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.002 sec. 
+
+
+ck :) EXPLAIN select count(*) from datasets.hits_v1;
+
+EXPLAIN
+SELECT count(*)
+FROM datasets.hits_v1
+
+Query id: 73e55e28-8f97-4516-8a02-e21a318c8253
+
+┌─explain──────────────────────────────────────────────┐
+│ Expression ((Projection + Before ORDER BY))          │
+│   MergingAggregated                                  │
+│     ReadFromPreparedSource (Optimized trivial count) │
+└──────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.005 sec. 
+
+ck :) EXPLAIN select count(1) from datasets.hits_v1;
+
+EXPLAIN
+SELECT count(1)
+FROM datasets.hits_v1
+
+Query id: d895f495-a0dc-4d05-a720-44bfe4f37200
+
+┌─explain──────────────────────────────────────────────┐
+│ Expression ((Projection + Before ORDER BY))          │
+│   MergingAggregated                                  │
+│     ReadFromPreparedSource (Optimized trivial count) │
+└──────────────────────────────────────────────────────┘
+
+3 rows in set. Elapsed: 0.004 sec. 
+
+# 此将进行真正的查询操作返回。
+ck :) EXPLAIN select count(CounterID) from datasets.hits_v1;
+
+EXPLAIN
+SELECT count(CounterID)
+FROM datasets.hits_v1
+
+Query id: ede92fee-1c85-417f-8112-3355ce37977d
+
+┌─explain───────────────────────────────────────────────────────────────────────┐
+│ Expression ((Projection + Before ORDER BY))                                   │
+│   Aggregating                                                                 │
+│     Expression (Before GROUP BY)                                              │
+│       SettingQuotaAndLimits (Set limits and quota after reading from storage) │
+│         ReadFromMergeTree                                                     │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+5 rows in set. Elapsed: 0.001 sec. 
+```
+
+Optimized trivial count 此就是对count做的优化。
+
+#### 13.1.2 **使用Prewhere替代where**
+
+​	prewhere和where语句的作用相同，用来过滤数据，不同之处在于prewhere只支持MergeTree引擎，首先会读取指定的列数据，来判断数据过滤，等过滤之后再读取select声明的列字段补齐其余属性。
+
+​	当查询列多于筛选列时使用Prewhere可十倍提升查询性能，prewhere会自动优化执行过滤阶段的数据读取方式，降低IO操作。
+
+​	在某此场景下,Prewhere语句比where语句处理的数据量更少性能更高。
+
+```sh
+# 关闭where自动转prewhere(在mergeTree引擎下，默认会将where条件转换成prewhere)
+set optimize_move_to_prewhere=0;
+
+# 使用 where
+select WatchID, 
+JavaEnable, 
+Title, 
+GoodEvent, 
+EventTime, 
+EventDate, 
+CounterID, 
+ClientIP, 
+ClientIP6, 
+RegionID, 
+UserID, 
+CounterClass, 
+OS, 
+UserAgent, 
+URL, 
+Referer, 
+URLDomain, 
+RefererDomain, 
+Refresh, 
+IsRobot, 
+RefererCategories, 
+URLCategories, 
+URLRegions, 
+RefererRegions, 
+ResolutionWidth, 
+ResolutionHeight, 
+ResolutionDepth, 
+FlashMajor, 
+FlashMinor, 
+FlashMinor2
+from datasets.hits_v1 where UserID='3198390223272470366';
+
+# 使用prewhere来查询
+select WatchID, 
+JavaEnable, 
+Title, 
+GoodEvent, 
+EventTime, 
+EventDate, 
+CounterID, 
+ClientIP, 
+ClientIP6, 
+RegionID, 
+UserID, 
+CounterClass, 
+OS, 
+UserAgent, 
+URL, 
+Referer, 
+URLDomain, 
+RefererDomain, 
+Refresh, 
+IsRobot, 
+RefererCategories, 
+URLCategories, 
+URLRegions, 
+RefererRegions, 
+ResolutionWidth, 
+ResolutionHeight, 
+ResolutionDepth, 
+FlashMajor, 
+FlashMinor, 
+FlashMinor2
+from datasets.hits_v1 prewhere UserID='3198390223272470366';
+
+
+# 打开优化设置
+set optimize_move_to_prewhere=1;
+
+select WatchID, 
+JavaEnable, 
+Title, 
+GoodEvent, 
+EventTime, 
+EventDate, 
+CounterID, 
+ClientIP, 
+ClientIP6, 
+RegionID, 
+UserID, 
+CounterClass, 
+OS, 
+UserAgent, 
+URL, 
+Referer, 
+URLDomain, 
+RefererDomain, 
+Refresh, 
+IsRobot, 
+RefererCategories, 
+URLCategories, 
+URLRegions, 
+RefererRegions, 
+ResolutionWidth, 
+ResolutionHeight, 
+ResolutionDepth, 
+FlashMajor, 
+FlashMinor, 
+FlashMinor2
+from datasets.hits_v1 where UserID='3198390223272470366';
+
+```
+
+输出:
+
+```sh
+ck :) set optimize_move_to_prewhere=0;
+
+SET optimize_move_to_prewhere = 0
+
+Query id: 4f82c228-3077-4926-a8f6-707591de933d
+
+Ok.
+
+0 rows in set. Elapsed: 0.002 sec. 
+
+ck :) select WatchID, 
+:-] JavaEnable, 
+:-] Title, 
+:-] GoodEvent, 
+:-] EventTime, 
+:-] EventDate, 
+:-] CounterID, 
+:-] ClientIP, 
+:-] ClientIP6, 
+:-] RegionID, 
+:-] UserID, 
+:-] CounterClass, 
+:-] OS, 
+:-] UserAgent, 
+:-] URL, 
+:-] Referer, 
+:-] URLDomain, 
+:-] RefererDomain, 
+:-] Refresh, 
+:-] IsRobot, 
+:-] RefererCategories, 
+:-] URLCategories, 
+:-] URLRegions, 
+:-] RefererRegions, 
+:-] ResolutionWidth, 
+:-] ResolutionHeight, 
+:-] ResolutionDepth, 
+:-] FlashMajor, 
+:-] FlashMinor, 
+:-] FlashMinor2
+:-] from datasets.hits_v1 where UserID='3198390223272470366';
+
+SELECT
+    WatchID,
+    JavaEnable,
+    Title,
+    GoodEvent,
+    EventTime,
+    EventDate,
+    CounterID,
+    ClientIP,
+    ClientIP6,
+    RegionID,
+    UserID,
+    CounterClass,
+    OS,
+    UserAgent,
+    URL,
+    Referer,
+    URLDomain,
+    RefererDomain,
+    Refresh,
+    IsRobot,
+    RefererCategories,
+    URLCategories,
+    URLRegions,
+    RefererRegions,
+    ResolutionWidth,
+    ResolutionHeight,
+    ResolutionDepth,
+    FlashMajor,
+    FlashMinor,
+    FlashMinor2
+FROM datasets.hits_v1
+WHERE UserID = '3198390223272470366'
+
+Query id: 41de1864-0852-4532-87c9-65455dd24686
+
+# 省略内容输出
+152 rows in set. Elapsed: 1.216 sec. Processed 8.87 million rows, 3.86 GB (7.30 million rows/s., 3.17 GB/s.)
+
+ck :) 
 
 
 
+# 使用prewhere关键字
+ck :) 
+ck :) 
+ck :) select WatchID, 
+:-] JavaEnable, 
+:-] Title, 
+:-] GoodEvent, 
+:-] EventTime, 
+:-] EventDate, 
+:-] CounterID, 
+:-] ClientIP, 
+:-] ClientIP6, 
+:-] RegionID, 
+:-] UserID, 
+:-] CounterClass, 
+:-] OS, 
+:-] UserAgent, 
+:-] URL, 
+:-] Referer, 
+:-] URLDomain, 
+:-] RefererDomain, 
+:-] Refresh, 
+:-] IsRobot, 
+:-] RefererCategories, 
+:-] URLCategories, 
+:-] URLRegions, 
+:-] RefererRegions, 
+:-] ResolutionWidth, 
+:-] ResolutionHeight, 
+:-] ResolutionDepth, 
+:-] FlashMajor, 
+:-] FlashMinor, 
+:-] FlashMinor2
+:-] from datasets.hits_v1 prewhere UserID='3198390223272470366';
 
-### 12.5 查询优化。
+SELECT
+    WatchID,
+    JavaEnable,
+    Title,
+    GoodEvent,
+    EventTime,
+    EventDate,
+    CounterID,
+    ClientIP,
+    ClientIP6,
+    RegionID,
+    UserID,
+    CounterClass,
+    OS,
+    UserAgent,
+    URL,
+    Referer,
+    URLDomain,
+    RefererDomain,
+    Refresh,
+    IsRobot,
+    RefererCategories,
+    URLCategories,
+    URLRegions,
+    RefererRegions,
+    ResolutionWidth,
+    ResolutionHeight,
+    ResolutionDepth,
+    FlashMajor,
+    FlashMinor,
+    FlashMinor2
+FROM datasets.hits_v1
+PREWHERE UserID = '3198390223272470366'
+
+Query id: adaf4023-ad75-4a21-a131-838008665146
+# 省略内容
+152 rows in set. Elapsed: 0.094 sec. Processed 8.87 million rows, 119.04 MB (94.28 million rows/s., 1.26 GB/s.)
+
+ck :) 
+
+# 打开优化设置
+ck :) set optimize_move_to_prewhere=1;
+
+SET optimize_move_to_prewhere = 1
+
+Query id: c4132092-acdc-41ab-86d7-ff359bd548b9
+
+Ok.
+
+0 rows in set. Elapsed: 0.064 sec. 
+
+# 使用where来查询
+ck :) select WatchID, 
+:-] JavaEnable, 
+:-] Title, 
+:-] GoodEvent, 
+:-] EventTime, 
+:-] EventDate, 
+:-] CounterID, 
+:-] ClientIP, 
+:-] ClientIP6, 
+:-] RegionID, 
+:-] UserID, 
+:-] CounterClass, 
+:-] OS, 
+:-] UserAgent, 
+:-] URL, 
+:-] Referer, 
+:-] URLDomain, 
+:-] RefererDomain, 
+:-] Refresh, 
+:-] IsRobot, 
+:-] RefererCategories, 
+:-] URLCategories, 
+:-] URLRegions, 
+:-] RefererRegions, 
+:-] ResolutionWidth, 
+:-] ResolutionHeight, 
+:-] ResolutionDepth, 
+:-] FlashMajor, 
+:-] FlashMinor, 
+:-] FlashMinor2
+:-] from datasets.hits_v1 where UserID='3198390223272470366';
+
+SELECT
+    WatchID,
+    JavaEnable,
+    Title,
+    GoodEvent,
+    EventTime,
+    EventDate,
+    CounterID,
+    ClientIP,
+    ClientIP6,
+    RegionID,
+    UserID,
+    CounterClass,
+    OS,
+    UserAgent,
+    URL,
+    Referer,
+    URLDomain,
+    RefererDomain,
+    Refresh,
+    IsRobot,
+    RefererCategories,
+    URLCategories,
+    URLRegions,
+    RefererRegions,
+    ResolutionWidth,
+    ResolutionHeight,
+    ResolutionDepth,
+    FlashMajor,
+    FlashMinor,
+    FlashMinor2
+FROM datasets.hits_v1
+WHERE UserID = '3198390223272470366'
+
+Query id: a5c2cce9-d285-4bac-bcfd-0c1ecbf88f21
+# 省略内容
+
+152 rows in set. Elapsed: 0.087 sec. Processed 8.87 million rows, 119.04 MB (101.86 million rows/s., 1.37 GB/s.)
+
+ck :) 
+```
+
+默认情况下，肯定不会关闭where自动优化成prewhere，但是在某些场景下，即使开启优化，也不会自动转换成prewhere，需要手动指定为prewhere。
+
+1)  使用了常量表达式
+2) 使用默认值为alias类型的字段。
+3) 包含了arrayJoin, globalIn，globalNotIn或者indexHint的查询
+4) select查询的列字段和where的谓词相同。
+5) 使用了主键字段。
+
+
 
 
 
