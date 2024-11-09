@@ -6761,6 +6761,41 @@ Optimized trivial count 此就是对count做的优化。
 ​	在某此场景下,Prewhere语句比where语句处理的数据量更少性能更高。
 
 ```sh
+# SQL被自动优化成prewhere
+EXPLAIN SYNTAX
+select WatchID, 
+JavaEnable, 
+Title, 
+GoodEvent, 
+EventTime, 
+EventDate, 
+CounterID, 
+ClientIP, 
+ClientIP6, 
+RegionID, 
+UserID, 
+CounterClass, 
+OS, 
+UserAgent, 
+URL, 
+Referer, 
+URLDomain, 
+RefererDomain, 
+Refresh, 
+IsRobot, 
+RefererCategories, 
+URLCategories, 
+URLRegions, 
+RefererRegions, 
+ResolutionWidth, 
+ResolutionHeight, 
+ResolutionDepth, 
+FlashMajor, 
+FlashMinor, 
+FlashMinor2
+from datasets.hits_v1 where UserID='3198390223272470366';
+
+
 # 关闭where自动转prewhere(在mergeTree引擎下，默认会将where条件转换成prewhere)
 set optimize_move_to_prewhere=0;
 
@@ -6871,6 +6906,117 @@ from datasets.hits_v1 where UserID='3198390223272470366';
 输出:
 
 ```sh
+ck :) EXPLAIN SYNTAX
+:-] select WatchID, 
+:-] JavaEnable, 
+:-] Title, 
+:-] GoodEvent, 
+:-] EventTime, 
+:-] EventDate, 
+:-] CounterID, 
+:-] ClientIP, 
+:-] ClientIP6, 
+:-] RegionID, 
+:-] UserID, 
+:-] CounterClass, 
+:-] OS, 
+:-] UserAgent, 
+:-] URL, 
+:-] Referer, 
+:-] URLDomain, 
+:-] RefererDomain, 
+:-] Refresh, 
+:-] IsRobot, 
+:-] RefererCategories, 
+:-] URLCategories, 
+:-] URLRegions, 
+:-] RefererRegions, 
+:-] ResolutionWidth, 
+:-] ResolutionHeight, 
+:-] ResolutionDepth, 
+:-] FlashMajor, 
+:-] FlashMinor, 
+:-] FlashMinor2
+:-] from datasets.hits_v1 where UserID='3198390223272470366';
+
+EXPLAIN SYNTAX
+SELECT
+    WatchID,
+    JavaEnable,
+    Title,
+    GoodEvent,
+    EventTime,
+    EventDate,
+    CounterID,
+    ClientIP,
+    ClientIP6,
+    RegionID,
+    UserID,
+    CounterClass,
+    OS,
+    UserAgent,
+    URL,
+    Referer,
+    URLDomain,
+    RefererDomain,
+    Refresh,
+    IsRobot,
+    RefererCategories,
+    URLCategories,
+    URLRegions,
+    RefererRegions,
+    ResolutionWidth,
+    ResolutionHeight,
+    ResolutionDepth,
+    FlashMajor,
+    FlashMinor,
+    FlashMinor2
+FROM datasets.hits_v1
+WHERE UserID = '3198390223272470366'
+
+Query id: c14a9d66-7b5d-4cd6-af80-5a7a1a595be9
+
+┌─explain─────────────────────────────────┐
+│ SELECT                                  │
+│     WatchID,                            │
+│     JavaEnable,                         │
+│     Title,                              │
+│     GoodEvent,                          │
+│     EventTime,                          │
+│     EventDate,                          │
+│     CounterID,                          │
+│     ClientIP,                           │
+│     ClientIP6,                          │
+│     RegionID,                           │
+│     UserID,                             │
+│     CounterClass,                       │
+│     OS,                                 │
+│     UserAgent,                          │
+│     URL,                                │
+│     Referer,                            │
+│     URLDomain,                          │
+│     RefererDomain,                      │
+│     Refresh,                            │
+│     IsRobot,                            │
+│     RefererCategories,                  │
+│     URLCategories,                      │
+│     URLRegions,                         │
+│     RefererRegions,                     │
+│     ResolutionWidth,                    │
+│     ResolutionHeight,                   │
+│     ResolutionDepth,                    │
+│     FlashMajor,                         │
+│     FlashMinor,                         │
+│     FlashMinor2                         │
+│ FROM datasets.hits_v1                   │
+│ PREWHERE UserID = '3198390223272470366' │
+└─────────────────────────────────────────┘
+
+33 rows in set. Elapsed: 0.012 sec.
+
+
+
+# 关闭自动优化
 ck :) set optimize_move_to_prewhere=0;
 
 SET optimize_move_to_prewhere = 0
@@ -7119,11 +7265,257 @@ ck :)
 
 默认情况下，肯定不会关闭where自动优化成prewhere，但是在某些场景下，即使开启优化，也不会自动转换成prewhere，需要手动指定为prewhere。
 
-1)  使用了常量表达式
+1)  使用了常量表达式。
 2) 使用默认值为alias类型的字段。
 3) 包含了arrayJoin, globalIn，globalNotIn或者indexHint的查询
 4) select查询的列字段和where的谓词相同。
 5) 使用了主键字段。
+
+场景演示，不会自动转换为prewhere
+
+```sql
+# 1)  使用了常量表达式。
+EXPLAIN SYNTAX SELECT WatchID, Title FROM datasets.hits_v1 WHERE UserID = '3198390223272470366' and  1 = 1;
+
+┌─explain────────────────────────────────────────────┐
+│ SELECT                                             │
+│     WatchID,                                       │
+│     Title                                          │
+│ FROM datasets.hits_v1                              │
+│ PREWHERE UserID = '3198390223272470366'            │
+│ WHERE (UserID = '3198390223272470366') AND (1 = 1) │
+└────────────────────────────────────────────────────┘
+
+# 2)  使用默认值为alias类型的字段。
+-- 假设 Title 的默认值类型是 ALIAS
+SELECT WatchID, Title FROM datasets.hits_v1 WHERE Title = 'A000'
+
+
+# 3)  包含了arrayJoin, globalIn，globalNotIn或者indexHint的查询
+
+# 4)  select查询的列字段和where的谓词相同。
+EXPLAIN SYNTAX SELECT UserID FROM datasets.hits_v1 WHERE UserID = '3198390223272470366' ;
+
+┌─explain──────────────────────────────┐
+│ SELECT UserID                        │
+│ FROM datasets.hits_v1                │
+│ WHERE UserID = '3198390223272470366' │
+└──────────────────────────────────────┘
+
+# 5)  使用了主键字段。
+EXPLAIN SYNTAX  SELECT CounterID FROM datasets.hits_v1 WHERE  CounterID = '57'
+
+┌─explain────────────────┐
+│ SELECT CounterID       │
+│ FROM datasets.hits_v1  │
+│ WHERE CounterID = '57' │
+└────────────────────────┘
+
+```
+
+#### 13.1.3 **数据采样**
+
+```sql
+# SAMPLE 0.1 表示采样10%，也可以是具体的条数
+SELECT 
+Title,count(1) as pageViews
+FROM datasets.hits_v1 
+SAMPLE 0.1
+group by Title
+order by pageViews desc
+limit 3;
+
+
+# 转换后执行的SQL
+SELECT
+    Title,
+    count(1) AS pageViews
+FROM datasets.hits_v1
+SAMPLE 1 / 10
+GROUP BY Title
+ORDER BY pageViews DESC
+LIMIT 3
+
+Query id: 9dcefb3e-10df-4219-9c9c-f1a9ad5d3a37
+
+┌─Title─────────┬─pageViews─┐
+│               │    234143 │
+│ HD Tube 5*    │     20146 │
+│ Играть кварти │      4511 │
+└───────────────┴───────────┘
+
+3 rows in set. Elapsed: 0.273 sec. Processed 7.41 million rows, 725.76 MB (27.15 million rows/s., 2.66 GB/s.)
+
+ck :)
+```
+
+数据采样只有对MergeTree 引擎表中才有效，县城在创建表时需要指定采样策略。
+
+
+
+#### 13.1.4 **列裁剪与分区裁剪**
+
+数据量大时，应避免使用select *，查询性能会与查询的字段大小和数量成线性，字段越少，消耗的IO资源越少，性能就会越高。
+
+```sh
+# 反例：
+select * from datasets.hits_v1 limit 100;
+
+# 指定需要的字段
+select
+WatchID,
+JavaEnable,
+Title
+from 
+datasets.hits_v1
+limit 100;
+```
+
+输出:
+
+```shell
+# 反例
+ck :) select * from datasets.hits_v1 limit 100;
+
+SELECT *
+FROM datasets.hits_v1
+LIMIT 100
+
+Query id: 804e4f37-d112-4010-bf59-fc758505046b
+# 略过数据内容
+100 rows in set. Elapsed: 0.029 sec. 
+
+
+# 指定列查询
+ck :) select
+:-] WatchID,
+:-] JavaEnable,
+:-] Title
+:-] from 
+:-] datasets.hits_v1
+:-] limit 100;
+
+SELECT
+    WatchID,
+    JavaEnable,
+    Title
+FROM datasets.hits_v1
+LIMIT 100
+
+Query id: 7f4a1b2e-bb76-4d9b-9662-17b200b7e0b3
+# 略过数据内容
+100 rows in set. Elapsed: 0.004 sec.
+```
+
+分区裁前就是只读取需要的分区，在过滤条件中指定
+
+```sql
+EXPLAIN 
+select WatchID, 
+ JavaEnable, 
+ Title, 
+ GoodEvent, 
+ EventTime, 
+ EventDate, 
+ CounterID, 
+ ClientIP, 
+ ClientIP6, 
+ RegionID, 
+ UserID
+from datasets.hits_v1
+where EventDate='2014-03-23'
+limit 10;
+;
+```
+
+
+
+#### 13.1.5  **列裁剪与分区裁剪**
+
+千万以上的数据集进行order by时，需要搭配where条件和limit语句一起使用
+
+```sql
+# 反例
+select UserID,Age
+FROM hists_v1
+ORDER BY AGE DESC;
+
+# 一般使用的语法
+select UserID,Age
+FROM hists_v1
+where CounterID=57
+ORDER BY AGE DESC 
+limit 100;
+```
+
+
+
+#### 13.1.6 避免使用虚拟列
+
+虚拟列，即为表中不存在列。比如两个列进行乘法或者除法运算。
+
+如非必要，不要在结果集上构建虚拟列，虚拟列是非常消耗资源浪费性能，可以考滤在查询完数据后，进行数据处理。或者在表中构建实际的字段进行额外的存储。
+
+```sh
+# 反例
+select 
+Income,UserID,(Income/UserID) as out
+from 
+datasets.visits_v1
+limit 1000;
+
+# 结果时间
+1000 rows in set. Elapsed: 0.016 sec. Processed 1.00 thousand rows, 9.00 KB (63.97 thousand rows/s., 575.72 KB/s.)
+
+# 直接获取
+select 
+Income,UserID
+from 
+datasets.visits_v1
+limit 1000;
+
+# 结果时间
+1000 rows in set. Elapsed: 0.004 sec. Processed 1.00 thousand rows, 9.00 KB (263.32 thousand rows/s., 2.37 MB/s.)
+```
+
+通过对比发现，带上一个虚拟的列进行计算后，响应的时间相差了4倍。
+
+#### 13.1.7 使用近似计算替代精确计算
+
+**uniqCombined 替代 distinct**
+
+性能可提供10倍以上， uniqCombined能接受2%左右数据误差，而精准去重使用的是uniqExact
+
+千万不建议在千万级别的数据上执行distinct去重查询，改为近似去重。
+
+```sql
+# 近似
+select uniqCombined(rand()) from datasets.hits_v1;
+
+# 结果
+┌─uniqCombined(rand())─┐
+│              8877260 │
+└──────────────────────┘
+
+1 rows in set. Elapsed: 0.122 sec. Processed 8.87 million rows, 80.31 MB (72.54 million rows/s., 656.45 MB/s.)
+
+
+# 精确
+select count(distinct rand()) from datasets.hits_v1;
+
+
+# 结果
+┌─uniqExact(rand())─┐
+│           8864849 │
+└───────────────────┘
+
+1 rows in set. Elapsed: 0.344 sec. Processed 8.87 million rows, 80.31 MB (25.77 million rows/s., 233.26 MB/s.)
+
+```
+
+
+
+#### 13.1.8 物化视图
 
 
 
