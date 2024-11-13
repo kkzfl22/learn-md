@@ -7565,28 +7565,80 @@ primary key (id)
 order by (id,order_id,create_time);
 
 
+truncate table  nullnull.replicatemt_user;
 
 
 
 
-# 测试按带顺序的
-insert into nullnull.replicatemt_user values
-(1,'001','空空1',20000,'2024-11-12 12:00:00'),
-(2,'002','空空2',20001,'2024-11-12 12:00:00'),
-......
-(2000,'002','空空2000',40000,'2024-10-25 19:50:00');
+
+# 测试写入20万行数据,有序数据集
+
+[root@ck clickhouse]# clickhouse-client    --send_logs_level=trace <<< "$(cat /root/clickhouse/order_insert.sql)"  > /dev/null
+[ck] 2024.11.13 23:40:01.789669 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Debug> executeQuery: (from [::1]:40242) insert into nullnull.replicatemt_user values  (stage: Complete)
+[ck] 2024.11.13 23:40:01.789898 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> ContextAccess (default): Access granted: INSERT(id, order_id, name, money, create_time) ON nullnull.replicatemt_user
+[ck] 2024.11.13 23:40:02.204982 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 1.00 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.205077 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 1.00 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.212243 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241112_3_3_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.214744 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.14 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.214819 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 2.14 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.231791 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241113_4_4_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.232411 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241112_3_3_0 to 20241112_3_3_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.234388 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.15 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.234439 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 2.15 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.248380 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241114_5_5_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.248978 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241113_4_4_0 to 20241113_4_4_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.250648 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.22 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.250696 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 2.22 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.265352 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241115_6_6_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.265913 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241114_5_5_0 to 20241114_5_5_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.267660 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.22 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.267704 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 2.22 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.281699 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241116_7_7_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.282256 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241115_6_6_0 to 20241115_6_6_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.282751 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 1.00 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:40:02.282797 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> DiskLocal: Reserved 1.00 MiB on local disk `default`, having unreserved 45.40 GiB.
+[ck] 2024.11.13 23:40:02.285955 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> MergedBlockOutputStream: filled checksums 20241117_8_8_0 (state Temporary)
+[ck] 2024.11.13 23:40:02.286464 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241116_7_7_0 to 20241116_7_7_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.286782 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241117_8_8_0 to 20241117_8_8_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:40:02.287174 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Information> executeQuery: Read 200000 rows, 10.09 MiB in 0.497449614 sec., 402050 rows/sec., 20.28 MiB/sec.
+[ck] 2024.11.13 23:40:02.287240 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Debug> MemoryTracker: Peak memory usage (for query): 45.24 MiB.
+[ck] 2024.11.13 23:40:02.287271 [ 2433 ] {8d4f794c-161a-4264-8a96-6f1b1318ebdf} <Debug> TCPHandler: Processed in 0.497953854 sec.
 
 
-INSERT INTO nullnull.replicatemt_user VALUES
 
-Query id: 288a2464-9eba-4d10-8484-0c006ae6a5e7
+# 无序数据集插入，同样20万
 
-Ok.
+[root@ck clickhouse]# clickhouse-client    --send_logs_level=trace <<< "$(cat /root/clickhouse/not_order_insert.sql)"  > /dev/null
+[ck] 2024.11.13 23:47:40.755011 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Debug> executeQuery: (from [::1]:38018) insert into nullnull.replicatemt_user values  (stage: Complete)
+[ck] 2024.11.13 23:47:40.755179 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> ContextAccess (default): Access granted: INSERT(id, order_id, name, money, create_time) ON nullnull.replicatemt_user
+[ck] 2024.11.13 23:47:41.191773 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 1.12 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:47:41.191851 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> DiskLocal: Reserved 1.12 MiB on local disk `default`, having unreserved 45.39 GiB.
+[ck] 2024.11.13 23:47:41.200601 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> MergedBlockOutputStream: filled checksums 20241112_9_9_0 (state Temporary)
+[ck] 2024.11.13 23:47:41.203244 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.53 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:47:41.203331 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> DiskLocal: Reserved 2.53 MiB on local disk `default`, having unreserved 45.39 GiB.
+[ck] 2024.11.13 23:47:41.221249 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> MergedBlockOutputStream: filled checksums 20241113_10_10_0 (state Temporary)
+[ck] 2024.11.13 23:47:41.222810 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241112_9_9_0 to 20241112_9_9_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:47:41.224608 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.52 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:47:41.224658 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> DiskLocal: Reserved 2.52 MiB on local disk `default`, having unreserved 45.38 GiB.
+[ck] 2024.11.13 23:47:41.241223 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> MergedBlockOutputStream: filled checksums 20241114_11_11_0 (state Temporary)
+[ck] 2024.11.13 23:47:41.241763 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241113_10_10_0 to 20241113_10_10_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:47:41.243603 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 2.53 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:47:41.243648 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> DiskLocal: Reserved 2.53 MiB on local disk `default`, having unreserved 45.38 GiB.
+[ck] 2024.11.13 23:47:41.259631 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> MergedBlockOutputStream: filled checksums 20241115_12_12_0 (state Temporary)
+[ck] 2024.11.13 23:47:41.260257 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241114_11_11_0 to 20241114_11_11_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:47:41.261365 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Trying to reserve 1.38 MiB using storage policy from min volume index 0
+[ck] 2024.11.13 23:47:41.261412 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> DiskLocal: Reserved 1.38 MiB on local disk `default`, having unreserved 45.38 GiB.
+[ck] 2024.11.13 23:47:41.275331 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> MergedBlockOutputStream: filled checksums 20241116_13_13_0 (state Temporary)
+[ck] 2024.11.13 23:47:41.275905 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241115_12_12_0 to 20241115_12_12_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:47:41.276254 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Trace> nullnull.replicatemt_user (bb037a4d-ecdf-4bf1-8a3d-046b3909fc93): Renaming temporary part tmp_insert_20241116_13_13_0 to 20241116_13_13_0 with tid (1, 1, 00000000-0000-0000-0000-000000000000).
+[ck] 2024.11.13 23:47:41.276634 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Information> executeQuery: Read 200000 rows, 10.09 MiB in 0.521569463 sec., 383458 rows/sec., 19.34 MiB/sec.
+[ck] 2024.11.13 23:47:41.276709 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Debug> MemoryTracker: Peak memory usage (for query): 40.33 MiB.
+[ck] 2024.11.13 23:47:41.276725 [ 2433 ] {02f330be-8fb6-460f-b4e0-444aac6fbce8} <Debug> TCPHandler: Processed in 0.522081973 sec.
 
-5000 rows in set. Elapsed: 0.003 sec. 
+
 ```
 
-
+可以看出，经过有序后，还有有点点提供，但是在后期的合并中，由于已经有序，合并的压力会小很多。
 
 
 
