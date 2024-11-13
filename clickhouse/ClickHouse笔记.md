@@ -7430,7 +7430,7 @@ limit 10;
 
 
 
-#### 13.1.5  **列裁剪与分区裁剪**
+#### 13.1.5  **order by使用时注意事项**
 
 千万以上的数据集进行order by时，需要搭配where条件和limit语句一起使用
 
@@ -7516,6 +7516,75 @@ select count(distinct rand()) from datasets.hits_v1;
 
 
 #### 13.1.8 物化视图
+
+后续有专门的章节的笔记 
+
+
+
+#### 13.1.9 其他注意事项
+
+1. 查询熔断。
+
+为了避免因为个别查询引起服务的雪崩问题，除了可以为单个查询设置超时时间以外，还可以配制周期熔断，在一个查询周期内，如果用户频繁进行慢查询操作，超出规定阈值后无法进行查询操作。
+
+2. 关闭虚拟内存
+
+物理内存与虚拟内存的数据交换，会导致查询变慢，资源允许的情况下关闭虚拟内存。
+
+3. 配制join_use_nulls
+
+为每个一账号添加join_use_nulls配制，左右中的一条记录在右表中不存在，右表的相关字段会返回该字段相应数据类型的默认值，而不标准SQL中的NULL值。
+
+4. 批量写入时先排序。
+
+批量写入数据时，必须控制每个批次的数据中涉及到的分区的数量，在写入之前最好对需要导入的数据进行排序。无序的数据或者涉及分区太多，会导致Clickhouse无法及时对新导入的数据进行合并，从而影响查询性能。
+
+5. 关注CPU
+
+CPU一般在50%左右会出现查询波动，达到70%会出现大范围的查询超时，CPU最是最关键的指标，要非常关注。
+
+
+
+实际操作
+
+写入时排序与不排序的实验
+
+```sql
+create database nullnull;
+
+
+create table nullnull.replicatemt_user(
+	id UInt32,
+    order_id String, 
+    name String,
+    money decimal(16,2),
+    create_time Datetime    
+)engine==MergeTree()
+partition by toYYYYMMDD(create_time)
+primary key (id)
+order by (id,order_id,create_time);
+
+
+
+
+
+
+# 测试按带顺序的
+insert into nullnull.replicatemt_user values
+(1,'001','空空1',20000,'2024-11-12 12:00:00'),
+(2,'002','空空2',20001,'2024-11-12 12:00:00'),
+......
+(2000,'002','空空2000',40000,'2024-10-25 19:50:00');
+
+
+INSERT INTO nullnull.replicatemt_user VALUES
+
+Query id: 288a2464-9eba-4d10-8484-0c006ae6a5e7
+
+Ok.
+
+5000 rows in set. Elapsed: 0.003 sec. 
+```
 
 
 
