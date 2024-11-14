@@ -7642,6 +7642,38 @@ truncate table  nullnull.replicatemt_user;
 
 
 
+### 13.2 多表JOIN
+
+在Clickhouse中不推荐使用多表关联的操作。Join查询的时候效率效低，是将右边的数据，完整的加载到内存中,然后从左边中分批读取数据，然后进行Join操作。这一操作，注定关联效率很低。
+
+如果一定要使用JOIN，以下这些操作可以优化：
+
+#### 13.2.1 数据准备
+
+```sql
+# 创建数据表
+CREATE TABLE visits_v2 
+ENGINE = CollapsingMergeTree(Sign)
+PARTITION BY toYYYYMM(StartDate)
+ORDER BY (CounterID, StartDate, intHash32(UserID), VisitID)
+SAMPLE BY intHash32(UserID)
+SETTINGS index_granularity = 8192
+as select * from visits_v1 limit 10000;
+
+
+#创建 join 结果表：避免控制台疯狂打印数据
+CREATE TABLE hits_v2 
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(EventDate)
+ORDER BY (CounterID, EventDate, intHash32(UserID))
+SAMPLE BY intHash32(UserID)
+SETTINGS index_granularity = 8192
+as select * from hits_v1 where 1=0;
+
+```
+
+
+
 
 
 
