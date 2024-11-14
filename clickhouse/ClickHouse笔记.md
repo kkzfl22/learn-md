@@ -7652,25 +7652,175 @@ truncate table  nullnull.replicatemt_user;
 
 ```sql
 # 创建数据表
-CREATE TABLE visits_v2 
-ENGINE = CollapsingMergeTree(Sign)
+CREATE TABLE nullnull.visits_limit_200000
+ENGINE = MergeTree()
 PARTITION BY toYYYYMM(StartDate)
 ORDER BY (CounterID, StartDate, intHash32(UserID), VisitID)
 SAMPLE BY intHash32(UserID)
 SETTINGS index_granularity = 8192
-as select * from visits_v1 limit 10000;
+as select * from datasets.visits_v1 limit 10000;
 
 
 #创建 join 结果表：避免控制台疯狂打印数据
-CREATE TABLE hits_v2 
+CREATE TABLE nullnull.hits_v2 
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(EventDate)
 ORDER BY (CounterID, EventDate, intHash32(UserID))
 SAMPLE BY intHash32(UserID)
 SETTINGS index_granularity = 8192
-as select * from hits_v1 where 1=0;
+as select * from datasets.hits_v1 where 1=0;
 
 ```
+
+#### 13.2.2 **使用IN代替Join**
+
+当多表联查时，查询的数据仅从其中一张表出时，可考虑用IN操作而不是JOIN
+
+操作的过程的SQL
+
+```sql
+# 清理数据
+truncate table nullnull.hits_v2;
+
+# 使用IN操作
+insert into nullnull.hits_v2
+select a.* from datasets.hits_v1 a where a. CounterID in (select CounterID from datasets.visits_v1 );
+
+# 清理数据
+truncate table nullnull.hits_v2;
+
+# 使用JOIN操作
+insert into table nullnull.hits_v2
+select a.* from datasets.hits_v1 a left join datasets.visits_v1 b on a. CounterID=b.CounterID;
+
+
+```
+
+日志
+
+```sh
+# 清理数据
+ck :) truncate table nullnull.hits_v2;
+
+TRUNCATE TABLE nullnull.hits_v2
+
+Query id: 0e8ed7fe-5d67-4b95-8359-6b609324d3b1
+
+Ok.
+
+0 rows in set. Elapsed: 0.006 sec. 
+
+# 使用IN操作
+ck :) insert into nullnull.hits_v2
+:-] select a.* from datasets.hits_v1 a where a. CounterID in (select CounterID from datasets.visits_v1 );
+
+INSERT INTO nullnull.hits_v2 SELECT a.*
+FROM datasets.hits_v1 AS a
+WHERE a.CounterID IN (
+    SELECT CounterID
+    FROM datasets.visits_v1
+)
+
+Query id: d8a0f271-8402-44c4-8894-c0cd7ccac214
+
+Ok.
+
+0 rows in set. Elapsed: 3.146 sec. Processed 6.17 million rows, 5.85 GB (1.96 million rows/s., 1.86 GB/s.)
+
+
+
+
+# 清理数据
+ck :) truncate table nullnull.hits_v2;
+
+TRUNCATE TABLE nullnull.hits_v2
+
+Query id: 38f4c640-dcbe-4ae3-8ce7-dd81b7e5e646
+
+Ok.
+
+0 rows in set. Elapsed: 0.004 sec. 
+
+# 使用JOIN操作
+ck :) insert into table nullnull.hits_v2
+:-] select a.* from datasets.hits_v1 a left join datasets.visits_v1 b on a. CounterID=b.CounterID;
+
+INSERT INTO nullnull.hits_v2 SELECT a.*
+FROM datasets.hits_v1 AS a
+LEFT JOIN datasets.visits_v1 AS b ON a.CounterID = b.CounterID
+
+Query id: 9dcf75b7-bb70-4365-8648-df1f14b61d9e
+
+Ok.
+
+0 rows in set. Elapsed: 14.071 sec. Processed 10.55 million rows, 8.47 GB (750.03 thousand rows/s., 601.75 MB/s.)
+
+
+```
+
+作为最直观的对比，使用In操作，仅需3秒，而JOIN操作，使用了14秒，差了5倍，内存使用上，IN使用5.85G，而JOIN使用了8.47G。
+
+
+
+#### 13.2.3 大小表JOIN
+
+多表Join时，要满足小表在右的原则，右表关联时被加载到内存中与左表进行比较，ClickHouse中无论是Left Join、Right
+
+Join 还是Inner Join永远都是使着右表中的每一条记录到左表中查询该记录是否存在，所以右表必须是小表。
+
+直观对比
+
+```sh
+
+# datasets.hits_v1   行数 8873898
+# datasets.visits_limit_200000 行数 200000
+
+# 清理数据
+truncate table nullnull.hits_v2;
+
+# 小表在右
+insert into table nullnull.hits_v2
+select a.* from datasets.hits_v1 a left join nullnull.visits_limit_200000 b on a.CounterID=b.CounterID;
+
+
+# 结果：
+0 rows in set. Elapsed: 13.502 sec. Processed 8.88 million rows, 8.46 GB (657.95 thousand rows/s., 626.59 MB/s.)
+
+# 大表在右
+insert into table nullnull.hits_v2
+select a.* from nullnull.visits_limit_200000 b left join datasets.hits_v1 a on a. CounterID=b.CounterID;
+
+
+# 此将直接导致配制的10G内存不够，直接超出内存限制。
+↓ Progress: 262.14 thousand rows, 250.99 MB (1.82 million rows/s., 1.74 GB/s.)  2%
+0 rows in set. Elapsed: 0.244 sec. Processed 262.14 thousand rows, 250.99 MB (1.07 million rows/s., 1.03 GB/s.)
+
+Received exception from server (version 21.7.3):
+Code: 241. DB::Exception: Received from localhost:9000. DB::Exception: Memory limit (for query) exceeded: would use 955.17 MiB (attempt to allocate chunk of 4484528 bytes), maximum: 953.67 MiB: (avg_value_size_hint = 160.075439453125, avg_chars_size = 182.49052734375, limit = 8192): (while reading column URL): (while reading from part /var/lib/clickhouse/store/a9a/a9a61af4-b8ea-434e-a9a6-1af4b8ea634e/201403_1_6_1/ from mark 0 with max_rows_to_read = 8192): While executing MergeTree. 
+
+```
+
+
+
+#### 13.2.4 分布式表使用GLOBAL
+
+两张分布式表上的IN和JOIN之前必须加上GLOBAL关键字，右表只会在接收查询请求的那个节点查询一次，并将其分发到其他节点上。如果不加GLOBAL关键字的话，每个节点都会单独发起一次对右表的查询，而右表又是分布式表，就导致右表一共会被 查询N的平方次（N为该分片表的分片数量），这就是查询放大，会带来很大的开销。
+
+
+
+#### 13.2.5 使用字典表
+
+将一些需要关联分析的业务创建成字典表进行JOIN操作，前提是字典表不宜太大，因为字典表会常驻内存。
+
+
+
+#### 13.2.6 提前过滤
+
+通过增加过滤可以减少数据扫描，达到提高执行速度及降低内存消耗的目的。
+
+
+
+## 14 数据一致性
 
 
 
