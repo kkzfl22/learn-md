@@ -8060,7 +8060,42 @@ Query id: a336024f-6af2-474a-88d8-0c352c45adf9
 7 rows in set. Elapsed: 0.044 sec. 
 
 
-explain pipeline select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 ;
+
+
+explain pipeline select * from datasets.visits_v1 final WHERE StartDate = '2014-03-17' limit 100 settings max_final_threads = 2;
+
+
+
+
+# 在 22.12.6版本中，可以发现，此运行已经都可以多线程来运行。
+┌─explain───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ (Expression)                                                                                                  │
+│ ExpressionTransform × 2                                                                                       │
+│   (Limit)                                                                                                     │
+│   Limit 2 → 2                                                                                                 │
+│     (Filter)                                                                                                  │
+│     FilterTransform × 2                                                                                       │
+│       (ReadFromMergeTree)                                                                                     │
+│       ExpressionTransform × 2                                                                                 │
+│         CollapsingSortedTransform 5 → 1                                                                       │
+│           ExpressionTransform × 5                                                                             │
+│             FilterSortedStreamByRange × 5                                                                     │
+│             Description: filter values in [(11651763, 16150, 492737595, 6456139558230001359), +inf)           │
+│               ExpressionTransform × 5                                                                         │
+│                 MergeTreeInOrder × 5 0 → 1                                                                    │
+│                   CollapsingSortedTransform 5 → 1                                                             │
+│                     ExpressionTransform × 5                                                                   │
+│                       FilterSortedStreamByRange × 5                                                           │
+│                       Description: filter values in [-inf, (11651763, 16150, 492737595, 6456139558230001359)) │
+│                         ExpressionTransform × 5                                                               │
+│                           MergeTreeInOrder × 5 0 → 1                                                          │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+20 rows in set. Elapsed: 0.069 sec. 
+
+
+
+
 ```
 
 
