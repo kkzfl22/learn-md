@@ -7916,6 +7916,153 @@ OPTIMIZE TABLE nullnull.rmt_user_distinct FINAL;
 
 ### 14.2 通过Group By去重
 
+```sql
+# 执行去重语句
+select 
+	user_id,
+	argMax(score,create_time) as score,
+	argMax(deleted,create_time) as deleted,
+	max(create_time) as ctime
+from nullnull.rmt_user_distinct
+group by user_id
+having deleted=0;
+
+# argMax(field1,field2) 按照field2的最大值取field1的值
+# 当更新数据时，会写入一行新的数据，查询时间最大的create_time，得到修改后的scopre的字段值
+
+
+# 数据修改操作，插入一条数据
+insert into table nullnull.rmt_user_distinct(user_id,score,create_time)
+values(0,'A4',now());
+
+# 再次查询
+select 
+	user_id,
+	argMax(score,create_time) as score,
+	argMax(deleted,create_time) as deleted,
+	max(create_time) as ctime
+from nullnull.rmt_user_distinct
+group by user_id
+having deleted=0
+and user_id=0;
+
+# 结果
+Query id: 7237e8d7-b6d4-4562-9402-3efb8ce2fe86
+
+┌─user_id─┬─score─┬─deleted─┬───────────────ctime─┐
+│       0 │ A4    │       0 │ 2024-11-15 12:38:36 │
+└─────────┴───────┴─────────┴─────────────────────┘
+
+1 rows in set. Elapsed: 0.002 sec. Processed 8.19 thousand rows, 196.63 KB (3.63 million rows/s., 87.16 MB/s.)
+─────────┴───────┴─────────┴─────────────────────┘
+
+# 数据删除操作，再添加一条数据
+insert into table nullnull.rmt_user_distinct(user_id,score,deleted,create_time)
+values(0,'delete',1,now());
+
+# 再次查询,数据查询不到了
+select 
+	user_id,
+	argMax(score,create_time) as score,
+	argMax(deleted,create_time) as deleted,
+	max(create_time) as ctime
+from nullnull.rmt_user_distinct
+group by user_id
+having deleted=0
+and user_id=0;
+
+Ok.
+
+0 rows in set. Elapsed: 0.003 sec. Processed 8.19 thousand rows, 196.66 KB (3.16 million rows/s., 75.89 MB/s.)
+
+
+# 数据插入操作
+insert into table nullnull.rmt_user_distinct(user_id,score,create_time)
+values(0,'A5',now());
+
+select 
+	user_id,
+	argMax(score,create_time) as score,
+	argMax(deleted,create_time) as deleted,
+	max(create_time) as ctime
+from nullnull.rmt_user_distinct
+group by user_id
+having deleted=0
+and user_id=0;
+
+# 结果
+Query id: e5ed1fda-a5db-43d0-9a96-a084cfd3cbf4
+
+┌─user_id─┬─score─┬─deleted─┬───────────────ctime─┐
+│       0 │ A5    │       0 │ 2024-11-15 12:42:46 │
+└─────────┴───────┴─────────┴─────────────────────┘
+
+1 rows in set. Elapsed: 0.005 sec. Processed 8.20 thousand rows, 196.68 KB (1.71 million rows/s., 41.03 MB/s.)
+
+
+# 最后，查看下刚刚那些记录
+select 
+	*
+from nullnull.rmt_user_distinct
+where user_id=0;
+
+# 结果响应
+Query id: e2dd9cbb-60d9-42ad-aed7-728d88fcd3ee
+
+┌─user_id─┬─score─┬─deleted─┬─────────create_time─┐
+│       0 │ AA    │       0 │ 2024-11-15 09:15:19 │
+└─────────┴───────┴─────────┴─────────────────────┘
+┌─user_id─┬─score─┬─deleted─┬─────────create_time─┐
+│       0 │ A4    │       0 │ 2024-11-15 12:38:36 │
+└─────────┴───────┴─────────┴─────────────────────┘
+┌─user_id─┬─score──┬─deleted─┬─────────create_time─┐
+│       0 │ delete │       1 │ 2024-11-15 12:40:38 │
+└─────────┴────────┴─────────┴─────────────────────┘
+┌─user_id─┬─score─┬─deleted─┬─────────create_time─┐
+│       0 │ A5    │       0 │ 2024-11-15 12:42:46 │
+└─────────┴───────┴─────────┴─────────────────────┘
+
+4 rows in set. Elapsed: 0.002 sec. Processed 8.20 thousand rows, 196.68 KB (3.54 million rows/s., 84.95 MB/s.)
+
+```
+
+
+
+### 14.3 通过FINAL查询
+
+在查询语句后增加FINAL修饰符，这样在查询的过程中将会执行Merge的特殊逻辑。
+
+但这种方法在早期版本基本没有人使用，因为在增加FINAL后，我们的查询将会变成一个单线程的执行过程。查询速度非常的慢。
+
+在V20.5.2.7-stable版本中，FINAL查询支持多线程执行，并且可以通过Max_final_threads参数控制单个查询的线程数，但是目前读取part部分的动作依然是串行的。
+
+```sql
+# 执行查询
+select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 settings max_threads = 2;
+
+100 rows in set. Elapsed: 0.036 sec. Processed 13.43 thousand rows, 20.25 MB (375.24 thousand rows/s., 565.83 MB/s.)
+
+# 查看执行计划
+explain pipeline select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 settings max_threads = 2;
+
+Query id: a336024f-6af2-474a-88d8-0c352c45adf9
+
+┌─explain─────────────────────────┐
+│ (Expression)                    │
+│ ExpressionTransform × 2         │
+│   (SettingQuotaAndLimits)       │
+│     (Limit)                     │
+│     Limit 2 → 2                 │
+│       (ReadFromMergeTree)       │
+│       MergeTreeThread × 2 0 → 1 │
+└─────────────────────────────────┘
+
+7 rows in set. Elapsed: 0.044 sec. 
+
+
+explain pipeline select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 ;
+```
+
 
 
 
