@@ -7818,9 +7818,103 @@ Code: 241. DB::Exception: Received from localhost:9000. DB::Exception: Memory li
 
 通过增加过滤可以减少数据扫描，达到提高执行速度及降低内存消耗的目的。
 
-
-
 ## 14 数据一致性
+
+针对ClickHouse，即便是对数据一致性最好的MergeTree，也只保证最终一致性。
+
+**ReplacingMergeTree**
+
+该引擎和MergeTree的不同之处在于它会删除排序键值相同的重复项。
+
+数据的去重只会在数据合并期间进行。合并会在后台一个不确定的时间进行，因此无法预先作出计划。有一些数据可能仍未被处理。尽管可以调用`OPTIMIZE`语句发起计划外的合并，但不能依靠它，因为`OPTIMIZE`语句会发数据的大量读写。
+
+因此,`ReplacingMergeTree`适用于在后台清除重复的数据以节省空间，但是它并不保证没有重复数据出现。
+
+我们在使用时`ReplacingMergeTree`、`SummmingMergeTree`这类表引擎的时候 ，会出现短暂数据不一致的情况
+
+针对一致性敏感的场景，可以有以下三种解决方案：
+
+数据准备：
+
+```sql
+CREATE TABLE nullnull.rmt_user_distinct(
+ user_id UInt64,
+ score String,
+ deleted UInt8 DEFAULT 0,
+ create_time DateTime DEFAULT toDateTime(0)
+)ENGINE= ReplacingMergeTree(create_time)
+ORDER BY user_id;
+
+# user_id 是数据去重更新的标识
+# create_time 是版本号，每组数据中create_time最大的一行表示最新的数据；
+# deleted是自定的一个标识位，比如0代表未删除，1代表删除数据。
+
+
+# 写入1000万和测试数据
+INSERT INTO TABLE nullnull.rmt_user_distinct(user_id,score)
+WITH(
+ SELECT ['A','B','C','D','E','F','G']
+)AS dict
+SELECT number AS user_id, dict[number%7+1] FROM numbers(10000000);
+
+
+# 修改前 100 万 行数据，修改内容包括 name 字段和 create_time 版本号字段
+INSERT INTO TABLE nullnull.rmt_user_distinct(user_id,score,create_time)
+WITH(
+ SELECT ['AA','BB','CC','DD','EE','FF','GG']
+)AS dict
+SELECT number AS user_id, dict[number%7+1], now() AS create_time FROM numbers(1000000);
+
+
+# 统计总数
+SELECT COUNT() FROM nullnull.rmt_user_distinct;
+11000000
+```
+
+
+
+### 14.1  手动执行OPTIMIZE
+
+经慎重，生产环境操作可能会阻塞其他SQL的执行。
+
+在写入数据后，立刻执行OPTIMIZE强制触 发新写入分区的合并动作。
+
+```sh
+OPTIMIZE TABLE nullnull.rmt_user_distinct FINAL;
+
+#语法：OPTIMIZE TABLE [db.]name [ON CLUSTER cluster] [PARTITION partition | PARTITION ID 'partition_id'] [FINAL] [DEDUPLICATE [BY expression]]
+```
+
+查看日志
+
+```sh
+[root@ck ~]# clickhouse-client -h 127.0.0.1 --send_logs_level=trace <<< " OPTIMIZE TABLE nullnull.rmt_user_distinct FINAL;" > /dev/null
+[ck] 2024.11.15 09:16:27.440947 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> executeQuery: (from 127.0.0.1:58160, using production parser)  OPTIMIZE TABLE nullnull.rmt_user_distinct FINAL; 
+[ck] 2024.11.15 09:16:27.441065 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Trace> ContextAccess (default): Access granted: OPTIMIZE ON nullnull.rmt_user_distinct
+[ck] 2024.11.15 09:16:27.441096 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb) (MergerMutator): Selected 6 parts from all_1_6_1 to all_11_11_0
+[ck] 2024.11.15 09:16:27.441123 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> DiskLocal: Reserving 46.73 MiB on disk `default`, having unreserved 36.61 GiB.
+[ck] 2024.11.15 09:16:27.441142 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb) (MergerMutator): Merging 6 parts: from all_1_6_1 to all_11_11_0 into Wide
+[ck] 2024.11.15 09:16:27.441165 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb) (MergerMutator): Selected MergeAlgorithm: Horizontal
+[ck] 2024.11.15 09:16:27.441192 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 769 marks from part all_1_6_1, total 6291270 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.441351 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 129 marks from part all_7_7_0, total 1048545 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.441445 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 129 marks from part all_8_8_0, total 1048545 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.441524 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 129 marks from part all_9_9_0, total 1048545 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.441585 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 70 marks from part all_10_10_0, total 563095 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.441653 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MergeTreeSequentialSource: Reading 124 marks from part all_11_11_0, total 1000000 rows starting from the beginning of the part
+[ck] 2024.11.15 09:16:27.983530 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb) (MergerMutator): Merge sorted 11000000 rows, containing 4 columns (4 merged, 0 gathered) in 0.542382502 sec., 20280890.256301075 rows/sec., 446.61 MiB/sec.
+[ck] 2024.11.15 09:16:27.983872 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Trace> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb): Renaming temporary part tmp_merge_all_1_11_2 to all_1_11_2.
+[ck] 2024.11.15 09:16:27.983946 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Trace> nullnull.rmt_user_distinct (044f1314-5c27-45eb-844f-13145c27f5eb) (MergerMutator): Merged 6 parts: from all_1_6_1 to all_11_11_0
+[ck] 2024.11.15 09:16:27.983964 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MemoryTracker: Peak memory usage: 25.00 MiB.
+[ck] 2024.11.15 09:16:27.984016 [ 1362 ] {e5ae49f7-9913-48ff-9821-2ecbbb4a9edd} <Debug> MemoryTracker: Peak memory usage (for query): 25.00 MiB.
+
+
+[root@ck ~]# clickhouse-client -h 127.0.0.1 --query  "SELECT COUNT() FROM nullnull.rmt_user_distinct;"
+10000000
+```
+
+
+
+### 14.2 通过Group By去重
 
 
 
