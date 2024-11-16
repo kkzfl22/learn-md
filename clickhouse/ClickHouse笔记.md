@@ -8034,7 +8034,7 @@ Query id: e2dd9cbb-60d9-42ad-aed7-728d88fcd3ee
 
 但这种方法在早期版本基本没有人使用，因为在增加FINAL后，我们的查询将会变成一个单线程的执行过程。查询速度非常的慢。
 
-在V20.5.2.7-stable版本中，FINAL查询支持多线程执行，并且可以通过Max_final_threads参数控制单个查询的线程数，但是目前读取part部分的动作依然是串行的。
+在V20.5.2.7-stable版本中，FINAL查询支持多线程执行，并且可以通过Max_final_threads参数控制单个查询的线程数，21.7版本中读取part部分的动作依然是串行的。22版本中，已经是并发执行了。
 
 ```sql
 # 执行查询
@@ -8042,7 +8042,7 @@ select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 settin
 
 100 rows in set. Elapsed: 0.036 sec. Processed 13.43 thousand rows, 20.25 MB (375.24 thousand rows/s., 565.83 MB/s.)
 
-# 查看执行计划
+# 查看执行计划，21.7.3.14版本中还存在部分串行
 explain pipeline select * from datasets.visits_v1 WHERE StartDate = '2014-03-17' limit 100 settings max_threads = 2;
 
 Query id: a336024f-6af2-474a-88d8-0c352c45adf9
@@ -8058,12 +8058,6 @@ Query id: a336024f-6af2-474a-88d8-0c352c45adf9
 └─────────────────────────────────┘
 
 7 rows in set. Elapsed: 0.044 sec. 
-
-
-
-
-explain pipeline select * from datasets.visits_v1 final WHERE StartDate = '2014-03-17' limit 100 settings max_final_threads = 2;
-
 
 
 
@@ -8093,9 +8087,244 @@ explain pipeline select * from datasets.visits_v1 final WHERE StartDate = '2014-
 
 20 rows in set. Elapsed: 0.069 sec. 
 
+```
 
 
 
+## 15. 物化视图
+
+官方地址：
+
+```sh
+https://clickhouse.com/docs/en/guides/developer/cascading-materialized-views
+```
+
+
+
+Clickhouse的物化视图是一种查询结果的持久化，它确实是给我们带来了查询效率的提升。用户查询查起来跟表没有区别，它就是一张表，它也像是一张时刻在计算的表。创建的过程它是用一种特殊的引擎，加上查询语句。
+
+物化视图的基础表不会随着基础表的变化而变化，所以它也称为快照。
+
+### 15.1 物化视图与普通视图的区别
+
+普通视图不保存数据，保存的仅仅是查询的语句，查询的时候还是从原表中读取数据，可以将普通视图理解为是个子查询。物化视图则是把查询的结果根据相应的引擎存入到了磁盘或者内存中，对数据重新进行了组织，可以理解物化视图完全是一张新的表。
+
+**优点**
+
+查询速度快，要是把物化视图的这些规则全部写入，它比原来查询语句快很多，总的行数少了，因为都预计算好了。
+
+**缺点**
+
+经的本质是一个流式数据的使用场景，是累加式的技术，如果要用历史数据做去重，去核这样的分析，在物化视图里是不太好用的。在某些场景的使用也是有限的。而且如果一张表加了好多的物化视图，在写这张表的时候，就会消耗很多的机器资源，比如数据带宽占满，存储一下子多了很多。
+
+
+
+**物化视图的语法**
+
+```sql
+CREATE MATERIALIZED VIEW [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster_name] [TO[db.]name] [ENGINE = engine] [POPULATE]
+[DEFINER = { user | CURRENT_USER }] [SQL SECURITY { DEFINER | INVOKER | NONE }]
+AS SELECT ...
+[COMMENT 'comment']
+
+# 注意POPULATE关键字，如果加上，则会进行历史数据的导入，时间较长。不建议使用 POPULATE因为在视图创建期间插入表中的数据不会插入到表中。
+
+```
+
+**创建物化视图的限制**
+
+1. 必须指定物化视图的engine用于存储。
+2.  [TO[db.]name] 不使用POPULATE
+3. 物化视图的alter操作有些限制，操作起来不太方便。
+4. 若视图定义使用了[TO[db.]name] 子语句，则可以将目标表的视图卸载 DETACH再装载ATTACH
+
+**物化视图的数据更新**
+
+1. 物化视图创建好之后，叵源表被写入新数据则物化视图也会同步更新
+2. POPULATE关键字决定了物化视图的更新策略。
+   1. 若有POPULATE则在创建视图的过程中会将源表已经存在的数据一并导入，类似于create table ...as
+   2. 若无POPULATE则物化视图在创建之后没有数据，只会在创建只有同步之后写入源表的数据
+   3. clickhouse官方并不推荐使用POPULATE，因为在创建物化视图的过程中同时写入的数据不能被插入物化视图。
+3. 物化视图不支持同步删除，若源表的数据不存在，则物化视图的数据仍然保留
+
+
+
+操作：
+
+```sh
+# 创建库
+CREATE DATABASE IF NOT EXISTS analytics;
+
+# 创建存储的数据表
+CREATE TABLE analytics.hits_data_mw
+(
+     EventDate Date, 
+     CounterID UInt32, 
+     UserID UInt64, 
+     URL String, 
+     Income UInt8
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(EventDate)
+ORDER BY (CounterID, EventDate, intHash32(UserID))
+SAMPLE BY intHash32(UserID)
+SETTINGS index_granularity = 8192;
+
+
+# 导入数据
+INSERT INTO analytics.hits_data_mw 
+ SELECT 
+ EventDate, CounterID, UserID, URL, Income 
+FROM datasets.hits_v1 limit 10000;
+
+
+
+# 创建物化视图,并存储
+CREATE MATERIALIZED VIEW analytics.hits_mv 
+ENGINE=SummingMergeTree
+PARTITION BY toYYYYMM(EventDate) 
+ORDER BY (EventDate, intHash32(UserID)) 
+AS SELECT
+UserID,
+EventDate,
+count(URL) as ClickCount,
+sum(Income) AS IncomeSum
+FROM analytics.hits_data_mw
+WHERE EventDate >= '2014-03-20' 
+GROUP BY UserID,EventDate;
+
+# 使用show table 查看表,可看到一张以.inner_id开始的表，此就是默认物化视图存储数据的表
+┌─name───────────────────────────────────────────┐
+│ .inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c │
+│ hits_data_mw                                   │
+│ hits_mv                                        │
+└────────────────────────────────────────────────┘
+
+
+#或者可以用下列语法，表 A 可以是一张 mergetree 表
+CREATE MATERIALIZED VIEW 物化视图名 TO 表 A
+AS SELECT FROM 表 B;
+
+
+# 导入增加数据
+INSERT INTO analytics.hits_data_mw 
+SELECT 
+ EventDate, CounterID, UserID, URL, Income 
+FROM datasets.hits_v1 
+WHERE EventDate >= '2014-03-23' 
+limit 10;
+
+
+#0 rows in set. Elapsed: 0.005 sec. Processed 8.19 thousand rows, 894.74 KB (1.58 million rows/s., 173.07 MB/s.)
+
+#查询物化视图
+SELECT * FROM analytics.hits_mv;
+# 可看到结果
+
+┌──────────────UserID─┬──EventDate─┬─ClickCount─┬─IncomeSum─┐
+│ 8585742290196126178 │ 2014-03-23 │          8 │        16 │
+│ 1095363898647626948 │ 2014-03-23 │          2 │         0 │
+└─────────────────────┴────────────┴────────────┴───────────┘
+
+2 rows in set. Elapsed: 0.002 sec. 
+
+# 再导入数据，进行查看
+INSERT INTO hits_mv
+SELECT UserID, EventDate, count(URL) as ClickCount, sum(Income) AS IncomeSum
+FROM analytics.hits_data_mw
+WHERE EventDate = '2014-03-20'
+GROUP BY UserID,EventDate;
+
+# 0 rows in set. Elapsed: 0.005 sec. Processed 10.00 thousand rows, 1.02 MB (1.87 million rows/s., 191.35 MB/s.)
+
+#查询物化视图
+SELECT * FROM analytics.hits_mv;
+# 可看到结果
+┌──────────────UserID─┬──EventDate─┬─ClickCount─┬─IncomeSum─┐
+│ 8585742290196126178 │ 2014-03-23 │          8 │        16 │
+│ 1095363898647626948 │ 2014-03-23 │          2 │         0 │
+└─────────────────────┴────────────┴────────────┴───────────┘
+┌───────────────UserID─┬──EventDate─┬─ClickCount─┬─IncomeSum─┐
+│  8682581061680449960 │ 2014-03-20 │         36 │         0 │
+......
+│  1913746513358768143 │ 2014-03-20 │          2 │         4 │
+└──────────────────────┴────────────┴────────────┴───────────┘
+
+341 rows in set. Elapsed: 0.003 sec. 
+```
+
+官方推荐的方操作:
+
+```sh
+# 官方推荐使用空表，可以在 Null 表上创建物化视图。因此，写入表的数据最终会影响视图，但原始数据仍将被丢弃。
+drop table analytics.hits_data_mw_null;
+
+CREATE TABLE analytics.hits_data_mw_null
+(
+ EventDate Date, 
+ CounterID UInt32, 
+ UserID UInt64, 
+ Income UInt8
+)
+ENGINE = Null;
+
+
+# 创建聚合引擎，用于汇聚数据指标
+drop table analytics.monthly_aggregated_data_agg;
+
+CREATE TABLE analytics.monthly_aggregated_data_agg
+(
+     EventDate Date, 
+     CounterID UInt32, 
+     UserID UInt64, 
+     Income UInt64,
+    `icomeSum` AggregateFunction(sum, UInt8),
+    `countNum` AggregateFunction(count, UInt64)
+)
+ENGINE = AggregatingMergeTree
+PARTITION BY toYYYYMM(EventDate) 
+ORDER BY (EventDate,UserID);
+
+
+# 创建物化视图，并将数据存储到聚合引擎中
+drop table analytics.monthly_aggregated_data_agg_mv;
+CREATE MATERIALIZED VIEW analytics.monthly_aggregated_data_agg_mv
+to analytics.monthly_aggregated_data_agg
+AS SELECT
+EventDate,
+CounterID,
+UserID,
+Income,
+sumState(Income) AS  icomeSum,
+countState(UserID) as countNum
+FROM analytics.hits_data_mw_null
+GROUP BY EventDate,CounterID,UserID,Income;
+
+# 向空表中导入数据
+INSERT INTO analytics.hits_data_mw_null 
+SELECT EventDate, CounterID, UserID, Income 
+ FROM datasets.hits_v1 
+WHERE EventDate >= '2014-03-23' 
+limit 20;
+
+#0 rows in set. Elapsed: 0.006 sec. Processed 8.19 thousand rows, 894.74 KB (1.34 million rows/s., 146.29 MB/s.)
+
+# 查询数据聚合引擎中的的存储信息
+select
+ EventDate, CounterID, UserID, Income,
+ sumMerge(icomeSum) as icomeSum,
+ countMerge(countNum) as countNum
+from analytics.monthly_aggregated_data_agg 
+group by EventDate,CounterID,UserID,Income ;
+
+# 查询结果：
+┌──EventDate─┬─CounterID─┬──────────────UserID─┬─Income─┬─icomeSum─┬─countNum─┐
+│ 2014-03-23 │        57 │ 1095363898647626948 │      0 │        0 │        2 │
+│ 2014-03-23 │        57 │ 4210364363248184944 │      2 │       20 │       10 │
+│ 2014-03-23 │        57 │ 8585742290196126178 │      2 │       16 │        8 │
+└────────────┴───────────┴─────────────────────┴────────┴──────────┴──────────┘
+
+3 rows in set. Elapsed: 0.003 sec. 
 ```
 
 
