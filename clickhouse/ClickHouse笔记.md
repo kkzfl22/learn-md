@@ -8388,6 +8388,10 @@ docker run --name mysql-5.7 -p 3306:3306 \
 -d mysql:5.7.44-oraclelinux7  \
 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
+
+firewall-cmd --permanent --zone=public --add-port=3306/tcp
+firewall-cmd --reload
+
 # 1. MySQL开启BinLog功能，且格式为ROW
 vi /opt/nullnull/mysql/conf/my.cnf
 [mysqld]
