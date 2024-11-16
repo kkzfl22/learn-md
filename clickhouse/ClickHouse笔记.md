@@ -8105,7 +8105,7 @@ Clickhouse的物化视图是一种查询结果的持久化，它确实是给我�
 
 物化视图的基础表不会随着基础表的变化而变化，所以它也称为快照。
 
-### 15.1 物化视图与普通视图的区别
+###  物化视图与普通视图的区别
 
 普通视图不保存数据，保存的仅仅是查询的语句，查询的时候还是从原表中读取数据，可以将普通视图理解为是个子查询。物化视图则是把查询的结果根据相应的引擎存入到了磁盘或者内存中，对数据重新进行了组织，可以理解物化视图完全是一张新的表。
 
@@ -8119,7 +8119,7 @@ Clickhouse的物化视图是一种查询结果的持久化，它确实是给我�
 
 
 
-**物化视图的语法**
+### **物化视图的语法**
 
 ```sql
 CREATE MATERIALIZED VIEW [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster_name] [TO[db.]name] [ENGINE = engine] [POPULATE]
@@ -8131,7 +8131,7 @@ AS SELECT ...
 
 ```
 
-**创建物化视图的限制**
+### **创建物化视图的限制**
 
 1. 必须指定物化视图的engine用于存储。
 2.  [TO[db.]name] 不使用POPULATE
@@ -8149,7 +8149,7 @@ AS SELECT ...
 
 
 
-操作：
+### 操作
 
 ```sh
 # 创建库
@@ -8253,7 +8253,7 @@ SELECT * FROM analytics.hits_mv;
 341 rows in set. Elapsed: 0.003 sec. 
 ```
 
-官方推荐的方操作:
+### 官方推荐
 
 ```sh
 # 官方推荐使用空表，可以在 Null 表上创建物化视图。因此，写入表的数据最终会影响视图，但原始数据仍将被丢弃。
@@ -8326,6 +8326,83 @@ group by EventDate,CounterID,UserID,Income ;
 
 3 rows in set. Elapsed: 0.003 sec. 
 ```
+
+
+
+## 16 MetarializeMySQL引擎
+
+注：此引擎Clickhouse官方已经不推荐使用。
+
+### 介绍
+
+MySQL的用户集体很大，为了能够增强数据的实时性，很多解决方案会利用BinLog将数据写入到ClickHouse，为了能够监听BinLog事件，我们需要用到类似cancal这样的第三方组件，这无疑增加了系统的复杂度。
+
+ClickHouse20.8.2.3 版本新增加了 MaterializeMySQL的database引擎，该database能映射到MySQL中的某个database，并自动在ClickHouse中创建对应的ReplcingMergeTree。ClickHouse服务做为MySQL副本，读取BinLog并执行DDL和DML请求，实现了基本于MySQL的BinLog机制的业务数据库实时同步功能。
+
+（1） MaterializeMySQL同时支持全量和增量同步，在database创建之初会全量同步MySQL中的表和数据，之后会通过BinLog进行增量同步。
+
+（2）MaterializeMySQL database为其创建的每张ReplacingMergeTree 自动增加了`_sign`和`_version`字段
+
+其中，`_version`用作ReplacingMergeTree的ver版本参数，每当监听到insert、update、和delete事件时，在database内全局自增。而`_sign`则用于标识是否被删除，取值1或者-1
+
+目前MaterializeMySQL支持如下几种binlog事件：
+
+- MYSQL_WRITE_ROWS_EVENT:  `_sign`=1,`_version`++
+- MYSQL_DELETE_ROWS_EVENT: `_sign`=-1,`_version`++
+- MYSQL_UPDATE_ROWS_EVENT: 新数据 `_sign`=1
+- MYSQL_QUERY_EVENT: 支持CREATE TABLE、DROP TABLE、RENAME TABLE等。
+
+### **细则**
+
+DDL查询
+
+MySQL DDL查询被转换成相应的Clickhouse DDL查询（ALTER,CREATE,DROP，RENAME）。
+
+如果Clickhouse不能解析某些DDL查询，该查询将被忽略。
+
+**数据复制**
+
+MaterializeMySQL不支持直接插入、删除和更新查询，而是将DDL语句进行相应的转换。
+
+1) MySQL INSERT 查询被转换为 INSERT with _sign=1
+2) MySQL DELETE 查询被转换为 INSERT with _sign=-1
+3) MySQL UPDATE 查询被转换成 INSERT with _sign=1 和 insert with _sign=1
+
+如果在SELECT查询中没有指定_version,则使用FINAL修饰，返回`_version`的最大值对应的数据，即最新版本的数据。
+
+如果在SELECT查询中没有指定`_sign`，则默认使用`where _sign=1`，返回未删除状态(`_sign`)的数据。
+
+ClickHouse数据库表会自动将MySQL主键和索引子句转换为Order By元组。
+
+ClickHouse只有一个物理顺序，由Order By子句决定，如果需要创建新的物理顺序，可以使用物化视图。
+
+
+
+### 案例
+
+```sh
+# 使用docker安装
+docker run --name mysql-5.7 -p 3306:3306 \
+-v /opt/nullnull/mysql/conf:/etc/mysql/conf.d \
+-e MYSQL_ROOT_PASSWORD=nullnull \
+-d mysql:5.7.44-oraclelinux7  \
+--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+# 1. MySQL开启BinLog功能，且格式为ROW
+vi /opt/nullnull/mysql/conf/my.cnf
+[mysqld]
+server-id=1 
+log-bin=mysql-bin
+binlog_format=ROW
+
+gtid-mode=on
+enforce-gtid-consistency=1
+log-slave-updates=1 
+```
+
+
+
+
 
 
 
