@@ -8402,14 +8402,16 @@ ClickHouse只有一个物理顺序，由Order By子句决定，如果需要创�
 
 ### 案例
 
+**1. mysql配制**
+
 ```sh
 # 使用docker安装
 docker run --name mysql-5.7 -p 3306:3306 \
 -v /opt/nullnull/mysql/conf:/etc/mysql/conf.d \
--v /opt/nullnull/mysql/logs:/logs 
--v /opt/nullnull/mysql/data:/var/lib/mysql
+-v /opt/nullnull/mysql/logs:/logs \
+-v /opt/nullnull/mysql/data:/var/lib/mysql \
 -e MYSQL_ROOT_PASSWORD=nullnull \
--d mysql:5.7.44-oraclelinux7  \
+-d mysql:5.7.27  \
 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
 
@@ -8417,6 +8419,8 @@ firewall-cmd --permanent --zone=public --add-port=3306/tcp
 firewall-cmd --reload
 
 # 1. MySQL开启BinLog功能，且格式为ROW
+# CK就20.8 prestable之后发布的版本，那么MySQL还需要配制开启GTID模式，这种方式在mysql主从模式下可以确保数据同步的一致性
+# GTID是MySQL复制的增强版，从MySQL5.6版本开始支持，目前已经是MySQL主流的复制模式，它分配一个全局唯一ID和序列号，我们可以不用关心MySQL集群评价拓扑结构，直接告知MySQL这个GTID即可。
 vi /opt/nullnull/mysql/conf/my.cnf
 [mysqld]
 server-id=1 
@@ -8425,8 +8429,287 @@ binlog_format=ROW
 
 gtid-mode=on
 enforce-gtid-consistency=1
-log-slave-updates=1 
+log-slave-updates=1
+
+# 重启MySQL
+docker restart mysql-5.7
+
 ```
+
+**2. MySQL库表创建**
+
+```sql
+CREATE DATABASE nullnull_ck;
+-- 组织表
+CREATE TABLE `nullnull_ck`.`t_organization` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `code` int NOT NULL,
+ `name` text DEFAULT NULL,
+ `updatetime` datetime DEFAULT NULL,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY (`code`)
+) ENGINE=InnoDB;
+
+-- 插入数据
+INSERT INTO nullnull_ck.t_organization (code, name,updatetime) 
+VALUES(1000,'总经理',NOW());
+INSERT INTO nullnull_ck.t_organization (code, name,updatetime) 
+VALUES(1001, '财务部',NOW());
+INSERT INTO nullnull_ck.t_organization (code, name,updatetime) 
+VALUES(1002,'人事部',NOW());
+
+# 用户表
+CREATE TABLE `nullnull_ck`.`t_user` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `code` int,
+ `name` varchar(64) DEFAULT NULL,
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+
+INSERT INTO nullnull_ck.t_user (code,name) VALUES(1,'nullnull');
+
+```
+
+**3. CK开启MySQL物化引擎**
+
+```sh
+clickhouse-client 
+
+set allow_experimental_database_materialize_mysql=1;
+```
+
+
+
+**4. 创建复制管道**
+
+```sh
+CREATE DATABASE nullnull_binlog ENGINE=MaterializeMySQL('192.168.5.22:3306','nullnull_ck','root','nullnull');
+```
+
+**5. 查看CK中表的数据**
+
+```sql
+use nullnull_binlog;
+
+show tables;
+┌─name───────────┐
+│ t_organization │
+│ t_user         │
+└────────────────┘
+
+select * from t_organization;
+┌─id─┬─code─┬─name───┬──────────updatetime─┐
+│  1 │ 1000 │ 总经理 │ 2024-11-18 15:32:39 │
+│  2 │ 1001 │ 财务部 │ 2024-11-18 15:32:39 │
+│  3 │ 1002 │ 人事部 │ 2024-11-18 15:32:39 │
+└────┴──────┴────────┴─────────────────────┘
+3 rows in set. Elapsed: 0.003 sec. 
+
+select * from t_user;
+┌─id─┬─code─┬─name─────┐
+│  1 │    1 │ nullnull │
+└────┴──────┴──────────┘
+1 rows in set. Elapsed: 0.002 sec. 
+
+```
+
+**6. 修改MySQL中表的数据**
+
+```sql
+update t_organization set name = '总经理-plus' where id = 1
+```
+
+**7. 检查CK日志 **
+
+/var/log/clickhouse-server/clickhouse-server.log 
+
+```sh
+2024.11.18 23:42:52.518967 [ 1943 ] {} <Debug> MaterializeMySQLSyncThread: Skip MySQL event: 
+=== GTIDEvent ===
+Timestamp: 1731944572
+Event Type: GTIDEvent
+Server ID: 1
+Event Size: 65
+Log Pos: 3345
+Flags: 0
+GTID Next: 5e7cda91-a5c0-11ef-8556-0242ac110002:11
+
+2024.11.18 23:42:52.519004 [ 1943 ] {} <Debug> MaterializeMySQLSyncThread: Skip MySQL event: 
+=== QueryEvent ===
+Timestamp: 1731944572
+Event Type: QueryEvent
+Server ID: 1
+Event Size: 79
+Log Pos: 3424
+Flags: 8
+[DryRun Event]
+
+2024.11.18 23:42:52.519017 [ 1943 ] {} <Debug> MaterializeMySQLSyncThread: Skip MySQL event: 
+=== TableMapEvent ===
+Timestamp: 1731944572
+Event Type: TableMapEvent
+Server ID: 1
+Event Size: 69
+Log Pos: 3493
+Flags: 0
+Table ID: 112
+Flags: 1
+Schema Len: 11
+Schema: nullnull_ck
+Table Len: 14
+Table: t_organization
+Column Count: 4
+Column Type [0]: 3, Meta: 0
+Column Type [1]: 3, Meta: 0
+Column Type [2]: 252, Meta: 2
+Column Type [3]: 18, Meta: 0
+Null Bitmap: 00001100
+
+2024.11.18 23:42:52.519096 [ 1943 ] {} <Debug> MaterializeMySQLSyncThread: Skip MySQL event: 
+=== XIDEvent ===
+Timestamp: 1731944572
+Event Type: XIDEvent
+Server ID: 1
+Event Size: 31
+Log Pos: 3615
+Flags: 0
+XID: 166
+
+2024.11.18 23:42:52.998345 [ 1943 ] {} <Debug> MemoryTracker: Peak memory usage (for query): 0.00 B.
+2024.11.18 23:42:52.998564 [ 1943 ] {} <Debug> executeQuery: (internal) /*Materialize MySQL step 1: execute dump data*/ INSERT INTO t_organization(id, code, name, updatetime, _sign, _version) VALUES
+2024.11.18 23:42:52.999196 [ 1943 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 37.66 GiB.
+2024.11.18 23:42:52.999750 [ 1943 ] {} <Trace> nullnull_binlog.t_organization (caa8fba8-98f6-43e9-8aa8-fba898f6b3e9): Renaming temporary part tmp_insert_0_4_4_0 to 0_4_4_0.
+2024.11.18 23:42:52.999914 [ 1943 ] {} <Information> MaterializeMySQLSyncThread: MySQL executed position: 
+ 
+=== Binlog Position ===
+Binlog: mysql-bin.000001
+Position: 3615
+GTIDSets: 5e7cda91-a5c0-11ef-8556-0242ac110002:1-11
+```
+
+**8. 查看CK同步的最新的数据**
+
+```sql
+select * from t_organization;
+
+┌─id─┬─code─┬─name────────┬──────────updatetime─┐
+│  1 │ 1000 │ 总经理-plus │ 2024-11-18 15:32:39 │
+│  2 │ 1001 │ 财务部      │ 2024-11-18 15:32:39 │
+│  3 │ 1002 │ 人事部      │ 2024-11-18 15:32:39 │
+└────┴──────┴─────────────┴─────────────────────┘
+
+3 rows in set. Elapsed: 0.003 sec. 
+
+```
+
+**9. 删除MySQL中的记录**·
+
+```sql
+DELETE FROM t_organization where id = 2;
+```
+
+**10.查看CK同步的数据**
+
+```sh
+# 检查查看被删除的账务部信息
+select * from t_organization;
+
+┌─id─┬─code─┬─name────────┬──────────updatetime─┐
+│  1 │ 1000 │ 总经理-plus │ 2024-11-18 15:32:39 │
+│  3 │ 1002 │ 人事部      │ 2024-11-18 15:32:39 │
+└────┴──────┴─────────────┴─────────────────────┘
+
+2 rows in set. Elapsed: 0.002 sec. 
+
+# 查看_sign和_version字段信息
+
+select *,_sign,_version from t_organization order by _sign desc,_version desc;
+
+┌─id─┬─code─┬─name────────┬──────────updatetime─┬─_sign─┬─_version─┐
+│  1 │ 1000 │ 总经理-plus │ 2024-11-18 15:32:39 │     1 │        4 │
+│  3 │ 1002 │ 人事部      │ 2024-11-18 15:32:39 │     1 │        1 │
+│  2 │ 1001 │ 财务部      │ 2024-11-18 15:32:39 │    -1 │        5 │
+└────┴──────┴─────────────┴─────────────────────┴───────┴──────────┘
+
+3 rows in set. Elapsed: 0.003 sec. 
+# 查询时，对于已经被删除的数据,_sign=-1,CK会自动重写SQL，将_sign=-1的数据过滤掉。
+```
+
+**11.删除user表**
+
+```sql
+drop table t_user;
+```
+
+**12. 至CK中查看**
+
+```sql
+show tables;
+┌─name───────────┐
+│ t_organization │
+└────────────────┘
+
+1 rows in set. Elapsed: 0.002 sec. 
+
+
+select * from t_user;
+Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Table nullnull_binlog.t_user doesn't exist. 
+
+```
+
+mysql再次建表
+
+```sql
+-- mysql再次新建表
+CREATE TABLE `nullnull_ck`.`t_user` (
+ `id` int(11) NOT NULL AUTO_INCREMENT,
+ `code` int,
+ `name` varchar(64) DEFAULT NULL,
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+
+INSERT INTO nullnull_ck.t_user (code,name) VALUES(1,'nullnull');
+```
+
+查询数据
+
+```sql
+-- 查询数据
+show tables;
+┌─name───────────┐
+│ t_organization │
+│ t_user         │
+└────────────────┘
+2 rows in set. Elapsed: 0.002 sec. 
+
+select * from t_user;
+┌─id─┬─code─┬─name─────┐
+│  1 │    1 │ nullnull │
+└────┴──────┴──────────┘
+1 rows in set. Elapsed: 0.003 sec. 
+```
+
+
+
+
+
+
+
+## 17. MaterializedPostgreSQL
+
+此引擎在 version 21.12之后加入。
+
+开启配制
+
+```sh
+SET allow_experimental_database_materialized_postgresql=1
+```
+
+
+
+
 
 
 
