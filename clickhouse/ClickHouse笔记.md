@@ -3848,6 +3848,18 @@ INSERT INTO his_wafer FROM INFILE '/var/log/clickhouse-server/data.native' FORMA
 
 
 
+方式4：
+
+使用命令行执插入SQL
+
+```sql
+clickhouse-client --password= --user=  --send_logs_level=trace   <<< "$(cat /home/data/xxsx.sql)" > /dev/null
+```
+
+
+
+
+
 
 
 ### 9.2  分区操作
