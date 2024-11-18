@@ -1,3 +1,13 @@
+
+
+
+
+
+
+
+
+
+
 # ClickHouse笔记
 
 ## 1. ClickHouse介绍
@@ -8384,6 +8394,8 @@ ClickHouse只有一个物理顺序，由Order By子句决定，如果需要创�
 # 使用docker安装
 docker run --name mysql-5.7 -p 3306:3306 \
 -v /opt/nullnull/mysql/conf:/etc/mysql/conf.d \
+-v /opt/nullnull/mysql/logs:/logs 
+-v /opt/nullnull/mysql/data:/var/lib/mysql
 -e MYSQL_ROOT_PASSWORD=nullnull \
 -d mysql:5.7.44-oraclelinux7  \
 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -8403,8 +8415,6 @@ gtid-mode=on
 enforce-gtid-consistency=1
 log-slave-updates=1 
 ```
-
-
 
 
 
