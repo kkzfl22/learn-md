@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 # ClickHouse笔记
 
 ## 1. ClickHouse介绍
@@ -8701,7 +8691,73 @@ select * from t_user;
 
 此引擎在 version 21.12之后加入。
 
-开启配制
+**1. 创建一个PostgreSQL数据库**
+
+```sh
+docker pull postgres:11.5
+
+
+docker run -d --name pgsql-11 \
+ --network host \
+ --restart always \
+ -e SSH_PORT=10022 \
+ -e POSTGRES_PASSWORD=nullnull \
+ -v /opt/nullnull/pgsql/data/:/var/lib/postgresql/data:z \
+postgres:11.5
+
+firewall-cmd --permanent --zone=public --add-port=5432/tcp
+firewall-cmd --reload
+```
+
+**2. 创建一个PostgreSQL数据库及表**
+
+```sql
+create database nullnull_pg_ck;
+
+-- 组织表
+CREATE TABLE nullnull_pg_ck.public.t_organization (
+ id Integer NOT NULL,
+ code Integer NOT NULL,
+ name varchar DEFAULT NULL,
+ updatetime TIMESTAMP(6) DEFAULT NULL
+);
+-- 唯一约束
+CREATE unique INDEX nullnull_pg_ck.public.t_org_unique_index on t_organization(id, code);
+-- 当 postgres_table 表中的数据发生变化时，PostgreSQL 会查看 postgres_table_index 索引中包含的列，并将这些列的变化记录在 WAL 日志中，以便逻辑复制过程可以使用这些信息
+ALTER TABLE nullnull_pg_ck.public.t_organization REPLICA IDENTITY USING INDEX t_org_unique_index;
+
+
+-- 插入数据
+INSERT INTO nullnull_pg_ck.public.t_organization (id,code, name,updatetime) 
+VALUES(1,1000,'总经理',NOW());
+INSERT INTO nullnull_pg_ck.public.t_organization (id,code, name,updatetime) 
+VALUES(2,1001, '财务部',NOW());
+INSERT INTO nullnull_pg_ck.public.t_organization (id,code, name,updatetime) 
+VALUES(3,1002,'人事部',NOW());
+
+-- 用户表
+drop table nullnull_pg_ck.public.t_user;
+
+CREATE TABLE nullnull_pg_ck.public.t_user (
+ id int NOT NULL,
+ code int  NOT NULL,
+ name varchar(64) DEFAULT NULL
+);
+
+-- 唯一约束
+CREATE unique INDEX t_user_unidex on t_user(id, code);
+-- 当 postgres_table 表中的数据发生变化时，PostgreSQL 会查看 postgres_table_index 索引中包含的列，并将这些列的变化记录在 WAL 日志中，以便逻辑复制过程可以使用这些信息
+ALTER TABLE t_user REPLICA IDENTITY USING INDEX t_user_unidex;
+
+
+INSERT INTO nullnull_pg_ck.public.t_user (id,code,name) VALUES(1,1,'nullnull');
+INSERT INTO nullnull_pg_ck.public.t_user (id,code,name) VALUES(2,2,'feifei');
+
+```
+
+
+
+**3. 开启引擎配制**
 
 ```sh
 SET allow_experimental_database_materialized_postgresql=1
