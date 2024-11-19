@@ -8963,6 +8963,42 @@ select *,_sign,_version from t_user order by _sign desc,_version desc;
 
 
 
+## 18 插入调优
+
+```sh
+# 插入控制参数
+SELECT getSetting('min_insert_block_size_rows');
+┌─getSetting('min_insert_block_size_rows')─┐
+│                                  1048449 │ -- 1.05 million
+└──────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.003 sec. 
+
+default: 1048545 million rows
+
+
+
+SELECT getSetting('min_insert_block_size_bytes');
+┌─getSetting('min_insert_block_size_bytes')─┐
+│                                 268402944 │ -- 268.40 million
+└───────────────────────────────────────────┘
+set min_insert_block_size_bytes=458333333
+
+1 row in set. Elapsed: 0.003 sec. 
+
+default: 256 MB
+
+
+SELECT getSetting('max_insert_threads');
+┌─getSetting('max_insert_threads')─┐
+│                                0 │
+└──────────────────────────────────┘
+1 row in set. Elapsed: 0.003 sec. 
+
+SELECT getSetting('max_insert_block_size');
+
+```
+
 
 
 
