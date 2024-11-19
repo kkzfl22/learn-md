@@ -8467,6 +8467,7 @@ INSERT INTO nullnull_ck.t_user (code,name) VALUES(1,'nullnull');
 clickhouse-client 
 
 set allow_experimental_database_materialize_mysql=1;
+
 ```
 
 
@@ -8687,7 +8688,19 @@ select * from t_user;
 
 
 
-## 17. MaterializedPostgreSQL
+## 17. MaterializedPostgreSQL引擎
+
+官网地址：
+
+```sh
+https://clickhouse.com/docs/en/engines/database-engines/materialized-postgresql
+```
+
+
+
+使用 PostgreSQL 数据库中的表创建 ClickHouse 数据库。首先，带有引擎 `MaterializedPostgreSQL` 的数据库创建 PostgreSQL 数据库的快照并加载所需的表。所需的表可以包括来自指定数据库的任何架构子集的任何表子集。随着快照数据库引擎获取 LSN，并且一旦执行表的初始转储，它就会开始从 WAL 中提取更新。创建数据库后，新添加到 PostgreSQL 数据库的表不会自动添加到复制中。必须使用 `ATTACH TABLE db.table` 查询手动添加它们。
+
+ClickHouse服务器作为PostgreSQL副本工作。它读取WAL并执行DML查询。DDL不是复制的，但可以处理
 
 此引擎在 version 21.12之后加入。
 
@@ -8707,6 +8720,13 @@ postgres:11.5
 
 firewall-cmd --permanent --zone=public --add-port=5432/tcp
 firewall-cmd --reload
+
+# 对默认的PG配制进行修改
+vi /opt/nullnull/pgsql/data/postgresql.conf
+# 将wal_level的值改为
+# minimal, replica, or logical
+# (change requires restart)
+wal_level = logical
 ```
 
 **2. 创建一个PostgreSQL数据库及表**
@@ -8760,10 +8780,184 @@ INSERT INTO nullnull_pg_ck.public.t_user (id,code,name) VALUES(2,2,'feifei');
 **3. 开启引擎配制**
 
 ```sh
+# 此处也使用docker安装24版本
+# 此处使用代理下载。
+docker pull dockerproxy.net/clickhouse/clickhouse-server:22.8.21.38-alpine
+
+
+docker stop clickhouse-22 && docker rm clickhouse-22
+
+
+# 注意此版本启动，需要手动在 /opt/nullnull/clickhouse/data/config/目录下放入ck的配制文件
+docker run -d --restart=always \
+--name clickhouse-22 \
+-p 8123:8123 \
+-p 9000:9000 \
+--ulimit nofile=262144:262144 \
+-v /opt/nullnull/clickhouse/data/config/:/etc/clickhouse-server:z \
+-v /opt/nullnull/clickhouse/data/data/:/var/lib/clickhouse:z \
+-v /opt/nullnull/clickhouse/data/log/:/var/log/clickhouse-server:z \
+clickhouse/clickhouse-server:22.8.21.38-alpine
+
+
+
+ clickhouse-client
+
+# 开启参数
 SET allow_experimental_database_materialized_postgresql=1
+
+# 有些输出证明设置成功
+SET allow_experimental_database_materialized_postgresql = 1
+Query id: 5dcefde0-e212-45bf-830f-d0170790ef24
+Ok.
+0 rows in set. Elapsed: 0.001 sec. 
+
+# 可通过系统表查看参数
+SELECT getSetting('allow_experimental_database_materialized_postgresql');
+
+┌─getSetting('allow_experimental_database_materialized_postgresql')─┐
+│ true                                                              │
+└───────────────────────────────────────────────────────────────────┘
+
+1 row in set. Elapsed: 0.001 sec. 
+
+# 系统参数表查看
+SELECT value FROM system.settings where name='allow_experimental_database_materialized_postgresql';
+
+┌─value─┐
+│ 1     │
+└───────┘
+
+1 row in set. Elapsed: 0.001 sec.
+
 ```
 
 
+
+**4. 在CK创建PG的同步表，并查看数据**
+
+```sql
+drop database IF  EXISTS nullnull_mpg ;
+
+CREATE DATABASE IF NOT EXISTS nullnull_mpg 
+ENGINE = MaterializedPostgreSQL('192.168.5.22:5432', 'nullnull_pg_ck', 'postgres', 'nullnull') 
+
+
+Ok.
+0 rows in set. Elapsed: 0.383 sec. 
+
+# 查看CK日志
+2024.11.19 05:43:52.816077 [ 171 ] {} <Debug> PostgreSQLConnection: New connection to 192.168.5.22:5432
+2024.11.19 05:43:52.816265 [ 171 ] {} <Debug> PostgreSQLReplicationHandler: Loading PostgreSQL table nullnull_pg_ck."t_user"
+2024.11.19 05:43:52.818443 [ 171 ] {} <Debug> StorageMaterializedPostgreSQL(nullnull_pg_ck.t_user): Creating clickhouse table for postgresql table nullnull_mpg.t_user
+2024.11.19 05:43:52.819885 [ 171 ] {} <Debug> nullnull_mpg.t_user (de0b0597-d603-45d0-a5cd-eb8f174ac37f): Loading data parts
+2024.11.19 05:43:52.820019 [ 171 ] {} <Debug> nullnull_mpg.t_user (de0b0597-d603-45d0-a5cd-eb8f174ac37f): There are no data parts
+2024.11.19 05:43:52.821493 [ 171 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 51.57 GiB.
+2024.11.19 05:43:52.821688 [ 171 ] {} <Trace> MergedBlockOutputStream: filled checksums all_1_1_0 (state Temporary)
+2024.11.19 05:43:52.821823 [ 171 ] {} <Trace> nullnull_mpg.t_user (de0b0597-d603-45d0-a5cd-eb8f174ac37f): Renaming temporary part tmp_insert_all_1_1_0 to all_1_1_0.
+2024.11.19 05:43:52.821966 [ 171 ] {} <Debug> PostgreSQLReplicationHandler: Loaded table nullnull_mpg.t_user (uuid: de0b0597-d603-45d0-a5cd-eb8f174ac37f)
+2024.11.19 05:43:52.822185 [ 171 ] {} <Debug> PostgreSQLReplicationHandler: Loading PostgreSQL table nullnull_pg_ck."t_organization"
+2024.11.19 05:43:52.823085 [ 171 ] {} <Debug> StorageMaterializedPostgreSQL(nullnull_pg_ck.t_organization): Creating clickhouse table for postgresql table nullnull_mpg.t_organization
+2024.11.19 05:43:53.028603 [ 171 ] {} <Debug> nullnull_mpg.t_organization (c5a4a6f1-002a-48b2-9a48-c843f5d403b6): Loading data parts
+2024.11.19 05:43:53.028708 [ 171 ] {} <Debug> nullnull_mpg.t_organization (c5a4a6f1-002a-48b2-9a48-c843f5d403b6): There are no data parts
+2024.11.19 05:43:53.030734 [ 171 ] {} <Debug> DiskLocal: Reserving 1.00 MiB on disk `default`, having unreserved 51.57 GiB.
+2024.11.19 05:43:53.031003 [ 171 ] {} <Trace> MergedBlockOutputStream: filled checksums all_1_1_0 (state Temporary)
+2024.11.19 05:43:53.031165 [ 171 ] {} <Trace> nullnull_mpg.t_organization (c5a4a6f1-002a-48b2-9a48-c843f5d403b6): Renaming temporary part tmp_insert_all_1_1_0 to all_1_1_0.
+2024.11.19 05:43:53.031280 [ 171 ] {} <Debug> PostgreSQLReplicationHandler: Loaded table nullnull_mpg.t_organization (uuid: c5a4a6f1-002a-48b2-9a48-c843f5d403b6)
+2024.11.19 05:43:53.031937 [ 171 ] {} <Trace> PostgreSQLReplicaConsumer(nullnull_pg_ck): Advanced LSN up to: 23834144
+2024.11.19 05:43:53.031955 [ 171 ] {} <Trace> PostgreSQLReplicaConsumer(nullnull_pg_ck): Starting replication. LSN: 23834144 (last: 23834144)
+2024.11.19 05:43:53.031987 [ 171 ] {} <Trace> StorageMaterializedPostgreSQL: New buffer for table nullnull_mpg.t_user (de0b0597-d603-45d0-a5cd-eb8f174ac37f), number of attributes: 3, number if columns: 5, structure: id Int32 Int32(size = 1), code Int32 Int32(size = 1), name Nullable(String) Nullable(size = 1, String(size = 1), UInt8(size = 1)), _sign Int8 Int8(size = 1), _version UInt64 UInt64(size = 1)
+2024.11.19 05:43:53.032051 [ 171 ] {} <Trace> StorageMaterializedPostgreSQL: New buffer for table nullnull_mpg.t_organization (c5a4a6f1-002a-48b2-9a48-c843f5d403b6), number of attributes: 4, number if columns: 6, structure: id Int32 Int32(size = 1), code Int32 Int32(size = 1), name Nullable(String) Nullable(size = 1, String(size = 1), UInt8(size = 1)), updatetime Nullable(DateTime64(6)) Nullable(size = 1, DateTime64(size = 1), UInt8(size = 1)), _sign Int8 Int8(size = 1), _version UInt64 UInt64(size = 1)
+2024.11.19 05:43:53.032136 [ 171 ] {} <Trace> MaterializedPostgreSQLDatabaseStartup: Execution took 1200 ms.
+
+# 查年表
+use nullnull_mpg;
+show tables;
+
+┌─name───────────┐
+│ t_organization │
+│ t_user         │
+└────────────────┘
+2 rows in set. Elapsed: 0.001 sec. 
+
+
+# 查看组织信息表
+select * from t_organization;
+┌─id─┬─code─┬─name───┬─────────────────updatetime─┐
+│  1 │ 1000 │ 总经理 │ 2024-11-19 09:35:00.783856 │
+│  2 │ 1001 │ 财务部 │ 2024-11-19 09:35:15.940007 │
+│  3 │ 1002 │ 人事部 │ 2024-11-19 09:35:15.942534 │
+└────┴──────┴────────┴────────────────────────────┘
+3 rows in set. Elapsed: 0.002 sec. 
+
+# 查看用户信息表
+select * from t_user;
+┌─id─┬─code─┬─name─────┐
+│  1 │    1 │ nullnull │
+│  2 │    2 │ feifei   │
+└────┴──────┴──────────┘
+2 rows in set. Elapsed: 0.002 sec. 
+```
+
+**5. 在CK创建PG的同步表，并查看数据**
+
+```sql
+update t_organization set name = '总经理-新' where id = 1;
+update t_user set name = 'nullnull-新' where id = 1;
+```
+
+**6. CK查看最新的数据**
+
+由于此是自动复制所以，立即查看CK中的PG表，数据已经同步成最新的。
+
+```sql
+# 查看组织信息表
+select * from t_organization;
+┌─id─┬─code─┬─name───┬─────────────────updatetime─┐
+│  2 │ 1001 │ 财务部 │ 2024-11-19 09:35:15.940007 │
+│  3 │ 1002 │ 人事部 │ 2024-11-19 09:35:15.942534 │
+└────┴──────┴────────┴────────────────────────────┘
+┌─id─┬─code─┬─name──────┬─────────────────updatetime─┐
+│  1 │ 1000 │ 总经理-新 │ 2024-11-19 09:35:00.783856 │
+└────┴──────┴───────────┴────────────────────────────┘
+↑ Progress: 0.00 rows, 0.00 B (0.00 rows/s., 0.00 B/s.)  
+
+# 查看用户信息表
+select * from t_user;
+┌─id─┬─code─┬─name────────┐
+│  1 │    1 │ nullnull-新 │
+└────┴──────┴─────────────┘
+┌─id─┬─code─┬─name───┐
+│  2 │    2 │ feifei │
+└────┴──────┴────────┘
+2 rows in set. Elapsed: 0.003 sec. 
+
+
+# 最新的组织结构表信息
+select *,_sign,_version from t_organization order by _sign desc,_version desc;
+
+┌─id─┬─code─┬─name──────┬─────────────────updatetime─┬─_sign─┬─_version─┐
+│  1 │ 1000 │ 总经理-新 │ 2024-11-19 09:35:00.783856 │     1 │ 23834424 │
+└────┴──────┴───────────┴────────────────────────────┴───────┴──────────┘
+┌─id─┬─code─┬─name───┬─────────────────updatetime─┬─_sign─┬─_version─┐
+│  1 │ 1000 │ 总经理 │ 2024-11-19 09:35:00.783856 │     1 │        1 │
+│  2 │ 1001 │ 财务部 │ 2024-11-19 09:35:15.940007 │     1 │        1 │
+│  3 │ 1002 │ 人事部 │ 2024-11-19 09:35:15.942534 │     1 │        1 │
+└────┴──────┴────────┴────────────────────────────┴───────┴──────────┘
+4 rows in set. Elapsed: 0.006 sec. 
+
+#最新的用户表信息
+select *,_sign,_version from t_user order by _sign desc,_version desc;
+
+┌─id─┬─code─┬─name────────┬─_sign─┬─_version─┐
+│  1 │    1 │ nullnull-新 │     1 │ 23834912 │
+└────┴──────┴─────────────┴───────┴──────────┘
+┌─id─┬─code─┬─name─────┬─_sign─┬─_version─┐
+│  1 │    1 │ nullnull │     1 │        1 │
+│  2 │    2 │ feifei   │     1 │        1 │
+└────┴──────┴──────────┴───────┴──────────┘
+3 rows in set. Elapsed: 0.003 sec. 
+```
 
 
 
