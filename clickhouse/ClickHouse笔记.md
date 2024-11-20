@@ -9013,9 +9013,48 @@ SELECT getSetting('max_insert_threads');
 
 SELECT getSetting('max_insert_block_size');
 
+
+SELECT getSetting('max_compress_block_size');
+SELECT getSetting('max_insert_block_size');
+
+SELECT getSetting('min_insert_block_size_bytes');
+   ┌─getSetting('max_compress_block_size')─┐
+1. │                               1048576 │ -- 1.05 million
+   └───────────────────────────────────────┘
+
 ```
 
 
+
+参数信息 
+
+```sh
+# 最大压缩块大小 
+max_compress_block_size
+
+# The maximum size of blocks of uncompressed data before compressing for writing to a table. By default, 1,048,576 (1 MiB). Specifying a smaller block size generally leads to slightly reduced compression ratio, the compression and decompression speed increases slightly due to cache locality, and memory consumption is reduced
+
+# 在压缩写入表之前未压缩数据块的最大大小。默认情况下，1,048,576 (1 MiB)。指定较小的块大小通常会导致压缩比稍微降低，压缩和解压缩速度由于缓存局部性而略有提高，并且内存消耗减少。
+#不要将压缩块（由字节组成的内存块）与查询处理块（表中的一组行）混淆。
+```
+
+
+
+
+
+## 19. ClickHouse监控
+
+ClickHouse运行时会将一些自身的运行状态记录到众多的表中（system.*)，所以对于CH自身的一些运行指标的监控数据，也主要来源这些系统表
+
+但是直接查询这些系统表会有一些不足之处：
+
+1， 这种方式太过底层，不够直观，我们还需要在此之上实现可视化展示。
+
+2， 系统表只记录了CH自身的运行指标，有些时候我们需要外部系统进行指标关联。
+
+现在promethens+Grafana的组合比较流行，安装简易上手，可以集成很多框架，包括服务器的负载，Promethens负责收集各类系统运行指标；Grafana负责可视化部分。
+
+ClickHouse从V20.1.2.4  开始，内置
 
 
 
