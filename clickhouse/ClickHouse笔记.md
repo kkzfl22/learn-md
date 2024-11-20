@@ -9054,7 +9054,179 @@ ClickHouse运行时会将一些自身的运行状态记录到众多的表中（s
 
 现在promethens+Grafana的组合比较流行，安装简易上手，可以集成很多框架，包括服务器的负载，Promethens负责收集各类系统运行指标；Grafana负责可视化部分。
 
-ClickHouse从V20.1.2.4  开始，内置
+ClickHouse从V20.1.2.4  开始，内置了对接Prometheus的功能，配制方式也很简单，可以将其作为Prometheus的EndPoint服务，从而自动将metrics、events和asynchronous_metrics的三张表的数据发送给Prometheus。
+
+
+
+### 19.1 安装Prometheus
+
+```sh
+Prometheus 下载地址：https://prometheus.io/download/
+```
+
+**安装Prometheus**
+
+Prometheus基于golang编写，编译后的软件包，不依赖于任何的第三方依赖，只需要下载对应平台的二进制包，解压并县城添加基本的配制即可正常启动Prometheus Server。
+
+```sh
+# 1 .上传压缩包,至服务器的目录,此处为 /opt/module 目录下
+
+# 2. 解压给文件包
+tar -zxvf prometheus-2.26.0.linux-amd64.tar.gz -C /opt/module/
+
+# 3. 修改目录名称
+cd /opt/module/
+mv prometheus-2.26.0.linux-amd64 prometheus-2.26.0
+```
+
+修改配制文件
+
+vi prometheus-2.26.0/prometheus.yml
+
+```yaml
+# my global config
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['localhost:9090']
+    
+  - job_name: 'clickhouse-1'
+    static_config:
+      - targets: ['192.168.5.66:9363']      
+```
+
+配制说明：
+
+```yaml
+# 1. global配制块： 控制Prometheus服务器的全局配制
+#	scrape_interval 配制摘取数据的时间间隔，默认为1分钟。
+#	evaluation_interval 规则验证，（生成alert)时间间隔，默认为1分钟。
+
+# 2. rule_files 配制块，规则配制文件。
+
+# 3. scrape_configs 配制块： 配制采集目录相关，prometheus监控的目录，Prometheus自身的运行信息可以通过HTTP访问，所以Prometheus可以监控自己的运行数据。
+#     job_name： 监控作业的名称
+#     static_configs: 表示静态目录配制，就是固定从某个target摘取数据。
+#     targets: 指定监控的目录，其实就是从哪拉取数据。Prometheus从 http://192.168.5.66:9363/metrics上摘取数据
+```
+
+**启动Prometheus Server**
+
+```sh
+nohup ./prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
+
+firewall-cmd --permanent --zone=public --add-port=9090/tcp
+firewall-cmd --reload
+
+```
+
+
+
+**访问**
+
+http://192.168.5.66:9090/ 选择 "Status" --> Targets
+
+![image-20241120224459026](.\images\image-20241120224459026.png)
+
+prometheus是up状态，表示安装启动成功。
+
+### 19.2 安装Grafana
+
+```sh
+Grafana 下载地址：https://grafana.com/grafana/download
+```
+
+安装
+
+```sh
+# 1 .上传压缩包,至服务器的目录,此处为 /opt/module 目录下
+
+# 2. 解压给文件包
+tar -zxvf grafana-7.5.2.linux-amd64.tar.gz -C /opt/module/
+
+# 3. 修改目录名称
+cd /opt/module/
+mv grafana-7.5.2.linux-amd64 grafana-7.5.2
+
+# 4. 启动Grafana
+nohup ./bin/grafana-server web > ./grafana.log 2>&1 &
+
+firewall-cmd --permanent --zone=public --add-port=3000/tcp
+firewall-cmd --reload
+
+# 5. 浏览器访问
+http://192.168.5.66:3000 默认用户名称密码: admin/admin
+```
+
+
+
+### 19.3 ClickHouse配制
+
+vi /etc/clickhouse-server/config.xml
+
+```xml
+<!-- 默认此是被注释掉的，需要打开-->
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <status_info>true</status_info>
+    </prometheus>
+
+```
+
+重启clickhouse
+
+```sh
+clickhouse restart
+
+
+firewall-cmd --permanent --zone=public --add-port=9363/tcp
+firewall-cmd --reload
+```
+
+浏览器查看
+
+http://192.168.5.66:9363/metrics
+
+```sh
+# HELP ClickHouseProfileEvents_Query Number of queries to be interpreted and potentially executed. Does not include queries that failed to parse or were rejected due to AST size limits, quota limits or limits on the number of simultaneously running queries. May include internal queries initiated by ClickHouse itself. Does not count subqueries.
+# TYPE ClickHouseProfileEvents_Query counter
+ClickHouseProfileEvents_Query 0
+# HELP ClickHouseProfileEvents_SelectQuery Same as Query, but only for SELECT queries.
+# TYPE ClickHouseProfileEvents_SelectQuery counter
+ClickHouseProfileEvents_SelectQuery 0
+......
+```
+
+
 
 
 
