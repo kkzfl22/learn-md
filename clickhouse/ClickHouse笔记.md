@@ -9056,7 +9056,7 @@ ClickHouse运行时会将一些自身的运行状态记录到众多的表中（s
 
 ClickHouse从V20.1.2.4  开始，内置了对接Prometheus的功能，配制方式也很简单，可以将其作为Prometheus的EndPoint服务，从而自动将metrics、events和asynchronous_metrics的三张表的数据发送给Prometheus。
 
-
+Prometheus和Grafana需要放在其他机器上,与CK不要放同一台机器上
 
 ### 19.1 安装Prometheus
 
@@ -9137,7 +9137,7 @@ scrape_configs:
 **启动Prometheus Server**
 
 ```sh
-nohup ./prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
+nohup /opt/module/prometheus-2.26.0/prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
 
 firewall-cmd --permanent --zone=public --add-port=9090/tcp
 firewall-cmd --reload
@@ -9173,7 +9173,7 @@ cd /opt/module/
 mv grafana-7.5.2.linux-amd64 grafana-7.5.2
 
 # 4. 启动Grafana
-nohup ./bin/grafana-server web > ./grafana.log 2>&1 &
+nohup /opt/module/grafana-7.5.2/bin/grafana-server web > ./grafana.log 2>&1 &
 
 firewall-cmd --permanent --zone=public --add-port=3000/tcp
 firewall-cmd --reload
@@ -9225,6 +9225,10 @@ ClickHouseProfileEvents_Query 0
 ClickHouseProfileEvents_SelectQuery 0
 ......
 ```
+
+
+
+### 19.4 Grafana集成Prometheus
 
 
 
