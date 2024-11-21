@@ -9137,7 +9137,7 @@ scrape_configs:
 **启动Prometheus Server**
 
 ```sh
-nohup /opt/module/prometheus-2.26.0/prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
+3000
 
 firewall-cmd --permanent --zone=public --add-port=9090/tcp
 firewall-cmd --reload
