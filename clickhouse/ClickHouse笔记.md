@@ -9137,6 +9137,8 @@ scrape_configs:
 **启动Prometheus Server**
 
 ```sh
+cd /opt/module/prometheus-2.26.0
+nohup ./prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
 3000
 
 firewall-cmd --permanent --zone=public --add-port=9090/tcp
@@ -9173,7 +9175,8 @@ cd /opt/module/
 mv grafana-7.5.2.linux-amd64 grafana-7.5.2
 
 # 4. 启动Grafana
-nohup /opt/module/grafana-7.5.2/bin/grafana-server web > ./grafana.log 2>&1 &
+cd /opt/module/grafana-7.5.2
+nohup ./bin/grafana-server web > ./grafana.log 2>&1 &
 
 firewall-cmd --permanent --zone=public --add-port=3000/tcp
 firewall-cmd --reload
@@ -9229,6 +9232,13 @@ ClickHouseProfileEvents_SelectQuery 0
 
 
 ### 19.4 Grafana集成Prometheus
+
+
+
+```sh
+# 获取模板的地址：
+https://grafana.com/grafana/dashboards/
+```
 
 
 
