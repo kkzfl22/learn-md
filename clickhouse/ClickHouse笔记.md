@@ -9139,7 +9139,7 @@ scrape_configs:
 ```sh
 cd /opt/module/prometheus-2.26.0
 nohup ./prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
-3000
+
 
 firewall-cmd --permanent --zone=public --add-port=9090/tcp
 firewall-cmd --reload
@@ -9233,14 +9233,211 @@ ClickHouseProfileEvents_SelectQuery 0
 
 ### 19.4 Grafana集成Prometheus
 
-
-
 ```sh
 # 获取模板的地址：
 https://grafana.com/grafana/dashboards/
+
+# 目前选择的是
+https://grafana.com/api/dashboards/14192/revisions/4/download
+
+# 名称： 14192_rev4.json
+# 此处将其重命名为：14192-clickhouse_rev4.json
+
 ```
 
+**打开Prometheus，检查服务状态**
 
+```sh
+http://192.168.5.66:9090/targets
+```
+
+可以看到状态信息:
+
+![image-20241122101303999](.\images\image-20241122101303999.png)
+
+**集成配制grafana**
+
+```sh
+# 默认用户名称密码: admin/admin
+http://192.168.5.66:3000 
+
+# 添加数据源
+
+```
+
+![image-20241122101523281](.\images\image-20241122101523281.png)
+
+配制信息:
+
+选择"Prometheus"
+
+![image-20241122101730369](.\images\image-20241122101730369.png)
+
+添加相关的配制信息
+
+```sh
+# 1. 填写一个名称：Prometheus-66
+# 名称可以随便定义
+
+# 2. 填写地址：192.168.5.66:9090
+# 此地址必须按真实的填写，在Prometheus开放的就是9090端口
+
+# 其他按需填写，我都没有填写
+
+# 点击 "Save & Test" 再点击 "back"
+```
+
+![image-20241122102116535](.\images\image-20241122102116535.png)
+
+**配制CK的监控**
+
+选择导入
+
+![image-20241122102313106](.\images\image-20241122102313106.png)
+
+再次 "Upload JSON file"
+
+![image-20241122102531970](.\images\image-20241122102531970.png)
+
+选择文件：
+
+![image-20241122102712762](.\images\image-20241122102712762.png)
+
+选择数据源
+
+![image-20241122102805668](.\images\image-20241122102805668.png)
+
+然后即可查看CK的相关监控信息
+
+![image-20241122102950963](.\images\image-20241122102950963.png)
+
+### 19.5 **集成节点监控**
+
+**开启node节点监控服务**
+
+```sh
+# 下载服务器监控安装
+https://github.com/prometheus/node_exporter/releases/download/v1.5.0/node_exporter-1.5.0.linux-amd64.tar.gz
+
+# 启动命令
+cd /opt/module/node_exporter-1.5.0
+nohup ./node_exporter --web.listen-address=":9100" > ./node_exporter.log  2>&1 &
+```
+
+相关配制参数
+
+```sh
+--web.listen-address=":9100"  
+#node_exporter监听的端口，默认是9100，若需要修改则通过此参数。
+
+--web.telemetry-path="/metrics"  
+#获取metric信息的url，默认是/metrics，若需要修改则通过此参数
+
+--log.level="info" 
+#设置日志级别
+
+--log.format="logger:stderr"  
+#设置打印日志的格式，若有自动化日志提取工具可以使用这个参数规范日志打印的格式
+
+# 以下内容不常用
+--collector.diskstats.ignored-devices="^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"
+#通过正则表达式忽略某些磁盘的信息收集
+
+--collector.filesystem.ignored-mount-points="^/(dev|proc|sys|var/lib/docker/.+)($|/)"  
+#通过正则表达式忽略某些文件系统挂载点的信息收集
+
+--collector.filesystem.ignored-fs-types="^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"  
+#通过正则表达式忽略某些文件系统类型的信息收集
+
+--collector.netclass.ignored-devices="^$"  
+#通过正则表达式忽略某些网络类的信息收集
+
+--collector.netdev.ignored-devices="^$"  
+#通过正则表达式忽略某些网络设备的信息收集
+
+  --collector.netstat.fields="^$"
+ #通过正则表达式配置需要获取的网络状态信息
+ 
+--collector.vmstat.fields="^(oom_kill|pgpg|pswp|pg.*fault).*" 
+#通过正则表达式配置vmstat返回信息中需要收集的选项
+```
+
+**配制prometheus**
+
+vi /opt/module/prometheus-2.26.0/prometheus.yml
+
+```yaml
+
+# my global config
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['192.168.5.66:9090']
+  - job_name: 'clickhouse-1'
+    static_configs:
+    - targets: ['192.168.5.66:9363']
+  - job_name: 'clickhouse-92'
+    static_configs:
+    - targets: ['192.168.3.92:9363']
+  - job_name: node
+    static_configs:
+      - targets: ['192.168.5.66:9100']
+```
+
+**重启prometheus**
+
+```sh
+# 重启
+ps -ef | grep prometheus
+kill -9 进程ID
+
+cd /opt/module/prometheus-2.26.0
+nohup ./prometheus --config.file=prometheus.yml > ./prometheus.log 2>&1 &
+
+```
+
+检查状态
+
+![image-20241122103941104](.\images\image-20241122103941104.png)
+
+按同样的方法配制节点的监控，此时已经不再需要配制数据源，重用之前的即可
+
+```sh
+# 下载公用配制
+https://grafana.com/api/dashboards/1860/revisions/22/download
+
+# 重命令为:1860_node_rev22.json
+```
+
+再次选择导入文件，即可查看节点的状态信息：
+
+![image-20241122104342982](D:\work\nullnull\learn\learn-md\clickhouse\images\image-20241122104342982.png)
+
+至此节点监控已经完成。
 
 
 
