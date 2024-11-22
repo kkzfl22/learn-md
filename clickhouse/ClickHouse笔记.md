@@ -9435,9 +9435,92 @@ https://grafana.com/api/dashboards/1860/revisions/22/download
 
 再次选择导入文件，即可查看节点的状态信息：
 
-![image-20241122104342982](D:\work\nullnull\learn\learn-md\clickhouse\images\image-20241122104342982.png)
+![image-20241122104342982](.\images\image-20241122104342982.png)
 
 至此节点监控已经完成。
+
+
+
+
+
+## 20 数据备份与恢复
+
+Clickhouse允许使用`ALTER TABLE ... FREEZE PARTITION ...` 查询以创建表分区的本地副本。这是利用硬链接(hardlink)到 /var/lib/clickhouse/shadow/ 文件夹中实现的，所以它通常不会因为旧数据而占用额外的磁盘空间，创建的文件副本不由Clickhouse服务器处理，所以不需要任何额外的外部系统就有一个简单的备份，防止硬件问题，最好将它们远程复制到另一个位置，然后删除本地副本。
+
+官网地址：
+
+```sh
+https://clickhouse.com/docs/en/operations/backup
+```
+
+`ALTER TABLE ... FREEZE PARTITION ...` 此命令并不会影响Clickhouse的执行。
+
+数据可以使用 `ALTER TABLE ... ATTACH PARTITION ...` 从备份中恢复。
+
+### 手动备份操作步骤
+
+```sh
+# 1. 创建用于备份的数据目录
+mkdir -p /var/lib/clickhouse/shadow/
+# 需要授权
+chown -R  clickhouse:clickhouse /var/lib/clickhouse/shadow/
+
+# 2. 执行备份命令
+echo -n 'alter table nullnull.hits_v2 freeze' | clickhouse-client
+# 数据备份已经完成。可至目录下查看文件列表
+
+# 3. 保存建表语句
+clickhouse-client -m --query='show create table nullnull.hits_v2'  --format=TabSeparatedRaw   > hits_v2_create.sql
+
+# 3. 将备份数据保存至其他路径上
+cd /var/lib/clickhouse/shadow/ 
+# 打包
+tar -zcvf hits_v2-2024-11-22.tar.gz  *
+# 备份到远程其他机器
+scp hits_v2-2024-11-22.tar.gz root@192.168.5.36:/home/bak
+
+# 4. 清除shadow下的数据
+cd /var/lib/clickhouse/shadow/ 
+rm -rf /var/lib/clickhouse/shadow/*
+```
+
+文件目录
+
+```sh
+.
+├── 1
+│   └── store
+│       └── 656
+│           └── 6566ba84-7615-4d2f-a566-ba847615fd2f
+│               ├── 201403_37_67_2
+│               │   ├── AdvEngineID.bin
+│               │   ├── AdvEngineID.mrk2
+│               │   ├── ......
+│               │   ├── YCLID.bin
+│               │   └── YCLID.mrk2
+│               └── 201403_68_68_0
+│                   ├── AdvEngineID.bin
+│                   ├── AdvEngineID.mrk2
+│                   ├── ......
+│                   ├── WithHash.bin
+│                   ├── WithHash.mrk2
+│                   ├── YCLID.bin
+│                   └── YCLID.mrk2
+└── increment.txt
+
+6 directories, 575 files
+```
+
+### 手动恢复操作步骤
+
+```sh
+# 1.将表进行删除操作
+echo -n 'drop table nullnull.hits_v2 freeze' | clickhouse-client
+
+
+```
+
+
 
 
 
