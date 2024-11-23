@@ -1,5 +1,7 @@
 # ClickHouse笔记
 
+
+
 ## 1. ClickHouse介绍
 
 官网地址：
@@ -9472,12 +9474,19 @@ echo -n 'alter table nullnull.hits_v2 freeze' | clickhouse-client
 # 3. 保存建表语句
 clickhouse-client -m --query='show create table nullnull.hits_v2'  --format=TabSeparatedRaw   > hits_v2_create.sql
 
+
+cp /var/lib/clickhouse/metadata/nullnull/hits_v2.sql /var/lib/clickhouse/shadow/
+
 # 3. 将备份数据保存至其他路径上
 cd /var/lib/clickhouse/shadow/ 
 # 打包
 tar -zcvf hits_v2-2024-11-22.tar.gz  *
 # 备份到远程其他机器
 scp hits_v2-2024-11-22.tar.gz root@192.168.5.36:/home/bak
+
+
+echo -n '$(cat /var/lib/clickhouse/shadow/hits_v2.sql)' | clickhouse-client
+
 
 # 4. 清除shadow下的数据
 cd /var/lib/clickhouse/shadow/ 
@@ -9515,12 +9524,772 @@ rm -rf /var/lib/clickhouse/shadow/*
 
 ```sh
 # 1.将表进行删除操作
-echo -n 'drop table nullnull.hits_v2 freeze' | clickhouse-client
+echo -n 'drop table nullnull.hits_v2' | clickhouse-client
 
+
+# 2. 从远程下载备份的文件
+cd /var/lib/clickhouse/shadow/
+scp root@192.168.5.36:/home/bak/hits_v2-2024-11-22.tar.gz .
+# 进行解压操作
+tar -zxvf hits_v2-2024-11-22.tar.gz 
+
+# 执行表的创建操作
+clickhouse-client --send_logs_level=trace <<< "$(cat /var/lib/clickhouse/shadow/hits_v2_create.sql)"  > /dev/null
+
+
+# 将数据拷贝至数据目录
+# clickhouse使用文件硬链接来实现即时备份，而不会导致Clickhouse服务停机（或者锁定），这些硬链接可以进一步有效的备份存储，将cp与-l标识一起使用，以避免复制重复数据。
+cp -rl /var/lib/clickhouse/shadow/1/store/656/6566ba84-7615-4d2f-a566-ba847615fd2f/* /var/lib/clickhouse/data/nullnull/hits_v2/detached
+
+
+
+# 加载表分区
+# 进行用户组的变更，以防止权限问题
+cd /var/lib/clickhouse/data/nullnull/hits_v2/detached
+chown  -R clickhouse:clickhouse *
+echo 'alter table nullnull.hits_v2 attach partition 201403' | clickhouse-client
+
+
+# 检查数据
+echo 'select count(1) from nullnull.hits_v2' | clickhouse-client
 
 ```
 
 
+
+
+
+### 自动备份与恢复
+
+上面的过程可以使用Clickhouse的备份工具clickhouse-backup帮我们自动化实现。
+
+github地址:
+
+```sh
+https://github.com/Altinity/clickhouse-backup
+```
+
+下载备份工具
+
+```sh
+https://github.com/Altinity/clickhouse-backup/releases/download/v2.6.3/clickhouse-backup-2.6.3-1.x86_64.rpm
+```
+
+将工具上传服务器,并安装
+
+```sh
+ rpm -ivh clickhouse-backup-2.6.3-1.x86_64.rpm 
+ 
+ # 查看配制文件
+cd /etc/clickhouse-backup/
+cp config.yml.example config.yml
+ 
+
+```
+
+备份相关的参数
+
+```sh
+[root@ck clickhouse-backup]# clickhouse-backup --help
+NAME:
+   clickhouse-backup - Tool for easy backup of ClickHouse with cloud support
+
+USAGE:
+   clickhouse-backup <command> [-t, --tables=<db>.<table>] <backup_name>
+
+VERSION:
+   2.6.3
+
+DESCRIPTION:
+   Run as 'root' or 'clickhouse' user
+
+COMMANDS:
+   tables               List of tables, exclude skip_tables
+   create               Create new backup
+   create_remote        Create and upload new backup
+   upload               Upload backup to remote storage
+   list                 List of backups
+   download             Download backup from remote storage
+   restore              Create schema and restore data from backup
+   restore_remote       Download and restore
+   delete               Delete specific backup
+   default-config       Print default config
+   print-config         Print current config merged with environment variables
+   clean                Remove data in 'shadow' folder from all 'path' folders available from 'system.disks'
+   clean_remote_broken  Remove all broken remote backups
+   watch                Run infinite loop which create full + incremental backup sequence to allow efficient backup sequences
+   server               Run API server
+   help, h              Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --config value, -c value                   Config 'FILE' name. (default: "/etc/clickhouse-backup/config.yml") [$CLICKHOUSE_BACKUP_CONFIG]
+   --environment-override value, --env value  override any environment variable via CLI parameter
+   --help, -h                                 show help
+   --version, -v                              print the version
+```
+
+配制说明
+
+如果有指定用户名和密码，需要修改clickhouse中的参数配制
+
+vi config.yml
+
+```yaml
+general:
+    remote_storage: none
+    max_file_size: 0
+    backups_to_keep_local: 0
+    backups_to_keep_remote: 0
+    log_level: info
+    allow_empty_backups: false
+    download_concurrency: 2
+    upload_concurrency: 1
+    upload_max_bytes_per_second: 0
+    download_max_bytes_per_second: 0
+    object_disk_server_side_copy_concurrency: 32
+    allow_object_disk_streaming: false
+    use_resumable_state: true
+    restore_schema_on_cluster: ""
+    upload_by_part: true
+    download_by_part: true
+    restore_database_mapping: {}
+    restore_table_mapping: {}
+    retries_on_failure: 3
+    retries_pause: 5s
+    watch_interval: 1h
+    full_interval: 24h
+    watch_backup_name_template: shard{shard}-{type}-{time:20060102150405}
+    sharded_operation_mode: ""
+    cpu_nice_priority: 15
+    io_nice_priority: idle
+    rbac_backup_always: true
+    rbac_conflict_resolution: recreate
+    retriesduration: 5s
+    watchduration: 1h0m0s
+    fullduration: 24h0m0s
+clickhouse:
+    username: default   
+    password: ""  
+    host: localhost
+    port: 9000
+    disk_mapping: {}
+    skip_tables:
+        - system.*
+        - INFORMATION_SCHEMA.*
+        - information_schema.*
+        - _temporary_and_external_tables.*
+    skip_table_engines: []
+    timeout: 30m
+    freeze_by_part: false
+    freeze_by_part_where: ""
+    use_embedded_backup_restore: false
+    embedded_backup_disk: ""
+    backup_mutations: true
+    restore_as_attach: false
+    check_parts_columns: true
+    secure: false
+    skip_verify: false
+    sync_replicated_tables: false
+    log_sql_queries: true
+    config_dir: /etc/clickhouse-server/
+    restart_command: exec:systemctl restart clickhouse-server
+    ignore_not_exists_error_during_freeze: true
+    check_replicas_before_attach: true
+    default_replica_path: /clickhouse/tables/{cluster}/{shard}/{database}/{table}
+    default_replica_name: '{replica}'
+    tls_key: ""
+    tls_cert: ""
+    tls_ca: ""
+    max_connections: 2
+    debug: false
+s3:
+    access_key: ""
+    secret_key: ""
+    bucket: ""
+    endpoint: ""
+    region: us-east-1
+    acl: private
+    assume_role_arn: ""
+    force_path_style: false
+    path: ""
+    object_disk_path: ""
+    disable_ssl: false
+    compression_level: 1
+    compression_format: tar
+    sse: ""
+    sse_kms_key_id: ""
+    sse_customer_algorithm: ""
+    sse_customer_key: ""
+    sse_customer_key_md5: ""
+    sse_kms_encryption_context: ""
+    disable_cert_verification: false
+    use_custom_storage_class: false
+    storage_class: STANDARD
+    custom_storage_class_map: {}
+    concurrency: 3
+    part_size: 0
+    max_parts_count: 4000
+    allow_multipart_download: false
+    object_labels: {}
+    request_payer: ""
+    check_sum_algorithm: ""
+    debug: false
+gcs:
+    credentials_file: ""
+    credentials_json: ""
+    credentials_json_encoded: ""
+    embedded_access_key: ""
+    embedded_secret_key: ""
+    skip_credentials: false
+    bucket: ""
+    path: ""
+    object_disk_path: ""
+    compression_level: 1
+    compression_format: tar
+    debug: false
+    force_http: false
+    endpoint: ""
+    storage_class: STANDARD
+    object_labels: {}
+    custom_storage_class_map: {}
+    client_pool_size: 32
+    chunk_size: 0
+cos:
+    url: ""
+    timeout: 2m
+    secret_id: ""
+    secret_key: ""
+    path: ""
+    object_disk_path: ""
+    compression_format: tar
+    compression_level: 1
+    debug: false
+api:
+    listen: localhost:7171
+    enable_metrics: true
+    enable_pprof: false
+    username: ""
+    password: ""
+    secure: false
+    certificate_file: ""
+    private_key_file: ""
+    ca_cert_file: ""
+    ca_key_file: ""
+    create_integration_tables: false
+    integration_tables_host: ""
+    allow_parallel: false
+    complete_resumable_after_restart: true
+    watch_is_main_process: false
+ftp:
+    address: ""
+    timeout: 2m
+    username: ""
+    password: ""
+    tls: false
+    skip_tls_verify: false
+    path: ""
+    object_disk_path: ""
+    compression_format: tar
+    compression_level: 1
+    concurrency: 6
+    debug: false
+sftp:
+    address: ""
+    port: 22
+    username: ""
+    password: ""
+    key: ""
+    path: ""
+    object_disk_path: ""
+    compression_format: tar
+    compression_level: 1
+    concurrency: 6
+    debug: false
+azblob:
+    endpoint_schema: https
+    endpoint_suffix: core.windows.net
+    account_name: ""
+    account_key: ""
+    sas: ""
+    use_managed_identity: false
+    container: ""
+    path: ""
+    object_disk_path: ""
+    compression_level: 1
+    compression_format: tar
+    sse_key: ""
+    buffer_size: 0
+    buffer_count: 3
+    max_parts_count: 256
+    timeout: 4h
+    debug: false
+custom:
+    upload_command: ""
+    download_command: ""
+    list_command: ""
+    delete_command: ""
+    command_timeout: 4h
+    commandtimeoutduration: 4h0m0s
+```
+
+
+
+
+
+查看可以备份的表
+
+ clickhouse-backup tables
+
+```sh
+[root@ck clickhouse-backup]# clickhouse-backup tables
+2024-11-23 11:01:43.903 INF pkg/clickhouse/clickhouse.go:128 > clickhouse connection prepared: tcp://localhost:9000 run ping
+2024-11-23 11:01:43.904 INF pkg/clickhouse/clickhouse.go:131 > clickhouse connection success: tcp://localhost:9000
+2024-11-23 11:01:43.904 INF pkg/clickhouse/clickhouse.go:1076 > SELECT name, count(*) as is_present FROM system.settings WHERE name IN (?, ?) GROUP BY name with args [show_table_uuid_in_table_create_query_if_not_nil display_secrets_in_show_and_select]
+2024-11-23 11:01:43.906 INF pkg/clickhouse/clickhouse.go:1078 > SELECT name FROM system.databases WHERE engine IN ('MySQL','PostgreSQL','MaterializedPostgreSQL')
+2024-11-23 11:01:43.908 INF pkg/clickhouse/clickhouse.go:1078 >    SELECT     countIf(name='data_path') is_data_path_present,     countIf(name='data_paths') is_data_paths_present,     countIf(name='uuid') is_uuid_present,     countIf(name='create_table_query') is_create_table_query_present,     countIf(name='total_bytes') is_total_bytes_present    FROM system.columns WHERE database='system' AND table='tables'  
+2024-11-23 11:01:43.912 INF pkg/clickhouse/clickhouse.go:1078 > SELECT database, name, engine , data_paths , uuid , create_table_query , coalesce(total_bytes, 0) AS total_bytes   FROM system.tables WHERE is_temporary = 0 ORDER BY total_bytes DESC SETTINGS show_table_uuid_in_table_create_query_if_not_nil=1
+2024-11-23 11:01:43.931 INF pkg/clickhouse/clickhouse.go:1078 > SELECT metadata_path FROM system.tables WHERE database = 'system' AND metadata_path!='' LIMIT 1;
+2024-11-23 11:01:43.934 INF pkg/clickhouse/clickhouse.go:1078 > SELECT sum(bytes_on_disk) as size FROM system.parts WHERE active AND database='default' AND table='alias_example' GROUP BY database, table
+2024-11-23 11:01:43.935 INF pkg/clickhouse/clickhouse.go:1078 > SELECT value FROM `system`.`build_options` where name='VERSION_INTEGER'
+2024-11-23 11:01:43.937 INF pkg/clickhouse/clickhouse.go:1078 > SELECT countIf(name='type') AS is_disk_type_present, countIf(name='object_storage_type') AS is_object_storage_type_present, countIf(name='free_space') AS is_free_space_present, countIf(name='disks') AS is_storage_policy_present FROM system.columns WHERE database='system' AND table IN ('disks','storage_policies') 
+2024-11-23 11:01:43.938 INF pkg/clickhouse/clickhouse.go:1078 > SELECT d.path AS path, any(d.name) AS name, any(d.type) AS type, min(d.free_space) AS free_space, groupUniqArray(s.policy_name) AS storage_policies FROM system.disks AS d  LEFT JOIN (SELECT policy_name, arrayJoin(disks) AS disk FROM system.storage_policies) AS s ON s.disk = d.name GROUP BY d.path
+nullnull.hits_v2                                          1.18GiB    default  full
+datasets.hits_v1                                          1.18GiB    default  full
+datasets.visits_v1                                        533.56MiB  default  full
+nullnull.visits_v2                                        528.29MiB  default  full
+nullnull.rmt_user_distinct                                38.62MiB   default  full
+nullnull.visits_limit_200000                              3.70MiB    default  full
+analytics.hits_data_mw                                    294.83KiB  default  full
+nullnull.replicatemt_user                                 161.12KiB  default  full
+analytics..inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c  4.90KiB    default  full
+nullnull_binlog.t_organization                            556B       default  full
+analytics.monthly_aggregated_data_agg                     468B       default  full
+nullnull_binlog.t_user                                    418B       default  full
+null_demo.user_null                                       0B         default  full
+default.alias_example                                     0B         default  full
+analytics.monthly_aggregated_data_agg_mv                  0B         default  full
+analytics.hits_mv                                         0B         default  full
+analytics.hits_data_mw_null                               0B                  full
+2024-11-23 11:01:43.941 INF pkg/clickhouse/clickhouse.go:325 > clickhouse connection closed
+```
+
+创建备份
+
+clickhouse-backup create
+
+```sh
+[root@ck clickhouse-backup]# clickhouse-backup create
+2024-11-23 11:03:50.599 INF pkg/clickhouse/clickhouse.go:128 > clickhouse connection prepared: tcp://localhost:9000 run ping
+2024-11-23 11:03:50.600 INF pkg/clickhouse/clickhouse.go:131 > clickhouse connection success: tcp://localhost:9000
+2024-11-23 11:03:50.600 INF pkg/clickhouse/clickhouse.go:1078 > SELECT metadata_path FROM system.tables WHERE database = 'system' AND metadata_path!='' LIMIT 1;
+2024-11-23 11:03:50.604 INF pkg/clickhouse/clickhouse.go:1078 > SELECT name, engine FROM system.databases WHERE NOT match(name,'^(system|INFORMATION_SCHEMA|information_schema|_temporary_and_external_tables)$')
+2024-11-23 11:03:50.605 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `analytics`
+2024-11-23 11:03:50.607 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `datasets`
+2024-11-23 11:03:50.607 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `default`
+2024-11-23 11:03:50.608 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `null_demo`
+2024-11-23 11:03:50.610 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `nullnull`
+2024-11-23 11:03:50.610 INF pkg/clickhouse/clickhouse.go:1078 > SHOW CREATE DATABASE `nullnull_binlog`
+2024-11-23 11:03:50.611 INF pkg/clickhouse/clickhouse.go:1076 > SELECT name, count(*) as is_present FROM system.settings WHERE name IN (?, ?) GROUP BY name with args [show_table_uuid_in_table_create_query_if_not_nil display_secrets_in_show_and_select]
+2024-11-23 11:03:50.614 INF pkg/clickhouse/clickhouse.go:1078 > SELECT name FROM system.databases WHERE engine IN ('MySQL','PostgreSQL','MaterializedPostgreSQL')
+2024-11-23 11:03:50.615 INF pkg/clickhouse/clickhouse.go:1078 >    SELECT     countIf(name='data_path') is_data_path_present,     countIf(name='data_paths') is_data_paths_present,     countIf(name='uuid') is_uuid_present,     countIf(name='create_table_query') is_create_table_query_present,     countIf(name='total_bytes') is_total_bytes_present    FROM system.columns WHERE database='system' AND table='tables'  
+2024-11-23 11:03:50.617 INF pkg/clickhouse/clickhouse.go:1078 > SELECT database, name, engine , data_paths , uuid , create_table_query , coalesce(total_bytes, 0) AS total_bytes   FROM system.tables WHERE is_temporary = 0 ORDER BY total_bytes DESC SETTINGS show_table_uuid_in_table_create_query_if_not_nil=1
+2024-11-23 11:03:50.625 INF pkg/clickhouse/clickhouse.go:1078 > SELECT metadata_path FROM system.tables WHERE database = 'system' AND metadata_path!='' LIMIT 1;
+2024-11-23 11:03:50.626 INF pkg/clickhouse/clickhouse.go:1078 > SELECT sum(bytes_on_disk) as size FROM system.parts WHERE active AND database='default' AND table='alias_example' GROUP BY database, table
+2024-11-23 11:03:50.628 INF pkg/clickhouse/clickhouse.go:1078 > SELECT count() as cnt FROM system.columns WHERE database='system' AND table='functions' AND name='create_query' SETTINGS empty_result_for_aggregation_by_empty_set=0
+2024-11-23 11:03:50.630 INF pkg/clickhouse/clickhouse.go:1078 > SELECT value FROM `system`.`build_options` where name='VERSION_INTEGER'
+2024-11-23 11:03:50.631 INF pkg/clickhouse/clickhouse.go:1078 > SELECT countIf(name='type') AS is_disk_type_present, countIf(name='object_storage_type') AS is_object_storage_type_present, countIf(name='free_space') AS is_free_space_present, countIf(name='disks') AS is_storage_policy_present FROM system.columns WHERE database='system' AND table IN ('disks','storage_policies') 
+2024-11-23 11:03:50.633 INF pkg/clickhouse/clickhouse.go:1078 > SELECT d.path AS path, any(d.name) AS name, any(d.type) AS type, min(d.free_space) AS free_space, groupUniqArray(s.policy_name) AS storage_policies FROM system.disks AS d  LEFT JOIN (SELECT policy_name, arrayJoin(disks) AS disk FROM system.storage_policies) AS s ON s.disk = d.name GROUP BY d.path
+2024-11-23 11:03:50.634 INF pkg/clickhouse/clickhouse.go:1078 > SELECT name FROM system.user_directories WHERE type='replicated'
+2024-11-23 11:03:50.635 INF pkg/clickhouse/clickhouse.go:1078 > SELECT JSONExtractString(params,'path') AS access_path FROM system.user_directories WHERE type='local directory'
+2024-11-23 11:03:50.645 INF pkg/backup/create.go:177 > done createBackupRBAC size=0B
+2024-11-23 11:03:50.645 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [nullnull hits_v2]
+2024-11-23 11:03:50.645 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [datasets hits_v1]
+2024-11-23 11:03:50.648 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`hits_v2` FREEZE WITH NAME 'dcd409f262cc402fb10cd0228c2f6c94';
+2024-11-23 11:03:50.648 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `datasets`.`hits_v1` FREEZE WITH NAME 'a346b962ce7e4510a9003e2866aae8d1';
+2024-11-23 11:03:50.884 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`hits_v2` UNFREEZE WITH NAME 'dcd409f262cc402fb10cd0228c2f6c94'
+2024-11-23 11:03:50.888 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull hits_v2]
+2024-11-23 11:03:50.890 INF pkg/backup/create.go:344 > done progress=1/85 table=nullnull.hits_v2
+2024-11-23 11:03:50.890 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [datasets visits_v1]
+2024-11-23 11:03:50.893 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `datasets`.`visits_v1` FREEZE WITH NAME '79b7974bf5554c9088553d7c16573c8e';
+2024-11-23 11:03:50.928 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `datasets`.`hits_v1` UNFREEZE WITH NAME 'a346b962ce7e4510a9003e2866aae8d1'
+2024-11-23 11:03:50.932 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [datasets hits_v1]
+2024-11-23 11:03:50.934 INF pkg/backup/create.go:344 > done progress=2/85 table=datasets.hits_v1
+2024-11-23 11:03:50.934 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [nullnull visits_v2]
+2024-11-23 11:03:50.937 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`visits_v2` FREEZE WITH NAME '0ea0a38f585346a39b4989363ae48239';
+2024-11-23 11:03:52.458 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `datasets`.`visits_v1` UNFREEZE WITH NAME '79b7974bf5554c9088553d7c16573c8e'
+2024-11-23 11:03:52.462 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [datasets visits_v1]
+2024-11-23 11:03:52.465 INF pkg/backup/create.go:344 > done progress=3/85 table=datasets.visits_v1
+2024-11-23 11:03:52.465 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [nullnull rmt_user_distinct]
+2024-11-23 11:03:52.469 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`rmt_user_distinct` FREEZE WITH NAME '53f313a64c654511b80566e0a5f16f72';
+2024-11-23 11:03:59.702 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`rmt_user_distinct` UNFREEZE WITH NAME '53f313a64c654511b80566e0a5f16f72'
+2024-11-23 11:03:59.702 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`visits_v2` UNFREEZE WITH NAME '0ea0a38f585346a39b4989363ae48239'
+2024-11-23 11:03:59.704 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull visits_v2]
+2024-11-23 11:03:59.704 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull rmt_user_distinct]
+2024-11-23 11:03:59.706 INF pkg/backup/create.go:344 > done progress=4/85 table=nullnull.visits_v2
+2024-11-23 11:03:59.706 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [nullnull visits_limit_200000]
+2024-11-23 11:03:59.707 INF pkg/backup/create.go:344 > done progress=5/85 table=nullnull.rmt_user_distinct
+2024-11-23 11:03:59.707 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [analytics hits_data_mw]
+2024-11-23 11:03:59.707 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`visits_limit_200000` FREEZE WITH NAME 'a2247d4277fc42ec8fa946c5f191c02a';
+2024-11-23 11:03:59.708 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`hits_data_mw` FREEZE WITH NAME '7eaa4f920d314257b03e76cb554f4027';
+2024-11-23 11:03:59.716 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`hits_data_mw` UNFREEZE WITH NAME '7eaa4f920d314257b03e76cb554f4027'
+2024-11-23 11:03:59.716 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics hits_data_mw]
+2024-11-23 11:03:59.718 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`visits_limit_200000` UNFREEZE WITH NAME 'a2247d4277fc42ec8fa946c5f191c02a'
+2024-11-23 11:03:59.719 INF pkg/backup/create.go:344 > done progress=10/85 table=analytics.hits_data_mw
+2024-11-23 11:03:59.719 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [nullnull replicatemt_user]
+2024-11-23 11:03:59.721 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull visits_limit_200000]
+2024-11-23 11:03:59.722 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`replicatemt_user` FREEZE WITH NAME 'cd639550fd6f4ec8b51fb9ffbdeff98a';
+2024-11-23 11:03:59.722 INF pkg/backup/create.go:344 > done progress=7/85 table=nullnull.visits_limit_200000
+2024-11-23 11:03:59.722 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [analytics .inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c]
+2024-11-23 11:03:59.725 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`.inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c` FREEZE WITH NAME '016194d86a464e07bdc5cf8deb0dbcbb';
+2024-11-23 11:03:59.726 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`replicatemt_user` UNFREEZE WITH NAME 'cd639550fd6f4ec8b51fb9ffbdeff98a'
+2024-11-23 11:03:59.726 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull replicatemt_user]
+2024-11-23 11:03:59.728 INF pkg/backup/create.go:344 > done progress=11/85 table=nullnull.replicatemt_user
+2024-11-23 11:03:59.728 WRN pkg/backup/create.go:756 > supports only schema backup backup=2024-11-23T03-03-50 engine=MaterializeMySQL operation=create table=nullnull_binlog.t_organization
+2024-11-23 11:03:59.728 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull_binlog t_organization]
+2024-11-23 11:03:59.730 INF pkg/backup/create.go:344 > done progress=15/85 table=nullnull_binlog.t_organization
+2024-11-23 11:03:59.730 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [analytics monthly_aggregated_data_agg]
+2024-11-23 11:03:59.732 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`.inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c` UNFREEZE WITH NAME '016194d86a464e07bdc5cf8deb0dbcbb'
+2024-11-23 11:03:59.732 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics .inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c]
+2024-11-23 11:03:59.733 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`monthly_aggregated_data_agg` FREEZE WITH NAME '756cfb94ff0d4a33873e145446f4f8f0';
+2024-11-23 11:03:59.733 INF pkg/backup/create.go:344 > done progress=14/85 table=analytics..inner_id.0388a3c9-4290-4c2c-8388-a3c942904c2c
+2024-11-23 11:03:59.733 WRN pkg/backup/create.go:756 > supports only schema backup backup=2024-11-23T03-03-50 engine=MaterializeMySQL operation=create table=nullnull_binlog.t_user
+2024-11-23 11:03:59.733 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [nullnull_binlog t_user]
+2024-11-23 11:03:59.735 INF pkg/backup/create.go:344 > done progress=17/85 table=nullnull_binlog.t_user
+2024-11-23 11:03:59.735 WRN pkg/backup/create.go:756 > supports only schema backup backup=2024-11-23T03-03-50 engine=TinyLog operation=create table=null_demo.user_null
+2024-11-23 11:03:59.735 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [null_demo user_null]
+2024-11-23 11:03:59.737 INF pkg/backup/create.go:344 > done progress=43/85 table=null_demo.user_null
+2024-11-23 11:03:59.738 INF pkg/clickhouse/clickhouse.go:1076 > SELECT column, groupUniqArray(type) AS uniq_types FROM system.parts_columns WHERE active AND database=? AND table=? AND type NOT LIKE 'Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Enum%!((MISSING)%!'(MISSING) AND type NOT LIKE 'Nullable(Tuple(%!'(MISSING) AND type NOT LIKE 'Array(Tuple(%!'(MISSING) AND type NOT LIKE 'Nullable(Array(Tuple(%!'(MISSING) GROUP BY column HAVING length(uniq_types) > 1 with args [default alias_example]
+2024-11-23 11:03:59.739 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `analytics`.`monthly_aggregated_data_agg` UNFREEZE WITH NAME '756cfb94ff0d4a33873e145446f4f8f0'
+2024-11-23 11:03:59.739 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `default`.`alias_example` FREEZE WITH NAME '20b728351e5646298f13fcdb2ecd6f72';
+2024-11-23 11:03:59.739 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics monthly_aggregated_data_agg]
+2024-11-23 11:03:59.740 INF pkg/backup/create.go:344 > done progress=16/85 table=analytics.monthly_aggregated_data_agg
+2024-11-23 11:03:59.740 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics monthly_aggregated_data_agg_mv]
+2024-11-23 11:03:59.741 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `default`.`alias_example` UNFREEZE WITH NAME '20b728351e5646298f13fcdb2ecd6f72'
+2024-11-23 11:03:59.741 INF pkg/backup/create.go:344 > done progress=59/85 table=analytics.monthly_aggregated_data_agg_mv
+2024-11-23 11:03:59.741 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics hits_mv]
+2024-11-23 11:03:59.741 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [default alias_example]
+2024-11-23 11:03:59.742 INF pkg/backup/create.go:344 > done progress=60/85 table=analytics.hits_mv
+2024-11-23 11:03:59.742 WRN pkg/backup/create.go:756 > supports only schema backup backup=2024-11-23T03-03-50 engine=Null operation=create table=analytics.hits_data_mw_null
+2024-11-23 11:03:59.742 INF pkg/clickhouse/clickhouse.go:1076 > SELECT mutation_id, command FROM system.mutations WHERE is_done=0 AND database=? AND table=? with args [analytics hits_data_mw_null]
+2024-11-23 11:03:59.744 INF pkg/backup/create.go:344 > done progress=45/85 table=default.alias_example
+2024-11-23 11:03:59.745 INF pkg/backup/create.go:344 > done progress=81/85 table=analytics.hits_data_mw_null
+2024-11-23 11:03:59.745 INF pkg/clickhouse/clickhouse.go:1078 > SELECT value FROM `system`.`build_options` WHERE name='VERSION_DESCRIBE'
+2024-11-23 11:03:59.747 INF pkg/backup/create.go:356 > done duration=9.148s operation=createBackupLocal version=2.6.3
+2024-11-23 11:03:59.747 INF pkg/clickhouse/clickhouse.go:325 > clickhouse connection closed
+```
+
+查看备份
+
+clickhouse-backup list
+
+```sh
+[root@ck clickhouse-backup]# clickhouse-backup list
+2024-11-23 11:05:35.599 INF pkg/clickhouse/clickhouse.go:128 > clickhouse connection prepared: tcp://localhost:9000 run ping
+2024-11-23 11:05:35.600 INF pkg/clickhouse/clickhouse.go:131 > clickhouse connection success: tcp://localhost:9000
+2024-11-23 11:05:35.600 INF pkg/clickhouse/clickhouse.go:1078 > SELECT value FROM `system`.`build_options` where name='VERSION_INTEGER'
+2024-11-23 11:05:35.601 INF pkg/clickhouse/clickhouse.go:1078 > SELECT countIf(name='type') AS is_disk_type_present, countIf(name='object_storage_type') AS is_object_storage_type_present, countIf(name='free_space') AS is_free_space_present, countIf(name='disks') AS is_storage_policy_present FROM system.columns WHERE database='system' AND table IN ('disks','storage_policies') 
+2024-11-23 11:05:35.602 INF pkg/clickhouse/clickhouse.go:1078 > SELECT d.path AS path, any(d.name) AS name, any(d.type) AS type, min(d.free_space) AS free_space, groupUniqArray(s.policy_name) AS storage_policies FROM system.disks AS d  LEFT JOIN (SELECT policy_name, arrayJoin(disks) AS disk FROM system.storage_policies) AS s ON s.disk = d.name GROUP BY d.path
+2024-11-23T03-03-50   3.45GiB   23/11/2024 03:03:59   local      regular
+2024-11-23 11:05:35.604 INF pkg/clickhouse/clickhouse.go:325 > clickhouse connection closed
+```
+
+备份存储在`/var/lib/clickhouse/backup/`目录下，备份名称默认为时间戳同，但是可以选择使用-name标识指定备份名称。备份包含两个目录： `metadata`目录，包含了重新创建架构所需的DDLSQL语句；以及一个`shadow`目录，包含了`alter table ... FREEZE`操作的结果数据。
+
+```sh
+[root@ck backup]# tree .
+.
+└── 2024-11-23T03-03-50
+    ├── metadata
+    │   ├── analytics
+    │   │   ├── %2Einner_id%2E0388a3c9%2D4290%2D4c2c%2D8388%2Da3c942904c2c.json
+    │   │   ├── hits_data_mw.json
+    │   │   ├── hits_data_mw_null.json
+    │   │   ├── hits_mv.json
+    │   │   ├── monthly_aggregated_data_agg.json
+    │   │   └── monthly_aggregated_data_agg_mv.json
+    │   ├── datasets
+    │   │   ├── hits_v1.json
+    │   │   └── visits_v1.json
+    │   ├── default
+    │   │   └── alias_example.json
+    │   ├── null_demo
+    │   │   └── user_null.json
+    │   ├── nullnull
+    │   │   ├── hits_v2.json
+    │   │   ├── replicatemt_user.json
+    │   │   ├── rmt_user_distinct.json
+    │   │   ├── visits_limit_200000.json
+    │   │   └── visits_v2.json
+    │   └── nullnull_binlog
+    │       ├── t_organization.json
+    │       └── t_user.json
+    ├── metadata.json
+    └── shadow
+        ├── analytics
+        │   ├── %2Einner_id%2E0388a3c9%2D4290%2D4c2c%2D8388%2Da3c942904c2c
+        │   │   └── default
+        │   │       ├── 201403_1_1_0
+        │   │       │   ├── checksums.txt
+        │   │       │   ├── columns.txt
+        │   │       │   ├── ......
+        │   │       │   └── primary.idx
+        │   │       └── 201403_2_2_0
+        │   │           ├── checksums.txt
+        │   │           ├── columns.txt
+        │   │           ├── ......
+        │   │           └── primary.idx
+        │   ├── hits_data_mw
+        │   │   └── default
+        │   │       ├── 201403_1_1_0
+        │   │       │   ├── checksums.txt
+        │   │       │   ├── ......
+        │   │       │   └── primary.idx
+        │   │       └── 201403_2_2_0
+        │   │           ├── checksums.txt
+        │   │           ├── columns.txt
+        │   │           ├── ......
+        │   │           └── primary.idx
+        │   └── monthly_aggregated_data_agg
+        │       └── default
+        │           └── 201403_1_1_0
+        │               ├── checksums.txt
+        │               ├── columns.txt
+        │               ├── ......
+        │               └── primary.idx
+        ├── datasets
+        │   ├── hits_v1
+        │   │   └── default
+        │   │       └── 201403_1_29_2
+        │   │           ├── AdvEngineID.bin
+        │   │           ├── AdvEngineID.mrk2
+        │   │           ├── ......
+        │   │           ├── YCLID.bin
+        │   │           └── YCLID.mrk2
+        │   └── visits_v1
+        │       └── default
+        │           ├── 201403_1_6_1
+        │           │   ├── AdvEngineID.bin
+        │           │   ├── AdvEngineID.mrk2
+        │           │   ├── ......
+        │           │   ├── YCLID.bin
+        │           │   └── YCLID.mrk2
+        │           └── 201403_7_9_1
+        │               ├── AdvEngineID.bin
+        │               ├── AdvEngineID.mrk2
+        │               ├── ......
+        │               ├── YCLID.bin
+        │               └── YCLID.mrk2
+        └── nullnull
+            ├── hits_v2
+            │   └── default
+            │       ├── 201403_1_1_2
+            │       │   ├── AdvEngineID.bin
+            │       │   ├── AdvEngineID.mrk2
+            │       │   ├── ......
+            │       │   ├── YCLID.bin
+            │       │   └── YCLID.mrk2
+            │       └── 201403_2_2_0
+            │           ├── AdvEngineID.bin
+            │           ├── AdvEngineID.mrk2
+            │           ├── ......
+            │           ├── YCLID.bin
+            │           └── YCLID.mrk2
+            ├── replicatemt_user
+            │   └── default
+            │       ├── 20241112_1_1_0
+            │       │   ├── checksums.txt
+            │       │   ├── columns.txt
+            │       │   ├── ......
+            │       │   └── primary.idx
+            │       ├── 20241112_2_2_0
+            │       │   ├── checksums.txt
+            │       │   ├── columns.txt
+            │       │   ├── ......
+            │       │   └── primary.idx
+            │       ├── 20241113_4_4_0
+            │       │   ├── checksums.txt
+            │       │   ├── columns.txt
+            │       │   ├── ......
+            │       │   └── primary.idx
+            │       └── 20241114_3_3_0
+            │           ├── checksums.txt
+            │           ├── columns.txt
+            │           ├── ......
+            │           └── primary.idx
+            ├── rmt_user_distinct
+            │   └── default
+            │       ├── all_1_11_2
+            │       │   ├── checksums.txt
+            │       │   ├── columns.txt
+            │       │   ├── ......
+            │       │   └── user_id.mrk2
+            │       └── all_12_14_1
+            │           ├── checksums.txt
+            │           ├── columns.txt
+            │           ├── ......
+            │           └── primary.idx
+            ├── visits_limit_200000
+            │   └── default
+            │       └── 201403_1_1_0
+            │           ├── AdvEngineID.bin
+            │           ├── AdvEngineID.mrk2
+            │           ├── ......
+            │           ├── YCLID.bin
+            │           └── YCLID.mrk2
+            └── visits_v2
+                └── default
+                    └── 201403_1_9_1
+                        ├── AdvEngineID.bin
+                        ├── AdvEngineID.mrk2
+                        ├── ......
+                        ├── YCLID.bin
+                        └── YCLID.mrk2
+
+50 directories, 2544 files
+[root@ck backup]# 
+```
+
+从备份中恢复数据
+
+```sh
+clickhouse-backup restore 2024-11-23T03-03-50  --table=nullnull.hits_v2 
+# -- schema 参数,只还原表结构。
+# -- data 参数 只还原数据
+# -- table 备份或者还原特定表，也可以使用一个正则表达式。例如只针对特定的数据表: --table=dbname.*;
+```
+
+
+
+执行过程
+
+```sh
+echo -n 'drop table nullnull.hits_v2' | clickhouse-client
+
+echo -n 'select count(1) from nullnull.hits_v2' | clickhouse-client
+
+clickhouse-backup restore 2024-11-23T03-03-50  --table=nullnull.hits_v2 
+
+# 检查数据
+[root@ck nullnull]# echo -n 'select count(1) from nullnull.hits_v2' | clickhouse-client
+8903641
+
+
+```
+
+输出：
+
+```sh
+# 1. 删除表
+[root@ck backup]# echo -n 'drop table nullnull.hits_v2' | clickhouse-client
+# 2. 检查是否已经彻底删除
+[root@ck backup]# echo -n 'select count(1) from nullnull.hits_v2' | clickhouse-client
+Received exception from server (version 21.7.3):
+Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Table nullnull.hits_v2 doesn't exist. 
+
+# 执行恢复操作
+[root@ck nullnull]# clickhouse-backup restore 2024-11-23T03-03-50  --table=nullnull.hits_v2 
+2024-11-23 11:42:13.785 INF pkg/clickhouse/clickhouse.go:128 > clickhouse connection prepared: tcp://localhost:9000 run ping
+2024-11-23 11:42:13.786 INF pkg/clickhouse/clickhouse.go:131 > clickhouse connection success: tcp://localhost:9000
+2024-11-23 11:42:13.786 INF pkg/clickhouse/clickhouse.go:1078 > SELECT value FROM `system`.`build_options` where name='VERSION_INTEGER'
+2024-11-23 11:42:13.788 INF pkg/clickhouse/clickhouse.go:1078 > SELECT countIf(name='type') AS is_disk_type_present, countIf(name='object_storage_type') AS is_object_storage_type_present, countIf(name='free_space') AS is_free_space_present, countIf(name='disks') AS is_storage_policy_present FROM system.columns WHERE database='system' AND table IN ('disks','storage_policies') 
+2024-11-23 11:42:13.791 INF pkg/clickhouse/clickhouse.go:1078 > SELECT d.path AS path, any(d.name) AS name, any(d.type) AS type, min(d.free_space) AS free_space, groupUniqArray(s.policy_name) AS storage_policies FROM system.disks AS d  LEFT JOIN (SELECT policy_name, arrayJoin(disks) AS disk FROM system.storage_policies) AS s ON s.disk = d.name GROUP BY d.path
+2024-11-23 11:42:13.794 INF pkg/clickhouse/clickhouse.go:1078 > SELECT engine FROM system.databases WHERE name = 'nullnull'
+2024-11-23 11:42:13.795 INF pkg/clickhouse/clickhouse.go:1078 > DROP TABLE IF EXISTS `nullnull`.`hits_v2` NO DELAY
+2024-11-23 11:42:13.796 INF pkg/clickhouse/clickhouse.go:1078 > CREATE DATABASE IF NOT EXISTS `nullnull`
+2024-11-23 11:42:13.796 INF pkg/clickhouse/clickhouse.go:1078 > CREATE TABLE nullnull.hits_v2  (`WatchID` UInt64, `JavaEnable` UInt8, `Title` String, `GoodEvent` Int16, `EventTime` DateTime, `EventDate` Date, `CounterID` UInt32, `ClientIP` UInt32, `ClientIP6` FixedString(16), `RegionID` UInt32, `UserID` UInt64, `CounterClass` Int8, `OS` UInt8, `UserAgent` UInt8, `URL` String, `Referer` String, `URLDomain` String, `RefererDomain` String, `Refresh` UInt8, `IsRobot` UInt8, `RefererCategories` Array(UInt16), `URLCategories` Array(UInt16), `URLRegions` Array(UInt32), `RefererRegions` Array(UInt32), `ResolutionWidth` UInt16, `ResolutionHeight` UInt16, `ResolutionDepth` UInt8, `FlashMajor` UInt8, `FlashMinor` UInt8, `FlashMinor2` String, `NetMajor` UInt8, `NetMinor` UInt8, `UserAgentMajor` UInt16, `UserAgentMinor` FixedString(2), `CookieEnable` UInt8, `JavascriptEnable` UInt8, `IsMobile` UInt8, `MobilePhone` UInt8, `MobilePhoneModel` String, `Params` String, `IPNetworkID` UInt32, `TraficSourceID` Int8, `SearchEngineID` UInt16, `SearchPhrase` String, `AdvEngineID` UInt8, `IsArtifical` UInt8, `WindowClientWidth` UInt16, `WindowClientHeight` UInt16, `ClientTimeZone` Int16, `ClientEventTime` DateTime, `SilverlightVersion1` UInt8, `SilverlightVersion2` UInt8, `SilverlightVersion3` UInt32, `SilverlightVersion4` UInt16, `PageCharset` String, `CodeVersion` UInt32, `IsLink` UInt8, `IsDownload` UInt8, `IsNotBounce` UInt8, `FUniqID` UInt64, `HID` UInt32, `IsOldCounter` UInt8, `IsEvent` UInt8, `IsParameter` UInt8, `DontCountHits` UInt8, `WithHash` UInt8, `HitColor` FixedString(1), `UTCEventTime` DateTime, `Age` UInt8, `Sex` UInt8, `Income` UInt8, `Interests` UInt16, `Robotness` UInt8, `GeneralInterests` Array(UInt16), `RemoteIP` UInt32, `RemoteIP6` FixedString(16), `WindowName` Int32, `OpenerName` Int32, `HistoryLength` Int16, `BrowserLanguage` FixedString(2), `BrowserCountry` FixedString(2), `SocialNetwork` String, `SocialAction` String, `HTTPError` UInt16, `SendTiming` Int32, `DNSTiming` Int32, `ConnectTiming` Int32, `ResponseStartTiming` Int32, `ResponseEndTiming` Int32, `FetchTiming` Int32, `RedirectTiming` Int32, `DOMInteractiveTiming` Int32, `DOMContentLoadedTiming` Int32, `DOMCompleteTiming` Int32, `LoadEventStartTiming` Int32, `LoadEventEndTiming` Int32, `NSToDOMContentLoadedTiming` Int32, `FirstPaintTiming` Int32, `RedirectCount` Int8, `SocialSourceNetworkID` UInt8, `SocialSourcePage` String, `ParamPrice` Int64, `ParamOrderID` String, `ParamCurrency` FixedString(3), `ParamCurrencyID` UInt16, `GoalsReached` Array(UInt32), `OpenstatServiceName` String, `OpenstatCampaignID` String, `OpenstatAdID` String, `OpenstatSourceID` String, `UTMSource` String, `UTMMedium` String, `UTMCampaign` String, `UTMContent` String, `UTMTerm` String, `FromTag` String, `HasGCLID` UInt8, `RefererHash` UInt64, `URLHash` UInt64, `CLID` UInt32, `YCLID` UInt64, `ShareService` String, `ShareURL` String, `ShareTitle` String, `ParsedParams.Key1` Array(String), `ParsedParams.Key2` Array(String), `ParsedParams.Key3` Array(String), `ParsedParams.Key4` Array(String), `ParsedParams.Key5` Array(String), `ParsedParams.ValueDouble` Array(Float64), `IslandID` FixedString(16), `RequestNum` UInt32, `RequestTry` UInt8) ENGINE = MergeTree PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID)) SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192
+2024-11-23 11:42:13.812 INF pkg/backup/restore.go:907 > done backup=2024-11-23T03-03-50 duration=17ms operation=restore_schema
+2024-11-23 11:42:13.812 INF pkg/clickhouse/clickhouse.go:1076 > SELECT name, count(*) as is_present FROM system.settings WHERE name IN (?, ?) GROUP BY name with args [show_table_uuid_in_table_create_query_if_not_nil display_secrets_in_show_and_select]
+2024-11-23 11:42:13.813 INF pkg/clickhouse/clickhouse.go:1078 > SELECT name FROM system.databases WHERE engine IN ('MySQL','PostgreSQL','MaterializedPostgreSQL')
+2024-11-23 11:42:13.814 INF pkg/clickhouse/clickhouse.go:1078 >    SELECT     countIf(name='data_path') is_data_path_present,     countIf(name='data_paths') is_data_paths_present,     countIf(name='uuid') is_uuid_present,     countIf(name='create_table_query') is_create_table_query_present,     countIf(name='total_bytes') is_total_bytes_present    FROM system.columns WHERE database='system' AND table='tables'  
+2024-11-23 11:42:13.816 INF pkg/clickhouse/clickhouse.go:1078 > SELECT database, name, engine , data_paths , uuid , create_table_query , coalesce(total_bytes, 0) AS total_bytes   FROM system.tables WHERE is_temporary = 0 AND match(concat(database,'.',name),'^nullnull\.hits_v2$')  ORDER BY total_bytes DESC SETTINGS show_table_uuid_in_table_create_query_if_not_nil=1
+2024-11-23 11:42:13.824 INF pkg/clickhouse/clickhouse.go:1078 > SELECT metadata_path FROM system.tables WHERE database = 'system' AND metadata_path!='' LIMIT 1;
+2024-11-23 11:42:13.826 INF pkg/clickhouse/clickhouse.go:1078 > SELECT sum(bytes_on_disk) as size FROM system.parts WHERE active AND database='nullnull' AND table='hits_v2' GROUP BY database, table
+2024-11-23 11:42:13.833 INF pkg/backup/restore.go:1440 > download object_disks start table=nullnull.hits_v2
+2024-11-23 11:42:13.833 INF pkg/backup/restore.go:1447 > download object_disks finish duration=0s size=0B
+2024-11-23 11:42:13.833 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`hits_v2` ATTACH PART '201403_1_1_2'
+2024-11-23 11:42:13.835 INF pkg/clickhouse/clickhouse.go:1078 > ALTER TABLE `nullnull`.`hits_v2` ATTACH PART '201403_2_2_0'
+2024-11-23 11:42:13.837 INF pkg/backup/restore.go:1405 > done database=nullnull duration=9ms operation=restoreDataRegular progress=1/1 table=hits_v2
+2024-11-23 11:42:13.837 INF pkg/backup/restore.go:1320 > done backup=2024-11-23T03-03-50 duration=25ms operation=restore_data
+2024-11-23 11:42:13.837 INF pkg/backup/restore.go:254 > done duration=52ms operation=restore version=2.6.3
+2024-11-23 11:42:13.837 INF pkg/clickhouse/clickhouse.go:325 > clickhouse connection closed
+
+
+#检查数据
+[root@ck nullnull]# echo -n 'select count(1) from nullnull.hits_v2' | clickhouse-client
+8903641
+
+```
+
+报错：
+
+```sh
+[root@ck backup]# clickhouse-backup restore 2024-11-23T03-03-50  --table=nullnull.hits_v2 
+2024-11-23 11:24:31.856 INF pkg/clickhouse/clickhouse.go:128 > clickhouse connection prepared: tcp://localhost:9000 run ping
+......
+2024-11-23 11:24:31.865 FTL cmd/clickhouse-backup/main.go:668 > error="can't create table `nullnull`.`hits_v2`: code: 57, message: Directory for table data store/6a1/6a1f4520-2ebf-45a0-aa1f-45202ebfb5a0/ already exists after 1 times, please check your schema dependencies"
+```
+
+解决办法
+
+```sh
+# 解决方法 ：
+# 进入备份目录
+
+/var/lib/clickhouse/backup/2024-11-23T03-03-50/metadata/nullnull/hits_v2.json中的`UUID '6a1f4520-2ebf-45a0-aa1f-45202ebfb5a0’`,这删除掉,重新执行clickhouse-backup restore 备份名。
+
+```
+
+修改之前提是:
+
+```json
+{
+ "table": "hits_v2",
+ "database": "nullnull",
+ "parts": {
+  "default": [
+   {
+    "name": "201403_1_1_2"
+   },
+   {
+    "name": "201403_2_2_0"
+   }
+  ]
+ },
+ "query": "CREATE TABLE nullnull.hits_v2 UUID '6a1f4520-2ebf-45a0-aa1f-45202ebfb5a0' (`WatchID` UInt64, `JavaEnable` UInt8, `Title` String, `GoodEvent` Int16, `EventTime` DateTime, `EventDate` Date, `CounterID` UInt32, `ClientIP` UInt32, `ClientIP6` FixedString(16), `RegionID` UInt32, `UserID` UInt64, `CounterClass` Int8, `OS` UInt8, `UserAgent` UInt8, `URL` String, `Referer` String, `URLDomain` String, `RefererDomain` String, `Refresh` UInt8, `IsRobot` UInt8, `RefererCategories` Array(UInt16), `URLCategories` Array(UInt16), `URLRegions` Array(UInt32), `RefererRegions` Array(UInt32), `ResolutionWidth` UInt16, `ResolutionHeight` UInt16, `ResolutionDepth` UInt8, `FlashMajor` UInt8, `FlashMinor` UInt8, `FlashMinor2` String, `NetMajor` UInt8, `NetMinor` UInt8, `UserAgentMajor` UInt16, `UserAgentMinor` FixedString(2), `CookieEnable` UInt8, `JavascriptEnable` UInt8, `IsMobile` UInt8, `MobilePhone` UInt8, `MobilePhoneModel` String, `Params` String, `IPNetworkID` UInt32, `TraficSourceID` Int8, `SearchEngineID` UInt16, `SearchPhrase` String, `AdvEngineID` UInt8, `IsArtifical` UInt8, `WindowClientWidth` UInt16, `WindowClientHeight` UInt16, `ClientTimeZone` Int16, `ClientEventTime` DateTime, `SilverlightVersion1` UInt8, `SilverlightVersion2` UInt8, `SilverlightVersion3` UInt32, `SilverlightVersion4` UInt16, `PageCharset` String, `CodeVersion` UInt32, `IsLink` UInt8, `IsDownload` UInt8, `IsNotBounce` UInt8, `FUniqID` UInt64, `HID` UInt32, `IsOldCounter` UInt8, `IsEvent` UInt8, `IsParameter` UInt8, `DontCountHits` UInt8, `WithHash` UInt8, `HitColor` FixedString(1), `UTCEventTime` DateTime, `Age` UInt8, `Sex` UInt8, `Income` UInt8, `Interests` UInt16, `Robotness` UInt8, `GeneralInterests` Array(UInt16), `RemoteIP` UInt32, `RemoteIP6` FixedString(16), `WindowName` Int32, `OpenerName` Int32, `HistoryLength` Int16, `BrowserLanguage` FixedString(2), `BrowserCountry` FixedString(2), `SocialNetwork` String, `SocialAction` String, `HTTPError` UInt16, `SendTiming` Int32, `DNSTiming` Int32, `ConnectTiming` Int32, `ResponseStartTiming` Int32, `ResponseEndTiming` Int32, `FetchTiming` Int32, `RedirectTiming` Int32, `DOMInteractiveTiming` Int32, `DOMContentLoadedTiming` Int32, `DOMCompleteTiming` Int32, `LoadEventStartTiming` Int32, `LoadEventEndTiming` Int32, `NSToDOMContentLoadedTiming` Int32, `FirstPaintTiming` Int32, `RedirectCount` Int8, `SocialSourceNetworkID` UInt8, `SocialSourcePage` String, `ParamPrice` Int64, `ParamOrderID` String, `ParamCurrency` FixedString(3), `ParamCurrencyID` UInt16, `GoalsReached` Array(UInt32), `OpenstatServiceName` String, `OpenstatCampaignID` String, `OpenstatAdID` String, `OpenstatSourceID` String, `UTMSource` String, `UTMMedium` String, `UTMCampaign` String, `UTMContent` String, `UTMTerm` String, `FromTag` String, `HasGCLID` UInt8, `RefererHash` UInt64, `URLHash` UInt64, `CLID` UInt32, `YCLID` UInt64, `ShareService` String, `ShareURL` String, `ShareTitle` String, `ParsedParams.Key1` Array(String), `ParsedParams.Key2` Array(String), `ParsedParams.Key3` Array(String), `ParsedParams.Key4` Array(String), `ParsedParams.Key5` Array(String), `ParsedParams.ValueDouble` Array(Float64), `IslandID` FixedString(16), `RequestNum` UInt32, `RequestTry` UInt8) ENGINE = MergeTree PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID)) SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192",
+ "size": {
+  "default": 1271282978
+ },
+ "total_bytes": 1271256279,
+ "metadata_only": false
+}
+```
+
+删除之后
+
+```json
+{
+ "table": "hits_v2",
+ "database": "nullnull",
+ "parts": {
+  "default": [
+   {
+    "name": "201403_1_1_2"
+   },
+   {
+    "name": "201403_2_2_0"
+   }
+  ]
+ },
+ "query": "CREATE TABLE nullnull.hits_v2  (`WatchID` UInt64, `JavaEnable` UInt8, `Title` String, `GoodEvent` Int16, `EventTime` DateTime, `EventDate` Date, `CounterID` UInt32, `ClientIP` UInt32, `ClientIP6` FixedString(16), `RegionID` UInt32, `UserID` UInt64, `CounterClass` Int8, `OS` UInt8, `UserAgent` UInt8, `URL` String, `Referer` String, `URLDomain` String, `RefererDomain` String, `Refresh` UInt8, `IsRobot` UInt8, `RefererCategories` Array(UInt16), `URLCategories` Array(UInt16), `URLRegions` Array(UInt32), `RefererRegions` Array(UInt32), `ResolutionWidth` UInt16, `ResolutionHeight` UInt16, `ResolutionDepth` UInt8, `FlashMajor` UInt8, `FlashMinor` UInt8, `FlashMinor2` String, `NetMajor` UInt8, `NetMinor` UInt8, `UserAgentMajor` UInt16, `UserAgentMinor` FixedString(2), `CookieEnable` UInt8, `JavascriptEnable` UInt8, `IsMobile` UInt8, `MobilePhone` UInt8, `MobilePhoneModel` String, `Params` String, `IPNetworkID` UInt32, `TraficSourceID` Int8, `SearchEngineID` UInt16, `SearchPhrase` String, `AdvEngineID` UInt8, `IsArtifical` UInt8, `WindowClientWidth` UInt16, `WindowClientHeight` UInt16, `ClientTimeZone` Int16, `ClientEventTime` DateTime, `SilverlightVersion1` UInt8, `SilverlightVersion2` UInt8, `SilverlightVersion3` UInt32, `SilverlightVersion4` UInt16, `PageCharset` String, `CodeVersion` UInt32, `IsLink` UInt8, `IsDownload` UInt8, `IsNotBounce` UInt8, `FUniqID` UInt64, `HID` UInt32, `IsOldCounter` UInt8, `IsEvent` UInt8, `IsParameter` UInt8, `DontCountHits` UInt8, `WithHash` UInt8, `HitColor` FixedString(1), `UTCEventTime` DateTime, `Age` UInt8, `Sex` UInt8, `Income` UInt8, `Interests` UInt16, `Robotness` UInt8, `GeneralInterests` Array(UInt16), `RemoteIP` UInt32, `RemoteIP6` FixedString(16), `WindowName` Int32, `OpenerName` Int32, `HistoryLength` Int16, `BrowserLanguage` FixedString(2), `BrowserCountry` FixedString(2), `SocialNetwork` String, `SocialAction` String, `HTTPError` UInt16, `SendTiming` Int32, `DNSTiming` Int32, `ConnectTiming` Int32, `ResponseStartTiming` Int32, `ResponseEndTiming` Int32, `FetchTiming` Int32, `RedirectTiming` Int32, `DOMInteractiveTiming` Int32, `DOMContentLoadedTiming` Int32, `DOMCompleteTiming` Int32, `LoadEventStartTiming` Int32, `LoadEventEndTiming` Int32, `NSToDOMContentLoadedTiming` Int32, `FirstPaintTiming` Int32, `RedirectCount` Int8, `SocialSourceNetworkID` UInt8, `SocialSourcePage` String, `ParamPrice` Int64, `ParamOrderID` String, `ParamCurrency` FixedString(3), `ParamCurrencyID` UInt16, `GoalsReached` Array(UInt32), `OpenstatServiceName` String, `OpenstatCampaignID` String, `OpenstatAdID` String, `OpenstatSourceID` String, `UTMSource` String, `UTMMedium` String, `UTMCampaign` String, `UTMContent` String, `UTMTerm` String, `FromTag` String, `HasGCLID` UInt8, `RefererHash` UInt64, `URLHash` UInt64, `CLID` UInt32, `YCLID` UInt64, `ShareService` String, `ShareURL` String, `ShareTitle` String, `ParsedParams.Key1` Array(String), `ParsedParams.Key2` Array(String), `ParsedParams.Key3` Array(String), `ParsedParams.Key4` Array(String), `ParsedParams.Key5` Array(String), `ParsedParams.ValueDouble` Array(Float64), `IslandID` FixedString(16), `RequestNum` UInt32, `RequestTry` UInt8) ENGINE = MergeTree PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID)) SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192",
+ "size": {
+  "default": 1271282978
+ },
+ "total_bytes": 1271256279,
+ "metadata_only": false
+}
+```
+
+备份已经完成
 
 
 
