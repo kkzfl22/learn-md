@@ -5575,6 +5575,13 @@ firewall-cmd --reload
 # 此端口用于数据访问
 firewall-cmd --permanent --zone=public --add-port=9009/tcp
 firewall-cmd --reload
+
+# 启动zk集群
+cd /opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin
+./zkServer.sh start
+
+# 查看ZK各状态
+./zkServer.sh status
 ```
 
 2. 对Clickhouse配制zookeeper(每个CK副本节点都需要修改)
@@ -5717,6 +5724,9 @@ partition by toYYYYMMDD(create_time)
 primary key (id)
 order by (id,order_id,create_time);
 
+# 检查数据
+select count(1) from nullnull.replicatemt_user;
+
 # os12上的建表语句
 create table nullnull.replicatemt_user(
 	id UInt32,
@@ -5728,6 +5738,9 @@ create table nullnull.replicatemt_user(
 partition by toYYYYMMDD(create_time)
 primary key (id)
 order by (id,order_id,create_time);
+
+# 检查数据
+select count(1) from nullnull.replicatemt_user;
 
 
 # 至CK节点查看数据信息 
@@ -5760,7 +5773,7 @@ insert into nullnull.replicatemt_user values
 (24,'012','空空6',20000,'2024-10-29 19:50:00');
 
 
-# os12查询数据
+# os11查询数据
 select * from nullnull.replicatemt_user;
 ```
 
@@ -6007,7 +6020,286 @@ Query id: c8e27adc-d1a5-4ba2-b9a8-452278998083
 
 ![image-20241119235214876](.\images\image-20241119235214876.png)
 
+集群信息
 
+| 名称 | IP           |
+| ---- | ------------ |
+| OS11 | 192.168.5.11 |
+| OS12 | 192.168.5.12 |
+
+#### 11.2.1 CK的双主安装
+
+此参数11.1的副本安装即可。
+
+
+
+#### 11.2.2 KeepAlived的安装
+
+```sh
+# 1.先装依赖
+yum install -y curl gcc openssl-devel libnl3-devel net-snmp-devel
+
+# 2. 再装keepalived
+yum install -y keepalived
+
+```
+
+这行配制
+
+文件: /etc/keepalived/keepalived.conf
+
+OS11节点的配制
+
+```yaml
+global_defs {
+  default_interface enp0s8
+}
+
+vrrp_instance VI_1 {
+  interface enp0s8
+
+  state BACKUP
+  virtual_router_id 51
+  priority 150
+  nopreempt
+
+  unicast_peer {
+    192.168.5.11
+    192.168.5.12
+  }
+
+  virtual_ipaddress {
+    192.168.5.210
+  }
+
+  authentication {
+    auth_type PASS
+    auth_pass hello
+  }
+}
+```
+
+os12节点的配制
+
+```yaml
+global_defs {
+  default_interface enp0s8
+}
+
+vrrp_instance VI_1 {
+  interface enp0s8
+
+  state BACKUP 
+  virtual_router_id 51
+  priority 140
+  nopreempt
+
+  unicast_peer {
+    192.168.5.11
+    192.168.5.12
+  }
+
+  virtual_ipaddress {
+    192.168.5.210
+  }
+
+  authentication {
+    auth_type PASS
+    auth_pass hello
+  }
+}
+```
+
+#### 启动keepalived
+
+```sh
+# 启动
+systemctl start keepalived   
+
+# 停止
+systemctl stop keepalived   
+
+# 重启
+systemctl restart keepalived   
+
+```
+
+
+
+
+
+11.2.2 NGINX的安装
+
+```sh
+yum install nginx 
+```
+
+进行nginx的配制
+
+两台主机都需要配制
+
+vi /etc/nginx/nginx.conf
+
+```properties
+# For more information on configuration, see:
+#   * Official English Documentation: http://nginx.org/en/docs/
+#   * Official Russian Documentation: http://nginx.org/ru/docs/
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Load modular configuration files from the /etc/nginx/conf.d directory.
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    # for more information.
+    include /etc/nginx/conf.d/*.conf;
+
+    upstream ck-load-balance {
+        server 192.168.5.11:8123;
+        server 192.168.5.12:8123;
+    }
+
+
+    server {
+        listen       28123;
+        listen       [::]:28123;
+        server_name  localhost;
+        root         /usr/share/nginx/html;
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+
+        location / {
+                #root   /usr/local/nginx/html/dist;
+                #try_files $uri $uri/ /index.html;
+                #index  index.html index.htm;
+                proxy_set_header Host $host;
+                proxy_pass      http://ck-load-balance/;
+        }
+    }
+
+}
+```
+
+端口需要开放防火墙
+
+两台机器都需要开放
+
+```sh
+firewall-cmd --permanent --zone=public --add-port=28123/tcp
+firewall-cmd --reload
+```
+
+通过客户端测试是否通过连接
+
+![image-20241123173850559](.\images\image-20241123173850559.png)
+
+
+
+#### 客户端JDBC代码
+
+```sh
+
+  /** 格式化时间输出 */
+  private static final DateTimeFormatter FORMAT =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+
+  private String url = "jdbc:clickhouse://192.168.5.210:28123/nullnull?socket_timeout=300000";
+  private String user = "default";
+  private String password = "";
+
+  @Test
+  public void Test() {
+    Connection conn = null;
+    PreparedStatement pstm = null;
+    ResultSet rt = null;
+    try {
+      Class.forName("com.clickhouse.jdbc.ClickHouseDriver");
+      conn = DriverManager.getConnection(url, user, password);
+      String sql =
+          "INSERT INTO nullnull.replicatemt_user (id,order_id,name,money,create_time) VALUES\n"
+              + "\t (?,?,?,?,?)\n";
+      pstm = conn.prepareStatement(sql);
+      Long startTime = System.currentTimeMillis();
+      for (int i = 1; i <= 10000; i++) {
+
+        Timestamp timestamp = Timestamp.valueOf(LocalDateTime.now().format(FORMAT));
+
+        pstm.setInt(1, i);
+        pstm.setString(2, String.valueOf("order" + i));
+        pstm.setString(3, String.valueOf("name" + i));
+        pstm.setInt(4, i);
+        pstm.setTimestamp(5, timestamp);
+        pstm.addBatch();
+
+        Thread.sleep(1000);
+        System.out.println("执行完毕：" + i + ",时间:" + timestamp.toString());
+      }
+      pstm.executeBatch();
+      Long endTime = System.currentTimeMillis();
+      System.out.println("OK,时间：" + (endTime - startTime));
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw new RuntimeException(e);
+    } finally {
+      if (pstm != null) {
+        try {
+          pstm.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+          throw new RuntimeException(e);
+        }
+      }
+      if (conn != null) {
+        try {
+          conn.close();
+        } catch (SQLException e) {
+          e.printStackTrace();
+          throw new RuntimeException(e);
+        }
+      }
+    }
+  }
+```
+
+#### 高可用验证
+
+```sh
+# 1, 启动客户端进行数据的插入
+
+```
 
 
 
