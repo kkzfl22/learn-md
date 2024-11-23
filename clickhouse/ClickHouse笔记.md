@@ -10289,7 +10289,9 @@ Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Table null
 }
 ```
 
-备份已经完成
+备份已经完成.
+
+
 
 
 
@@ -10334,5 +10336,3 @@ order by `总行数`
 
 
 ## 结束
-
-wps
