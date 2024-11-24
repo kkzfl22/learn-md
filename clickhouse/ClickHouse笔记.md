@@ -6220,6 +6220,13 @@ http {
 ```sh
 firewall-cmd --permanent --zone=public --add-port=28123/tcp
 firewall-cmd --reload
+
+#启动nginx
+nginx
+
+
+# 重新加载
+nginx -s reload
 ```
 
 通过客户端测试是否通过连接
@@ -6231,74 +6238,233 @@ firewall-cmd --reload
 #### 客户端JDBC代码
 
 ```sh
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
-  /** 格式化时间输出 */
-  private static final DateTimeFormatter FORMAT =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+import org.junit.Test;
 
-  private String url = "jdbc:clickhouse://192.168.5.210:28123/nullnull?socket_timeout=300000";
-  private String user = "default";
-  private String password = "";
+/**
+ * 进行CK的JDBC操作
+ *
+ * @author liujun
+ * @since 2024/11/23
+ */
+public class ClickHouseJdbc {
 
-  @Test
-  public void Test() {
-    Connection conn = null;
-    PreparedStatement pstm = null;
-    ResultSet rt = null;
-    try {
-      Class.forName("com.clickhouse.jdbc.ClickHouseDriver");
-      conn = DriverManager.getConnection(url, user, password);
-      String sql =
-          "INSERT INTO nullnull.replicatemt_user (id,order_id,name,money,create_time) VALUES\n"
-              + "\t (?,?,?,?,?)\n";
-      pstm = conn.prepareStatement(sql);
-      Long startTime = System.currentTimeMillis();
-      for (int i = 1; i <= 10000; i++) {
+    /**
+     * 格式化时间输出
+     */
+    private static final DateTimeFormatter FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
-        Timestamp timestamp = Timestamp.valueOf(LocalDateTime.now().format(FORMAT));
+    private String url = "jdbc:clickhouse://192.168.5.210:28123/nullnull?socket_timeout=300000";
+    private String user = "default";
+    private String password = "liujun";
 
-        pstm.setInt(1, i);
-        pstm.setString(2, String.valueOf("order" + i));
-        pstm.setString(3, String.valueOf("name" + i));
-        pstm.setInt(4, i);
-        pstm.setTimestamp(5, timestamp);
-        pstm.addBatch();
+    @Test
+    public void Test() {
+        for (int i = 0; i < 1000; i += 2) {
+            try {
+                runInsert(i);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
 
-        Thread.sleep(1000);
-        System.out.println("执行完毕：" + i + ",时间:" + timestamp.toString());
-      }
-      pstm.executeBatch();
-      Long endTime = System.currentTimeMillis();
-      System.out.println("OK,时间：" + (endTime - startTime));
-    } catch (Exception e) {
-      e.printStackTrace();
-      throw new RuntimeException(e);
-    } finally {
-      if (pstm != null) {
-        try {
-          pstm.close();
-        } catch (SQLException e) {
-          e.printStackTrace();
-          throw new RuntimeException(e);
+            System.out.println("----------------------");
+            System.out.println("----------------------");
+            System.out.println("----------------------");
+            System.out.println("----------------------");
         }
-      }
-      if (conn != null) {
-        try {
-          conn.close();
-        } catch (SQLException e) {
-          e.printStackTrace();
-          throw new RuntimeException(e);
-        }
-      }
     }
-  }
+
+    private void runInsert(int i) {
+        Connection conn = null;
+        PreparedStatement pstm = null;
+        ResultSet rt = null;
+        try {
+            Class.forName("com.clickhouse.jdbc.ClickHouseDriver");
+            conn = DriverManager.getConnection(url, user, password);
+            String sql =
+                    "INSERT INTO nullnull.replicatemt_user (id,order_id,name,money,create_time) VALUES\n"
+                            + "\t (?,?,?,?,?)\n";
+            pstm = conn.prepareStatement(sql);
+
+            Timestamp timestamp = Timestamp.valueOf(LocalDateTime.now().format(FORMAT));
+
+            pstm.setInt(1, i);
+            pstm.setString(2, String.valueOf("order" + i));
+            pstm.setString(3, String.valueOf("name" + i));
+            pstm.setInt(4, i);
+            pstm.setTimestamp(5, timestamp);
+            pstm.addBatch();
+            pstm.executeBatch();
+
+            System.out.println("执行完毕：" + i + ",时间:" + timestamp.toString());
+
+
+            Thread.sleep(1000);
+            i = i + 1;
+
+            pstm.setInt(1, i);
+            pstm.setString(2, String.valueOf("order" + i));
+            pstm.setString(3, String.valueOf("name" + i));
+            pstm.setInt(4, i);
+            pstm.setTimestamp(5, timestamp);
+            pstm.addBatch();
+            pstm.executeBatch();
+
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            if (pstm != null) {
+                try {
+                    pstm.close();
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+}
 ```
 
 #### 高可用验证
 
-```sh
-# 1, 启动客户端进行数据的插入
+1. 验证在执行过程中发生连接切换。
 
+```sh
+# 1, 启动客户端进行数据的插入，等待第一个插入完成,通过debug调试，将断点设置在， i = i + 1;
+# 执行进入断点后，停止210的VIP所在的那台机器的KEEPALIVED 
+systemctl stop keepalived
+
+# 此时将收到连接的异常:
+java.lang.RuntimeException: java.sql.BatchUpdateException: Connection reset by peer
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:92)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+Caused by: java.sql.BatchUpdateException: Connection reset by peer
+	at com.clickhouse.jdbc.SqlExceptionUtils.batchUpdateError(SqlExceptionUtils.java:107)
+	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:154)
+	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:83)
+	... 28 more
+```
+
+问题2：
+
+ck日志
+
+```sh
+2024.11.24 13:49:48.415380 [ 4226 ] {} <Information> DatabaseAtomic (default): Starting up tables.
+2024.11.24 13:49:48.415386 [ 4226 ] {} <Information> DatabaseAtomic (nullnull): Starting up tables.
+2024.11.24 13:49:48.416263 [ 4384 ] {} <Warning> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): No metadata in ZooKeeper for /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11: table will stay in readonly mode
+2024.11.24 13:49:48.416286 [ 4384 ] {} <Information> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Table is initialized
+2024.11.24 13:49:48.416365 [ 4226 ] {} <Information> DatabaseAtomic (system): Starting up tables.
+```
+
+可以在节点执行表语句，以重新激活CK节点,注意按节点，并不是所有节点都一样
+
+```sh
+ create /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags/force_restore_data
+ 
+ set /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags/force_restore_data 'true'
+```
+
+问题：
+
+```sh
+2024.11.24 14:09:16.396049 [ 7208 ] {} <Information> DatabaseAtomic (nullnull): Starting up tables.
+2024.11.24 14:09:16.397018 [ 7283 ] {} <Warning> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Replica /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11 is dropped (but metadata is not completely removed from ZooKeeper), table will stay in readonly mode
+2024.11.24 14:09:16.397037 [ 7283 ] {} <Information> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Table is initialized
+2024.11.24 14:09:16.397180 [ 7208 ] {} <Information> DatabaseAtomic (system): Starting up tables.
+```
+
+
+
+
+
+问题
+
+```sh
+java.lang.RuntimeException: java.sql.BatchUpdateException: Code: 244. DB::Exception: Unexpected logical error while adding block 110 with ID '20241124_14246018264534042777_5984015422582196172': No node, path /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_110_110_0. (UNEXPECTED_ZOOKEEPER_ERROR) (version 22.12.6.22 (official build))
+
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:87)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+Caused by: java.sql.BatchUpdateException: Code: 244. DB::Exception: Unexpected logical error while adding block 110 with ID '20241124_14246018264534042777_5984015422582196172': No node, path /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_110_110_0. (UNEXPECTED_ZOOKEEPER_ERROR) (version 22.12.6.22 (official build))
+
+	at com.clickhouse.jdbc.SqlExceptionUtils.batchUpdateError(SqlExceptionUtils.java:107)
+	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:154)
+	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:71)
 ```
 
 
