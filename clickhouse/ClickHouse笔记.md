@@ -5581,7 +5581,7 @@ cd /opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin
 ./zkServer.sh start
 
 # 查看ZK各状态
-./zkServer.sh status
+/opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin/zkServer.sh status
 ```
 
 2. 对Clickhouse配制zookeeper(每个CK副本节点都需要修改)
@@ -5710,6 +5710,23 @@ clickhouse restart
 
 5. 在Clickhouse的节点上进行分别的建表数据查询操作。
 
+执行清理
+
+```sh
+# 节点1上执行
+echo -n 'drop table nullnull.replicatemt_user' | clickhouse-client --password
+# 节点2执行
+echo -n 'drop table nullnull.replicatemt_user' | clickhouse-client --password
+
+# 清进zk上的数据
+/opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin/zkCli.sh
+deleteall /clickhouse/table/nullnull/r1/replicatemt_user
+```
+
+
+
+相关的SQL
+
 ```sql
 # os11上的建表语句
 # drop table nullnull.replicatemt_user;
@@ -5744,7 +5761,7 @@ select count(1) from nullnull.replicatemt_user;
 
 
 # 至CK节点查看数据信息 
-zkCli.sh
+/opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin/zkCli.sh
 ls -R  /clickhouse/table/nullnull/r1/replicatemt_user
 
 
@@ -5775,12 +5792,18 @@ insert into nullnull.replicatemt_user values
 
 # os11查询数据
 select * from nullnull.replicatemt_user;
+
+chown -R clickhouse:clickhouse /var/lib/clickhouse/store/96f/96fb6e9a-5f93-4f5b-92b3-40acd52ec402/
+
+
+cp /home/clickhouse/data/replicatemt_user/format_version.txt  /var/lib/clickhouse/store/96f/96fb6e9a-5f93-4f5b-92b3-40acd52ec402/format_version.txt
 ```
 
 #### 数据查看
 
 ```sh
 # os1创建表
+
 os11 :) create table nullnull.replicatemt_user(
         ^Iid UInt32,
             order_id String, 
@@ -5847,7 +5870,7 @@ Ok.
 
 
 # 查看Ck中的数据信息
-zkCli.sh
+/opt/soft/zookeeper/apache-zookeeper-3.7.2-bin/bin/zkCli.sh
 [zk: localhost:2181(CONNECTED) 20] ls -R  /clickhouse/table/nullnull/r1/replicatemt_user
 /clickhouse/table/nullnull/r1/replicatemt_user
 /clickhouse/table/nullnull/r1/replicatemt_user/alter_partition_version
@@ -6249,12 +6272,7 @@ import java.time.format.DateTimeFormatter;
 
 import org.junit.Test;
 
-/**
- * 进行CK的JDBC操作
- *
- * @author liujun
- * @since 2024/11/23
- */
+
 public class ClickHouseJdbc {
 
     /**
@@ -6263,15 +6281,16 @@ public class ClickHouseJdbc {
     private static final DateTimeFormatter FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
-    private String url = "jdbc:clickhouse://192.168.5.210:28123/nullnull?socket_timeout=300000";
+    private String url = "jdbc:clickhouse://192.168.5.210:28123/nullnull?socket_timeout=10000";
     private String user = "default";
     private String password = "liujun";
 
     @Test
-    public void Test() {
+    public void Test() throws InterruptedException {
         for (int i = 0; i < 1000; i += 2) {
             try {
                 runInsert(i);
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -6280,6 +6299,8 @@ public class ClickHouseJdbc {
             System.out.println("----------------------");
             System.out.println("----------------------");
             System.out.println("----------------------");
+
+            Thread.sleep(2500);
         }
     }
 
@@ -6307,8 +6328,7 @@ public class ClickHouseJdbc {
 
             System.out.println("执行完毕：" + i + ",时间:" + timestamp.toString());
 
-
-            Thread.sleep(1000);
+            Thread.sleep(1500);
             i = i + 1;
 
             pstm.setInt(1, i);
@@ -6319,6 +6339,7 @@ public class ClickHouseJdbc {
             pstm.addBatch();
             pstm.executeBatch();
 
+            Thread.sleep(1500);
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -6340,6 +6361,7 @@ public class ClickHouseJdbc {
         }
     }
 }
+
 ```
 
 #### 高可用验证
@@ -6347,13 +6369,71 @@ public class ClickHouseJdbc {
 1. 验证在执行过程中发生连接切换。
 
 ```sh
-# 1, 启动客户端进行数据的插入，等待第一个插入完成,通过debug调试，将断点设置在， i = i + 1;
-# 执行进入断点后，停止210的VIP所在的那台机器的KEEPALIVED 
-systemctl stop keepalived
+# 1, 将高可用主节点关闭
+poweroff
 
-# 此时将收到连接的异常:
-java.lang.RuntimeException: java.sql.BatchUpdateException: Connection reset by peer
-	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:92)
+```
+
+异常信息
+
+```sh
+执行完毕：2,时间:2024-11-24 19:28:43.164
+----------------------
+----------------------
+----------------------
+----------------------
+执行完毕：4,时间:2024-11-24 19:28:48.778
+----------------------
+----------------------
+----------------------
+----------------------
+执行完毕：6,时间:2024-11-24 19:28:54.346
+----------------------
+----------------------
+----------------------
+----------------------
+执行完毕：8,时间:2024-11-24 19:28:59.91
+2024-11-24 19:29:02.352 [main] ERROR [] com.clickhouse.client.http.ApacheHttpConnectionImpl - HTTP request failed
+java.net.SocketException: Connection reset
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:323)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:350)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:803)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.readLine(SessionInputBufferImpl.java:280)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:247)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:54)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.DefaultBHttpClientConnection.receiveResponseHeader(DefaultBHttpClientConnection.java:299)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:175)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:218)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager$InternalConnectionEndpoint.execute(PoolingHttpClientConnectionManager.java:712)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalExecRuntime.execute(InternalExecRuntime.java:216)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.MainClientExec.execute(MainClientExec.java:116)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:188)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:123)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:260)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.sendRequest(ClickHouseStatementImpl.java:362)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeInsert(ClickHouseStatementImpl.java:382)
+	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:124)
+	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:84)
 	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
@@ -6382,90 +6462,884 @@ java.lang.RuntimeException: java.sql.BatchUpdateException: Connection reset by p
 	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
 	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
 	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
-Caused by: java.sql.BatchUpdateException: Connection reset by peer
+java.lang.RuntimeException: java.sql.BatchUpdateException: Connection reset
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:89)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+Caused by: java.sql.BatchUpdateException: Connection reset
 	at com.clickhouse.jdbc.SqlExceptionUtils.batchUpdateError(SqlExceptionUtils.java:107)
 	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:154)
 	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
 	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
-	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:83)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:84)
+	... 28 more
+----------------------
+----------------------
+----------------------
+----------------------
+2024-11-24 19:29:14.890 [main] ERROR [] com.clickhouse.client.http.ApacheHttpConnectionImpl - HTTP request failed
+java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:283)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:309)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:350)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:803)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.readLine(SessionInputBufferImpl.java:280)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:247)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:54)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.DefaultBHttpClientConnection.receiveResponseHeader(DefaultBHttpClientConnection.java:299)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:175)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:218)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager$InternalConnectionEndpoint.execute(PoolingHttpClientConnectionManager.java:712)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalExecRuntime.execute(InternalExecRuntime.java:216)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.MainClientExec.execute(MainClientExec.java:116)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:188)
+java.lang.RuntimeException: java.sql.SQLException: Read timed out
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:89)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:123)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:260)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:128)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:335)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:288)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:157)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:41)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:57)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+Caused by: java.sql.SQLException: Read timed out
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:85)
+	at com.clickhouse.jdbc.SqlExceptionUtils.create(SqlExceptionUtils.java:31)
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:90)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:131)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:335)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:288)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:157)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:41)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:57)
+	... 28 more
+Caused by: java.net.ConnectException: Read timed out
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:276)
+----------------------
+----------------------
+----------------------
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+----------------------
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:128)
+	... 35 more
+2024-11-24 19:29:27.420 [main] ERROR [] com.clickhouse.client.http.ApacheHttpConnectionImpl - HTTP request failed
+java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:283)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:309)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:350)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:803)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+java.lang.RuntimeException: java.sql.SQLException: Read timed out
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.readLine(SessionInputBufferImpl.java:280)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:89)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:247)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:54)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.DefaultBHttpClientConnection.receiveResponseHeader(DefaultBHttpClientConnection.java:299)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:175)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:218)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager$InternalConnectionEndpoint.execute(PoolingHttpClientConnectionManager.java:712)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalExecRuntime.execute(InternalExecRuntime.java:216)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.MainClientExec.execute(MainClientExec.java:116)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:188)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:123)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:260)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+Caused by: java.sql.SQLException: Read timed out
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:85)
+	at com.clickhouse.jdbc.SqlExceptionUtils.create(SqlExceptionUtils.java:31)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:90)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:131)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:335)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:128)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:288)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:157)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:335)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:41)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.<init>(ClickHouseConnectionImpl.java:288)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:229)
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:157)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:57)
+	... 28 more
+	at com.clickhouse.jdbc.ClickHouseDriver.connect(ClickHouseDriver.java:41)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:681)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:229)
+Caused by: java.net.ConnectException: Read timed out
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:57)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:276)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getServerInfo(ClickHouseConnectionImpl.java:128)
+	... 35 more
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+----------------------
+----------------------
+----------------------
+----------------------
+2024-11-24 19:29:39.963 [main] ERROR [] com.clickhouse.client.http.ApacheHttpConnectionImpl - HTTP request failed
+java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:283)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:309)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:350)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:803)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:966)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.SessionInputBufferImpl.readLine(SessionInputBufferImpl.java:280)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:247)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:54)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.DefaultBHttpClientConnection.receiveResponseHeader(DefaultBHttpClientConnection.java:299)
+java.lang.RuntimeException: java.sql.SQLException: Read timed out
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:175)
+	at com.clickhouse.client.internal.apache.hc.core5.http.impl.io.HttpRequestExecutor.execute(HttpRequestExecutor.java:218)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager$InternalConnectionEndpoint.execute(PoolingHttpClientConnectionManager.java:712)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalExecRuntime.execute(InternalExecRuntime.java:216)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:89)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.MainClientExec.execute(MainClientExec.java:116)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:188)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at com.clickhouse.client.internal.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:123)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:260)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getTableColumns(ClickHouseConnectionImpl.java:264)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.prepareStatement(ClickHouseConnectionImpl.java:843)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at com.clickhouse.jdbc.ClickHouseConnection.prepareStatement(ClickHouseConnection.java:121)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:61)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+Caused by: java.sql.SQLException: Read timed out
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:85)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at com.clickhouse.jdbc.SqlExceptionUtils.create(SqlExceptionUtils.java:31)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at com.clickhouse.jdbc.SqlExceptionUtils.handle(SqlExceptionUtils.java:90)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getTableColumns(ClickHouseConnectionImpl.java:267)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.prepareStatement(ClickHouseConnectionImpl.java:843)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at com.clickhouse.jdbc.ClickHouseConnection.prepareStatement(ClickHouseConnection.java:121)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:61)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	... 28 more
+Caused by: java.net.ConnectException: Read timed out
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.clickhouse.client.http.ApacheHttpConnectionImpl.post(ApacheHttpConnectionImpl.java:276)
+	at com.clickhouse.client.http.ClickHouseHttpClient.send(ClickHouseHttpClient.java:195)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.clickhouse.client.AbstractClient.execute(AbstractClient.java:280)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.sendOnce(ClickHouseClientBuilder.java:282)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.send(ClickHouseClientBuilder.java:294)
+	at com.clickhouse.client.ClickHouseClientBuilder$Agent.execute(ClickHouseClientBuilder.java:349)
+	at com.clickhouse.client.ClickHouseClient.executeAndWait(ClickHouseClient.java:878)
+	at com.clickhouse.client.ClickHouseRequest.executeAndWait(ClickHouseRequest.java:2154)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.clickhouse.jdbc.internal.ClickHouseConnectionImpl.getTableColumns(ClickHouseConnectionImpl.java:264)
+	... 31 more
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+----------------------
+----------------------
+----------------------
+----------------------
+执行完毕：16,时间:2024-11-24 19:29:43.239
+```
+
+可以发现，经过3次的尝试后，VIP已经切换至os12节点，数据已经能够正常的写入。同时观察下zookeeper的信息
+
+```sh
+[zk: localhost:2181(CONNECTED) 2] ls -R  /clickhouse/table/nullnull/r1/replicatemt_user
+/clickhouse/table/nullnull/r1/replicatemt_user
+/clickhouse/table/nullnull/r1/replicatemt_user/alter_partition_version
+/clickhouse/table/nullnull/r1/replicatemt_user/async_blocks
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks
+/clickhouse/table/nullnull/r1/replicatemt_user/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/leader_election
+/clickhouse/table/nullnull/r1/replicatemt_user/log
+/clickhouse/table/nullnull/r1/replicatemt_user/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/mutations
+/clickhouse/table/nullnull/r1/replicatemt_user/nonincrement_block_numbers
+/clickhouse/table/nullnull/r1/replicatemt_user/part_moves_shard
+/clickhouse/table/nullnull/r1/replicatemt_user/pinned_part_uuids
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas
+/clickhouse/table/nullnull/r1/replicatemt_user/table_shared_id
+/clickhouse/table/nullnull/r1/replicatemt_user/temp
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241025
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241027
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241028
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241029
+/clickhouse/table/nullnull/r1/replicatemt_user/block_numbers/20241124
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241025_13015592445632956282_4562001324984579865
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241027_4578369839963845089_13189989263489756522
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241028_7080457497643908898_16729317074611543288
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241029_11740399369354270067_2673371466962755153
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_10132405379693272639_3428046646577274056
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_10230540805119537085_14681059210997440547
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_10450717146692111000_25758759621509487
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_10817505757869412569_181026628591761432
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11137960405753402379_7390834225104179286
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_1125629283160499471_667313474256206014
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11449262614891223712_10434325193973995840
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11485574739239147437_1382832233741835750
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_1149172063834973361_11349858368046309974
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11510015607999608073_8865444847460484811
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11651783335595762112_4834290258384934395
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11674819375185304181_13128638123613309042
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11711130768983730720_353588696856796399
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_11823961191413141801_12981946982804300000
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_12040821143702654621_7385131898990434452
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_12139192742162530601_192948997602006123
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_12421503130293894135_15024828183388612022
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_12815462189865143289_15125070928626088649
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13017195842504131605_12336544041716796557
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13093405628726730086_13834507190341013707
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13217313052810609003_2363354494291021302
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13218721635582901265_1911407198327491341
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13589351207944190138_2086037467436233884
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13686897151858068106_5263557940720416037
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_1373644903226071216_4176601694352448340
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13922215881496494978_13042167988016965784
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_13937145169340622570_9292500181067029899
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_14394045199563391374_2518033756811352752
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_14687916304426451340_2896564919249006302
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_14782457654085597715_8470790756262822685
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_14994766779009257912_13963510367717106344
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_15419226848111004660_978340887563602415
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_15581422367017887880_8792992670553925616
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_15606365243214768912_11688400057059751661
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_158749320364770544_1088332567205158469
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_16242368213427321767_17516936842213548306
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_16444032223447184294_2210822360263809153
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_16767260364202704829_8479801800992011121
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_16886839423364470219_3369375760396808671
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17150934099646145716_11924090494006589279
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17253311801061048157_2854759083303689606
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17533376373598234729_9288259479554827213
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17548875678560702067_14991475219629019169
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17605366269672927580_9320923185215517417
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17639623446476965478_2079597241399815513
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_17991644770892027087_12101583147385101138
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_18114359500974745538_72165797436477916
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_18343404638012127740_6757323399263063779
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2100048519024979695_3941175722074072985
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2168656553268737188_14101235180955414810
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2296091928270273495_1573072768743313564
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2551193334399080139_15999441472662761838
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2598628805843678230_4557709907724900596
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2645907823683769571_167249692943270525
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2792934677139152056_16671771645258698720
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2916302703994038756_4478116680611879907
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_2968037541574617443_8438028906454587043
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_3481802849342973554_16871209448529287809
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_3620079644501056278_4120356078075605236
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_3763020337176116626_14139007783168737248
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_3923910132112806256_3210601222545549659
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_4153452345042971522_8075731586150291080
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_4291461651938430132_14694147955351382359
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_4488874927353496186_15529138536320098129
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_4492489027706661579_12822366580776177232
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_4518370751875425307_15986852146212902192
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_498519109592619179_3383171227519472861
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5163210677651136486_9191358775694034226
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5478927697678467271_702881506132591623
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5584995206686495698_403385251837165750
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5615697465761137853_16146391150786017052
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5814075244209043955_5979986013899790294
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_5825788043291314863_12199375025392728330
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_6240200977340380955_9362595267384472291
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_6320167766456856667_9237710157017689992
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_643999295163740842_14689546741455616935
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_648859703155568425_7285749331845435071
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_6863209337244983772_8349634265841269874
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7356656119487493172_7085123012842164213
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7371310301040073785_16433821631507183583
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7457817910625093863_5814149119689692310
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7480262948039692789_17407097582743199918
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7711636546040296599_11628934173031955694
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_7996671237317660896_9189770914568988817
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8096215877767839624_15466401100761770896
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8120584604318820784_8641009530054684306
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8164017999313980639_15288919785474941215
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8224876827535762800_4588888098202526814
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8242732913426915397_7027079768630026725
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8583224233213991358_1307291437392790359
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8669644682051738077_13320715612514776868
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_8702268257523737396_8476075556063722400
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_9130819884056628017_14038881831393447754
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_9140494556531469766_384175152845583851
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_9482396326331890585_9608142230621718211
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_9732022391761307689_6613354627955927869
+/clickhouse/table/nullnull/r1/replicatemt_user/blocks/20241124_9755738767192495372_4360041466014502202
+/clickhouse/table/nullnull/r1/replicatemt_user/leader_election/leader_election-0
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000019
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000020
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000021
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000022
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000023
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000024
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000025
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000026
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000027
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000028
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000029
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000030
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000031
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000032
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000033
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000034
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000035
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000036
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000037
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000038
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000039
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000040
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000041
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000042
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000043
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000044
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000045
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000046
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000047
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000048
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000049
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000050
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000051
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000052
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000053
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000054
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000055
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000056
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000057
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000058
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000059
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000060
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000061
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000062
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000063
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000064
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000065
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000066
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000067
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000068
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000069
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000070
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000071
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000072
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000073
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000074
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000075
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000076
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000077
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000078
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000079
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000080
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000081
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000082
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000083
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000084
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000085
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000086
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000087
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000088
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000089
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000090
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000091
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000092
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000093
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000094
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000095
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000096
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000097
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000098
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000099
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000100
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000101
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000102
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000103
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000104
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000105
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000106
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000107
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000108
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000109
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000110
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000111
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000112
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000113
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000114
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000115
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000116
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000117
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000118
+/clickhouse/table/nullnull/r1/replicatemt_user/log/log-0000000119
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/failed_parts
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/last_part
+/clickhouse/table/nullnull/r1/replicatemt_user/quorum/parallel
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/host
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/is_lost
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/log_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/max_processed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/metadata_version
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/min_unprocessed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/mutation_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/queue
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241025_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241027_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241028_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241029_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_0_4_1
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_0_9_2
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_10_10_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_11_11_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_12_12_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_1_1_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_2_2_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_3_3_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_4_4_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_5_5_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_6_6_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_7_7_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_8_8_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_9_9_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/columns
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/flags
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/host
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/is_active
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/is_lost
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/log_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/max_processed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/metadata
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/metadata_version
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/min_unprocessed_insert_time
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/mutation_pointer
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/queue
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241025_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241027_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241028_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241029_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_0_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_14_3
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_19_4
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_24_5
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_29_6
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_34_7
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_39_8
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_44_9
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_49_10
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_4_1
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_54_11
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_59_12
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_64_13
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_69_14
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_74_15
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_83_16
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_92_17
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_0_9_2
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_10_10_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_11_11_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_12_12_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_13_13_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_14_14_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_15_15_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_16_16_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_17_17_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_18_18_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_19_19_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_1_1_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_20_20_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_21_21_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_22_22_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_23_23_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_24_24_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_25_25_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_26_26_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_27_27_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_28_28_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_29_29_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_2_2_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_30_30_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_31_31_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_32_32_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_33_33_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_34_34_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_35_35_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_36_36_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_37_37_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_38_38_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_39_39_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_3_3_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_40_40_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_41_41_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_42_42_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_43_43_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_44_44_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_45_45_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_46_46_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_47_47_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_48_48_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_49_49_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_4_4_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_50_50_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_51_51_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_52_52_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_53_53_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_54_54_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_55_55_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_56_56_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_57_57_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_58_58_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_59_59_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_5_5_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_60_60_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_61_61_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_62_62_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_63_63_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_64_64_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_65_65_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_66_66_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_67_67_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_68_68_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_69_69_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_6_6_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_70_70_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_71_71_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_72_72_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_73_73_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_74_74_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_75_75_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_75_79_1
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_76_76_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_77_77_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_78_78_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_79_79_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_7_7_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_80_80_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_81_81_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_82_82_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_83_83_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_84_84_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_84_88_1
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_85_85_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_86_86_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_87_87_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_88_88_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_89_89_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_8_8_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_90_90_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_91_91_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_92_92_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_93_93_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_94_94_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_95_95_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_96_96_0
+/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_12/parts/20241124_9_9_0
+/clickhouse/table/nullnull/r1/replicatemt_user/temp/abandonable_lock-insert
+/clickhouse/table/nullnull/r1/replicatemt_user/temp/abandonable_lock-other
+```
+
+再次启动OS11节点恢复数据
+
+
+
+ZK节点数据丢失问题
+
+```sh
+java.lang.RuntimeException: java.sql.BatchUpdateException: Code: 242. DB::Exception: Table is in readonly mode since table metadata was not found in zookeeper: replica_path=/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11. (TABLE_IS_READ_ONLY) (version 22.12.6.22 (official build))
+
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:90)
+	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
+	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+Caused by: java.sql.BatchUpdateException: Code: 242. DB::Exception: Table is in readonly mode since table metadata was not found in zookeeper: replica_path=/clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11. (TABLE_IS_READ_ONLY) (version 22.12.6.22 (official build))
+
+	at com.clickhouse.jdbc.SqlExceptionUtils.batchUpdateError(SqlExceptionUtils.java:107)
+	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:154)
+	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
+	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
+----------------------
+	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:71)
 	... 28 more
 ```
 
-问题2：
 
-ck日志
-
-```sh
-2024.11.24 13:49:48.415380 [ 4226 ] {} <Information> DatabaseAtomic (default): Starting up tables.
-2024.11.24 13:49:48.415386 [ 4226 ] {} <Information> DatabaseAtomic (nullnull): Starting up tables.
-2024.11.24 13:49:48.416263 [ 4384 ] {} <Warning> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): No metadata in ZooKeeper for /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11: table will stay in readonly mode
-2024.11.24 13:49:48.416286 [ 4384 ] {} <Information> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Table is initialized
-2024.11.24 13:49:48.416365 [ 4226 ] {} <Information> DatabaseAtomic (system): Starting up tables.
-```
-
-可以在节点执行表语句，以重新激活CK节点,注意按节点，并不是所有节点都一样
-
-```sh
- create /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags/force_restore_data
- 
- set /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/flags/force_restore_data 'true'
-```
-
-问题：
-
-```sh
-2024.11.24 14:09:16.396049 [ 7208 ] {} <Information> DatabaseAtomic (nullnull): Starting up tables.
-2024.11.24 14:09:16.397018 [ 7283 ] {} <Warning> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Replica /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11 is dropped (but metadata is not completely removed from ZooKeeper), table will stay in readonly mode
-2024.11.24 14:09:16.397037 [ 7283 ] {} <Information> nullnull.replicatemt_user (ReplicatedMergeTreeAttachThread): Table is initialized
-2024.11.24 14:09:16.397180 [ 7208 ] {} <Information> DatabaseAtomic (system): Starting up tables.
-```
-
-
-
-
-
-问题
-
-```sh
-java.lang.RuntimeException: java.sql.BatchUpdateException: Code: 244. DB::Exception: Unexpected logical error while adding block 110 with ID '20241124_14246018264534042777_5984015422582196172': No node, path /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_110_110_0. (UNEXPECTED_ZOOKEEPER_ERROR) (version 22.12.6.22 (official build))
-
-	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:87)
-	at data.test.jdbcck.ClickHouseJdbc.Test(ClickHouseJdbc.java:36)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
-	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
-	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
-	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
-	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
-	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
-	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
-	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
-	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
-	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
-	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
-	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
-	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
-	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
-	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
-	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
-	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
-	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
-	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
-	at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
-	at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
-	at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
-	at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
-	at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:232)
-	at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
-Caused by: java.sql.BatchUpdateException: Code: 244. DB::Exception: Unexpected logical error while adding block 110 with ID '20241124_14246018264534042777_5984015422582196172': No node, path /clickhouse/table/nullnull/r1/replicatemt_user/replicas/rep_11/parts/20241124_110_110_0. (UNEXPECTED_ZOOKEEPER_ERROR) (version 22.12.6.22 (official build))
-
-	at com.clickhouse.jdbc.SqlExceptionUtils.batchUpdateError(SqlExceptionUtils.java:107)
-	at com.clickhouse.jdbc.internal.InputBasedPreparedStatement.executeAny(InputBasedPreparedStatement.java:154)
-	at com.clickhouse.jdbc.internal.AbstractPreparedStatement.executeLargeBatch(AbstractPreparedStatement.java:85)
-	at com.clickhouse.jdbc.internal.ClickHouseStatementImpl.executeBatch(ClickHouseStatementImpl.java:815)
-	at data.test.jdbcck.ClickHouseJdbc.runInsert(ClickHouseJdbc.java:71)
-```
 
 
 
