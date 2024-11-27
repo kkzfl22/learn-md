@@ -4,7 +4,7 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/13
  */
 public class ConcreteSubject implements Subject {

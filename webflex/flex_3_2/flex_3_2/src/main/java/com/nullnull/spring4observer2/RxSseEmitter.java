@@ -7,7 +7,7 @@ import rx.Subscriber;
 import java.io.IOException;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/15
  */
 public class RxSseEmitter extends SseEmitter {

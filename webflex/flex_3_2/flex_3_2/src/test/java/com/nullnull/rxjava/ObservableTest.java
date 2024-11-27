@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/13
  */
 public class ObservableTest {

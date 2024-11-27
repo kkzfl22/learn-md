@@ -9,7 +9,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.net.URI;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/15
  */
 public class WebClientTest {

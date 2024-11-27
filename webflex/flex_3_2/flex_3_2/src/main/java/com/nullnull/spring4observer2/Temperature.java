@@ -1,7 +1,7 @@
 package com.nullnull.spring4observer2;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/13
  */
 public class Temperature {

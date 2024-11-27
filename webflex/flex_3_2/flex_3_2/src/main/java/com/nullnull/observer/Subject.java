@@ -1,7 +1,9 @@
 package com.nullnull.observer;
 
 /**
- * @author liujun
+ * Subject接口
+ *
+ * @author nullnull
  * @since 2023/7/13
  */
 public interface Subject {

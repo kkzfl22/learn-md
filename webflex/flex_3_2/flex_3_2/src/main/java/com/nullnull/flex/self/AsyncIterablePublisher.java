@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Publisher的实现，用于进行数据的生产操作，可以理解为要加工的数据
  *
- * @author liujun
+ * @author nullnull
  * @since 2023/6/27
  */
 public class AsyncIterablePublisher<T> implements Publisher<T> {

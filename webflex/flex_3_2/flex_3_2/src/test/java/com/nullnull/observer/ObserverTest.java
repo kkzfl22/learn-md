@@ -3,7 +3,7 @@ package com.nullnull.observer;
 import org.junit.Test;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/13
  */
 public class ObserverTest {

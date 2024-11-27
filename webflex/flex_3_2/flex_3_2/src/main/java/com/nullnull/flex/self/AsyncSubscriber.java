@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 法进行处理。
  * 注意：该类中使用了很多try-catch用于说明什么时候可以抛异常，什么时候不可以抛异常
  *
- * @author liujun
+ * @author nullnull
  * @since 2023/6/30
  */
 public abstract class AsyncSubscriber<T> implements Subscriber<T>, Runnable {

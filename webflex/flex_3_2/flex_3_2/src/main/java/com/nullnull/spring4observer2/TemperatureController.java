@@ -8,7 +8,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import javax.servlet.http.HttpServletRequest;
 
 /**
- * @author liujun
+ * @author nullnull
  * @since 2023/7/15
  */
 @RestController
