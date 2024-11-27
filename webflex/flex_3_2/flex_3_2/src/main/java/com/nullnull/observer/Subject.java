@@ -6,27 +6,9 @@ package com.nullnull.observer;
  */
 public interface Subject {
 
-
     /**
-     * * 注册观察者
-     * <p>
-     * * @param observer
-     * <p>
-     * 1
-     * 2
-     * 3
-     * 4
-     * 5
-     * 6
-     * 7
-     * <p>
-     * Observer接口：
-     * <p>
-     * <p>
-     * Subject的实现类：
-     * <p>
+     *  注册观察者
      */
-
     void registerObserver(Observer observer);
 
     /**
@@ -34,8 +16,6 @@ public interface Subject {
      *
      * @param observer
      */
-
-
     void unregisterObserver(Observer observer);
 
     /**
@@ -43,9 +23,6 @@ public interface Subject {
      *
      * @param event
      */
-
-
     void notifyObservers(String event);
-
 
 }
