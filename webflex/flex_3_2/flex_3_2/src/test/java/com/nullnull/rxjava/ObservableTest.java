@@ -220,23 +220,21 @@ public class ObservableTest {
 
         Observable.from(dataList)
                 //过滤出偶数
-                .filter(item -> item % 2 == 0)
+                .filter(item -> item % 100 == 0)
                 //计数
                 .count()
                 //输出
                 .subscribe(
-                        item -> System.out.println("下一个元素:" + item),
-                        ex -> System.err.println("异常:" + ex),
-                        () -> System.out.println("完成:")
+                        item -> System.out.println("结果计数:" + item)
                 );
     }
 
 
     @Test
     public void zip() {
-        Observable.zip(Observable.just(1,2,3,4),
-                Observable.just("a","b","C","D"),
-                (a ,b) ->  a + b)
+        Observable.zip(Observable.just(1, 2, 3, 4),
+                        Observable.just("a", "b", "C", "D"),
+                        (a, b) -> a + b)
                 .forEach(System.out::println);
 
     }
