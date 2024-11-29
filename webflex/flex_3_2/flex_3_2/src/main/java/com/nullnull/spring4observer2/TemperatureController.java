@@ -23,10 +23,9 @@ public class TemperatureController {
     @RequestMapping(value = "/temperature-stream", method =
             RequestMethod.GET)
     public SseEmitter events(HttpServletRequest request) {
-
         RxSseEmitter emitter = new RxSseEmitter();
+        //数据源对象生产数据，交给订阅者SseEmitter
         temperatureSensor.temperatureStream().subscribe(emitter.getSubscriber());
-
         return emitter;
     }
 }
