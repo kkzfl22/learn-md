@@ -33,4 +33,63 @@ public class TestSubscribe {
                 .subscribe();
     }
 
+    @Test
+    public void subscribeOk() {
+        Flux.range(1, 20)
+                .filter(item -> item % 4 == 0)
+                .subscribe(System.out::println);
+    }
+
+    @Test
+    public void subscribeException() {
+        Flux.from(subscriber -> {
+            for (int i = 0; i < 5; i++) {
+                subscriber.onNext(i);
+            }
+            subscriber.onError(new IllegalArgumentException("添加错误"));
+        }).subscribe(item -> System.out.println("item:" + item),
+                ex -> System.out.println("异常情况:" + ex)
+        );
+    }
+
+    @Test
+    public void subscribeFinish() {
+        Flux.from(subscriber -> {
+            for (int i = 0; i < 5; i++) {
+                subscriber.onNext(i);
+            }
+            subscriber.onComplete();
+            ;
+        }).subscribe(item -> System.out.println("item:" + item),
+                ex -> System.out.println("异常情况:" + ex),
+                () -> System.out.println("处理完成")
+        );
+    }
+
+    @Test
+    public void subscribeCancel() {
+        Flux.range(1, 20)
+                .subscribe(item -> System.out.println("onNext:" + item),
+                        ex -> System.out.println("异常情况:" + ex),
+                        () -> System.out.println("处理完成"),
+                        //一订阅成功就取消订阅
+                        subscription -> subscription.cancel()
+                );
+    }
+
+    @Test
+    public void subscribeRequest() {
+        Flux.range(1, 20)
+                .subscribe(item -> System.out.println("onNext:" + item),
+                        ex -> System.out.println("异常情况:" + ex),
+                        () -> System.out.println("处理完成"),
+                        subscription -> {
+                            //订阅响应式流5个元素
+                            subscription.request(5);
+                            //取消订阅
+                            subscription.cancel();
+                        }
+                );
+    }
+
 }
