@@ -4,6 +4,7 @@ import org.junit.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.context.Context;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -60,4 +61,30 @@ public class TestFluxContext {
 
         System.out.println("结果：" + lastValue);
     }
+
+
+    @Test
+    public void contextRun() {
+        printCurrentContext("top")
+                .subscriberContext(Context.of("top", "Context"))
+                .flatMap(data -> printCurrentContext("middle"))
+                .subscriberContext(Context.of("middle", "context"))
+                .flatMap(data -> printCurrentContext("bottom"))
+                .subscriberContext(Context.of("bottom", "context"))
+                .flatMap(data -> printCurrentContext("initial"))
+                .block();
+    }
+
+    private void print(String id, Context context) {
+        System.out.println(id + "{");
+        System.out.println(context);
+        System.out.println("}");
+    }
+
+
+    Mono<Context> printCurrentContext(String id) {
+        return Mono.subscriberContext()
+                .doOnNext(context -> print(id, context));
+    }
+
 }
