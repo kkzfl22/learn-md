@@ -2,8 +2,6 @@ package com.maxwell.datack;
 
 import com.maxwell.datack.service.OrderHandler;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.server.RequestPredicates;
@@ -16,7 +14,7 @@ import org.springframework.web.reactive.function.server.ServerResponse;
  * @author nullnull
  * @since 2024/12/10
  */
-@SpringBootApplication
+//@SpringBootApplication
 public class WebFluxWebApplication {
 
     public static void main(String[] args) {
@@ -24,7 +22,7 @@ public class WebFluxWebApplication {
     }
 
 
-    @Bean
+    //@Bean
     public RouterFunction<ServerResponse> reoutes(OrderHandler handler) {
         return RouterFunctions
                 //nest包含两个参数，1，测试条件是否通过，如果通过，则跳转到第二参数指定的路由函数
