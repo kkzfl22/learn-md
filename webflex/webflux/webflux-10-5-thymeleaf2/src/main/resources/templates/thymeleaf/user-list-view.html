@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>用户列表-freemarker</title>
+</head>
+<table border="1">
+     <thead>
+    </thead>
+     <tbody>
+       <tr th:each="e : ${userList}">
+       <td th:text="${e.name}">...</td>
+       <td th:text="${e.age}">...</td>
+       <td th:text="${e.address}">...</td>
+     </tr>
+ </tbody>
+</table>
+</body>
+</html>

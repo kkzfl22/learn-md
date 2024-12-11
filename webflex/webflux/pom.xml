@@ -20,6 +20,8 @@
         <module>webflux-rxjava2</module>
         <module>webflux-reactor</module>
         <module>webflux-10-3-web</module>
+        <module>webflux-10-5-list</module>
+        <module>webflux-10-5-thymeleaf2</module>
     </modules>
 
     <properties>
