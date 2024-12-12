@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript" src="jquery-1.9.1.js"></script>
+    <script type="text/javascript">
+        $(function () {
+          $("#btn").click(function () {
+            if ($("#userName").val() == '') {
+              alert("请输入用户名称")
+              $("#userName").focus()
+              return
+            }
+            $.ajax({
+              url: "/info-by-user",
+              data: $("#userName").val(),
+              contentType: "application/json;charset=utf-8",
+              cache: false,
+              method: "post",
+              success: function (data) {
+                alert(JSON.stringify(data))
+              },
+              error: function () {
+                alert("通信异常")
+              }
+            })
+          })
+        })
+    </script>
+</head>
+<body>
+<input type="text" id="userName" placeholder="请输入用户名称">
+<input id="btn" type="button" value="获取数据">
+</body>
+</html>
