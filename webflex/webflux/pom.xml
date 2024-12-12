@@ -24,6 +24,7 @@
         <module>webflux-10-5-thymeleaf2</module>
         <module>webflux-10-6-security</module>
         <module>webflux-10-7-rxjava</module>
+        <module>webflux-13-2-bigfile</module>
     </modules>
 
     <properties>
