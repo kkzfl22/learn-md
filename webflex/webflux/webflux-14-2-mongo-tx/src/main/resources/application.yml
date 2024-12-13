@@ -1,13 +1,13 @@
 spring:
   data:
    mongodb:
-    host: "192.168.5.16"
-    port: 37017
-    database: "wallet"
+    #host: "192.168.5.16"
+    #port: 37017
+    #database: "wallet"
 #   username: "root"
 #   password: "123456"
 #   authentication-database: "admin"
-#   uri: "mongodb://192.168.2.106:27017/wallet,192.168.2.106:27018/wallet,192.168.2.106:27019/wallet"
+   uri: "mongodb://192.168.5.66:37017,192.168.5.66:37018/wallet,192.168.5.66:37019/wallet"
 logging:
   level:
    reactor.core.publisher.FluxUsingWhen: ERROR

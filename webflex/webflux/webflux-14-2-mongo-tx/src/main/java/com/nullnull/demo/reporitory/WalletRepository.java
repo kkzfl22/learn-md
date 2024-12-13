@@ -15,11 +15,11 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface WalletRepository extends ReactiveMongoRepository<Wallet, ObjectId> {
 
-    /**
-     * 查询用户的钱包
-     *
-     * @param owner
-     * @return
-     */
-    Mono<Wallet> findByOwner(Mono<String> owner);
+  /**
+   * 查询用户的钱包
+   *
+   * @param owner
+   * @return
+   */
+  Mono<Wallet> findByOwner(Mono<String> owner);
 }
