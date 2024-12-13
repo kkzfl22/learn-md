@@ -25,6 +25,7 @@
         <module>webflux-10-6-security</module>
         <module>webflux-10-7-rxjava</module>
         <module>webflux-13-2-bigfile</module>
+        <module>webflux-14-2-mongo-tx</module>
     </modules>
 
     <properties>
