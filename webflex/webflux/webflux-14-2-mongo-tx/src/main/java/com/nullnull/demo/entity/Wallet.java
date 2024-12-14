@@ -1,5 +1,8 @@
 package com.nullnull.demo.entity;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -9,105 +12,76 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * @since 2024/12/13
  */
 @Document("wallet")
+@Getter
+@Setter
+@ToString
 public class Wallet {
 
-  @Id private ObjectId id;
+    @Id
+    private ObjectId id;
 
-  private String owner;
+    private String owner;
 
-  /** 余额 */
-  private int balance;
+    /**
+     * 余额
+     */
+    private int balance;
 
-  /** 入账笔数 */
-  private int depositOperations;
+    /**
+     * 入账笔数
+     */
+    private int depositOperations;
 
-  /** 转账笔数 */
-  private int withdrawOperations;
+    /**
+     * 转账笔数
+     */
+    private int withdrawOperations;
 
-  public Wallet(
-      ObjectId id, String owner, int balance, int depositOperations, int withdrawOperations) {
-    this.id = id;
-    this.owner = owner;
-    this.balance = balance;
-    this.depositOperations = depositOperations;
-    this.withdrawOperations = withdrawOperations;
-  }
-
-  /**
-   * 余额检查
-   *
-   * @param amount
-   * @return
-   */
-  public boolean hasEnoughFunds(int amount) {
-    return balance >= amount;
-  }
-
-  /**
-   * 扣除余额
-   *
-   * @param amount
-   */
-  public void withDraw(int amount) {
-    if (!hasEnoughFunds(amount)) {
-      throw new RuntimeException("Not enough founds!");
+    public Wallet(
+            ObjectId id, String owner, int balance, int depositOperations, int withdrawOperations) {
+        this.id = id;
+        this.owner = owner;
+        this.balance = balance;
+        this.depositOperations = depositOperations;
+        this.withdrawOperations = withdrawOperations;
     }
 
-    this.balance = this.balance - amount;
-    this.withdrawOperations += 1;
-  }
+    /**
+     * 余额检查
+     *
+     * @param amount
+     * @return
+     */
+    public boolean hasEnoughFunds(int amount) {
+        return balance >= amount;
+    }
 
-  /**
-   * 增加余额
-   *
-   * @param amount
-   */
-  public void deposit(int amount) {
-    this.balance = this.balance + amount;
-    this.depositOperations += 1;
-  }
+    /**
+     * 扣除余额
+     *
+     * @param amount
+     */
+    public void withDraw(int amount) {
+        if (!hasEnoughFunds(amount)) {
+            throw new RuntimeException("Not enough founds!");
+        }
 
-  public static Wallet wallet(String owner, int balance) {
-    return new Wallet(new ObjectId(), owner, balance, 0, 0);
-  }
+        this.balance = this.balance - amount;
+        this.withdrawOperations += 1;
+    }
 
-  public ObjectId getId() {
-    return id;
-  }
+    /**
+     * 增加余额
+     *
+     * @param amount
+     */
+    public void deposit(int amount) {
+        this.balance = this.balance + amount;
+        this.depositOperations += 1;
+    }
 
-  public void setId(ObjectId id) {
-    this.id = id;
-  }
+    public static Wallet wallet(String owner, int balance) {
+        return new Wallet(new ObjectId(), owner, balance, 0, 0);
+    }
 
-  public String getOwner() {
-    return owner;
-  }
-
-  public void setOwner(String owner) {
-    this.owner = owner;
-  }
-
-  public int getBalance() {
-    return balance;
-  }
-
-  public void setBalance(int balance) {
-    this.balance = balance;
-  }
-
-  public int getDepositOperations() {
-    return depositOperations;
-  }
-
-  public void setDepositOperations(int depositOperations) {
-    this.depositOperations = depositOperations;
-  }
-
-  public int getWithdrawOperations() {
-    return withdrawOperations;
-  }
-
-  public void setWithdrawOperations(int withdrawOperations) {
-    this.withdrawOperations = withdrawOperations;
-  }
 }
