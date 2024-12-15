@@ -26,17 +26,34 @@ public class TransferComputerRepository {
   public Mono<Void> insertRows() {
     String uuid = UUID.randomUUID().toString();
 
+    int i = 0;
+
     StringBuilder value = new StringBuilder();
     value.append("values(");
     value.append("'").append(uuid).append("'").append(",");
-    value.append("'java编程思想'").append(",");
-    value.append("156").append(",");
-    value.append("2007");
+    value.append("'联想'").append(",");
+    value.append("8500").append(",");
+    value.append("2023");
     value.append(")");
 
-    return client.sql("insert int computer (id,name,money,make_year) " + value)
-            .fetch()
-            .rowsUpdated()
-            ;
+    StringBuilder value2 = new StringBuilder();
+    value2.append("values(");
+    value2.append("'").append(uuid).append("'").append(",");
+    value2.append("'HP'").append(",");
+    value2.append("5600").append(",");
+    value2.append("2022");
+    value2.append(")");
+
+    return client
+        .sql("insert int computer (id,name,money,make_year) " + value.toString())
+        .fetch()
+        .rowsUpdated()
+        .doOnNext(
+            item -> {
+              int a = 10 / i;
+            })
+        .then(
+            client.sql("insert int computer (id,name,money,make_year) " + value2.toString()).then())
+        .then();
   }
 }

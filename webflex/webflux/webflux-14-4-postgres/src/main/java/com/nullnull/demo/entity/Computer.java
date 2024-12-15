@@ -7,6 +7,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.util.UUID;
+
 /**
  * 电脑信息
  *
@@ -22,7 +24,7 @@ public class Computer {
   @Id private String code;
 
   @Column("name")
-  private String title;
+  private String name;
 
   @Column("money")
   private Integer money;
@@ -31,14 +33,14 @@ public class Computer {
   @Column("make_year")
   private Integer makeYear;
 
-  public Computer(String code, String title, Integer money, Integer makeYear) {
-    this.code = code;
-    this.title = title;
+  public Computer(String name, Integer money, Integer makeYear) {
+    this.code = UUID.randomUUID().toString();
+    this.name = name;
     this.money = money;
     this.makeYear = makeYear;
   }
 
   public Computer() {
-    this(null, null, null, null);
+    this(null, null, null);
   }
 }
