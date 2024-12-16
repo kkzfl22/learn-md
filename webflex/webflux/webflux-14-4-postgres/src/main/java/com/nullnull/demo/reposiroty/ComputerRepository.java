@@ -11,7 +11,7 @@ import reactor.core.publisher.Flux;
  * @author nullnull
  * @since 2024/12/14
  */
-public interface ComputerRepository extends ReactiveCrudRepository<Computer, String> {
+public interface ComputerRepository extends ReactiveCrudRepository<Computer, Integer> {
 
   /**
    * 查找最新制造的电脑

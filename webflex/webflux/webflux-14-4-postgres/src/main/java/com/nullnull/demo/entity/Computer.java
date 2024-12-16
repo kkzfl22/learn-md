@@ -1,13 +1,9 @@
 package com.nullnull.demo.entity;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
-
-import java.util.UUID;
 
 /**
  * 电脑信息
@@ -16,12 +12,13 @@ import java.util.UUID;
  * @since 2024/12/14
  */
 @Table("computer")
-@Getter
-@Setter
-@ToString
+@Data
 public class Computer {
 
-  @Id private String code;
+  /**
+   * @Id 仅针对自增长序列
+   */
+  @Id private Integer id;
 
   @Column("name")
   private String name;
@@ -34,7 +31,6 @@ public class Computer {
   private Integer makeYear;
 
   public Computer(String name, Integer money, Integer makeYear) {
-    this.code = UUID.randomUUID().toString();
     this.name = name;
     this.money = money;
     this.makeYear = makeYear;

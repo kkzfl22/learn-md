@@ -1,6 +1,6 @@
-create database mysql_r2dbc;
+CREATE DATABASE `spring_r2dbc`;
 
-
+use spring_r2dbc;
 
 CREATE TABLE `student` (
   `id` int(11) ,
@@ -22,10 +22,9 @@ CURRENT_TIMESTAMP(0),
 
 
 
-insert into student(code, name, gender, birthday, address, createdBy, 
-updatedBy)
+insert into student(id,code, name, gender, birthday, address, createdBy,updatedBy)
 values
-  (1,'S0001', 'Tom', 'M', '2001-03-05', null, 'TEST', 'TEST')
- ,(2,'S0002', 'Ted', 'M', '2001-06-12', null, 'TEST', 'TEST')
- ,(3,'S0003', 'Mary', 'F', '2001--9-12', 'Chicago', 'TEST', 'TEST')
+  (1,'S0001', 'Tom', 'M', '2001-03-05', null, 'TEST', 'TEST'),
+  (2,'S0002', 'Ted', 'M', '2001-06-12', null, 'TEST', 'TEST'),
+  (3,'S0003', 'Mary', 'F', '2001--9-12', 'Chicago', 'TEST', 'TEST')
 ;

@@ -24,7 +24,7 @@ import java.util.concurrent.CountDownLatch;
 public class TestComputerServiceImpl {
 
   @Test
-  public void test(@Autowired ComputerRepository repository) throws InterruptedException {
+  public void testSave(@Autowired ComputerRepository repository) throws InterruptedException {
     Assert.assertNotNull(repository);
     CountDownLatch latch = new CountDownLatch(1);
 
@@ -32,6 +32,7 @@ public class TestComputerServiceImpl {
     thinkStation.subscribe(
         item -> System.out.println("onnext:" + item),
         ex -> {
+          ex.printStackTrace();
           System.err.println("error:" + ex);
           latch.countDown();
         },
@@ -100,7 +101,7 @@ public class TestComputerServiceImpl {
   public void testServiceFindAll(@Autowired ComputerService computerService)
       throws InterruptedException {
     computerService.findComputerAll().subscribe(System.out::println);
-    Thread.sleep(10000);
+    Thread.sleep(5000);
   }
 
   @Test

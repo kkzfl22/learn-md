@@ -1,12 +1,9 @@
 package com.nullnull.demo.reposiroty;
 
-import com.nullnull.demo.entity.Computer;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * 事务的操作
@@ -30,30 +27,28 @@ public class TransferComputerRepository {
 
     StringBuilder value = new StringBuilder();
     value.append("values(");
-    value.append("'").append(uuid).append("'").append(",");
-    value.append("'联想'").append(",");
+    value.append("'联想-1'").append(",");
     value.append("8500").append(",");
     value.append("2023");
     value.append(")");
 
+    uuid = UUID.randomUUID().toString();
     StringBuilder value2 = new StringBuilder();
     value2.append("values(");
-    value2.append("'").append(uuid).append("'").append(",");
-    value2.append("'HP'").append(",");
+    value2.append("'HP-1'").append(",");
     value2.append("5600").append(",");
     value2.append("2022");
     value2.append(")");
 
     return client
-        .sql("insert int computer (id,name,money,make_year) " + value.toString())
+        .sql("insert into computer (name,money,make_year) " + value.toString())
         .fetch()
         .rowsUpdated()
         .doOnNext(
             item -> {
               int a = 10 / i;
             })
-        .then(
-            client.sql("insert int computer (id,name,money,make_year) " + value2.toString()).then())
+        .then(client.sql("insert into computer (name,money,make_year) " + value2.toString()).then())
         .then();
   }
 }
