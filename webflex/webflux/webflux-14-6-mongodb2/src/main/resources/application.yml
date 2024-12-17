@@ -1,0 +1,10 @@
+spring:
+  data:
+    mongodb:
+      uri: "mongodb://node16:37017,node16:37018,node16:37019/wallet"
+
+
+logging:
+  level:
+    reactor.core.publisher.FluxUsingWhen: ERROR
+#  org.springframework.data.mongodb.core.ReactiveMongoTemplate: DEBUG

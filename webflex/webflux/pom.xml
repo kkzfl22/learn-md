@@ -28,6 +28,7 @@
         <module>webflux-14-2-mongo-tx</module>
         <module>webflux-14-4-postgres</module>
         <module>webflux-15-5-mysql</module>
+        <module>webflux-14-6-mongodb2</module>
     </modules>
 
     <properties>
