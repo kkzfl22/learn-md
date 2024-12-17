@@ -1,8 +1,7 @@
 spring:
   data:
     mongodb:
-      uri: "mongodb://node16:37017,node16:37018,node16:37019/wallet"
-
+      uri: "mongodb://node16:37017,node16:37018,node16:37019/test-db"
 
 logging:
   level:

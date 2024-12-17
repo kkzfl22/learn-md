@@ -4,11 +4,11 @@ package com.nullnull.demo;
 import com.nullnull.demo.entity.Book;
 import com.nullnull.demo.repository.BookSpringDataMongoRepository;
 import org.bson.types.ObjectId;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import reactor.core.publisher.Flux;
 
@@ -19,7 +19,7 @@ import java.util.concurrent.CountDownLatch;
  * @author nullnull
  * @since 2024/12/17
  */
-@SpringBootApplication
+@SpringBootTest
 public class WebFluxApplicationTests {
 
     private static final Logger log = LoggerFactory.getLogger(WebFluxApplicationTests.class);
@@ -44,7 +44,7 @@ public class WebFluxApplicationTests {
         System.out.println("----------------------------------");
         System.out.println();
 
-        bookRepo.findByAuthorsOrderByPublishingYearDesc("Bob")
+        bookRepo.findByAuthorsOrderByPublishingYearDesc("bob")
                 .doOnNext(book -> System.out.println(book))
                 .blockLast();
         System.out.println("----------------------------------");
@@ -83,11 +83,12 @@ public class WebFluxApplicationTests {
 
     @Test
     public void testDelete(@Autowired ReactiveMongoRepository repository) throws InterruptedException {
-        ObjectId id = new ObjectId("data");
-        repository.findById(id)
+        Book back = (Book) repository.findAll().blockLast();
+
+        repository.findById(back.getId())
                 .doOnNext(book -> System.out.println("删除之前:" + book))
-                .then(repository.deleteById(id))
-                .map(book -> repository.findById(id))
+                .then(repository.deleteById(back.getId()))
+                .map(book -> repository.findById(back.getId()))
                 .doOnNext(book -> System.out.println("删除之后:" + book))
                 .doOnTerminate(() -> System.out.println("运行结束"))
                 .block();
