@@ -6,11 +6,13 @@ import org.springframework.data.annotation.Id;
 import java.io.Serializable;
 
 /**
+ * 用户信息
+ *
  * @author nullnull
  * @since 2024/12/18
  */
 @Data
-public class City implements Serializable {
+public class User implements Serializable {
 
     private static final long serialVersionUID = -1L;
 
@@ -18,17 +20,17 @@ public class City implements Serializable {
     private Long id;
 
     /**
-     * 省份编号
+     * 用户编号
      */
-    private Long provinceId;
+    private String code;
 
     /**
-     * 城市名称
+     * 用户所在的城市
      */
-    private String cityName;
+    private String addressCity;
 
     /**
-     * 描述
+     * 备注
      */
-    private String description;
+    private String remark;
 }
