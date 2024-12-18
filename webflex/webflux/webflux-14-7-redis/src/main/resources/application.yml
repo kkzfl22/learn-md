@@ -1,0 +1,5 @@
+spring:
+  redid:
+    host: 192.168.5.16
+    port: 6379
+    timeout: 5000

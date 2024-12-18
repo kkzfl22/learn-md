@@ -27,8 +27,10 @@
         <module>webflux-13-2-bigfile</module>
         <module>webflux-14-2-mongo-tx</module>
         <module>webflux-14-4-postgres</module>
-        <module>webflux-15-5-mysql</module>
+        <module>webflux-14-5-mysql</module>
         <module>webflux-14-6-mongodb2</module>
+        <module>webflux-14-7-redis</module>
+
     </modules>
 
     <properties>
