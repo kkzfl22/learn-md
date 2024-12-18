@@ -30,6 +30,7 @@
         <module>webflux-14-5-mysql</module>
         <module>webflux-14-6-mongodb2</module>
         <module>webflux-14-7-redis</module>
+        <module>webflux-14-8-rxjava2</module>
 
     </modules>
 

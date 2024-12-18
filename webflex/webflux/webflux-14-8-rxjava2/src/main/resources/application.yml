@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:mysql://node2/book?useSSL=false
+    driver-class-name: com.mysql.jdbc.Driver
+    username: root
+    password: 123456
+
+
+rxjava2jdbc:
+  pool:
+    size: 10
