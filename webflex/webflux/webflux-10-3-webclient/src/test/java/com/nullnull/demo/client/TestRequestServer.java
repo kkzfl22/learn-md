@@ -133,7 +133,7 @@ public class TestRequestServer {
         Mono.zip(listResponse, item -> {
                     return item;
                 })
-                .log()
+                //.log()
                 .subscribe(item -> System.out.println("结果：" + item),
                         ex -> {
                             System.err.println("error" + ex);
@@ -146,7 +146,10 @@ public class TestRequestServer {
 
                 );
 
+        Long startTime = System.currentTimeMillis();
         latch.await();
+        Long end = System.currentTimeMillis();
+        System.out.println("用时：" + (end - startTime));
     }
 
 }
