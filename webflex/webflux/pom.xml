@@ -33,6 +33,7 @@
         <module>webflux-14-8-rxjava2</module>
         <module>webflux-10-3-webclient</module>
         <module>webflux-14-9-crud</module>
+        <module>webflux-15-1-stepVerifier</module>
 
     </modules>
 
