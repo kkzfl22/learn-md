@@ -1,4 +1,4 @@
-package org.nullnull.demo;
+package com.nullnull.demo;
 
 import junit.framework.Test;
 import junit.framework.TestCase;

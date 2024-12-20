@@ -1,0 +1,9 @@
+spring:
+  datasource:
+   driver-class-name: com.mysql.jdbc.Driver
+   username: root
+   password: 123456
+   url: jdbc:mysql://node16/book?useSSL=false&allowPublicKeyRetrieval=true
+logging:
+  level:
+   org.springframework.jdbc.datasource: debug

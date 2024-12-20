@@ -32,6 +32,7 @@
         <module>webflux-14-7-redis</module>
         <module>webflux-14-8-rxjava2</module>
         <module>webflux-10-3-webclient</module>
+        <module>webflux-14-9-crud</module>
 
     </modules>
 

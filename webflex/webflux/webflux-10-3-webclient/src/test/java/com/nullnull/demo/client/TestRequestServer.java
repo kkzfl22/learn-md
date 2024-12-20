@@ -133,7 +133,7 @@ public class TestRequestServer {
         Mono.zip(listResponse, item -> {
                     return item;
                 })
-                //.log()
+                .log()
                 .subscribe(item -> System.out.println("结果：" + item),
                         ex -> {
                             System.err.println("error" + ex);

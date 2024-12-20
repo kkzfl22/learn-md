@@ -7,11 +7,11 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>org.nullnull.demo</groupId>
-    <artifactId>webflux-14-8-rxjava2</artifactId>
+    <groupId>com.nullnull.demo</groupId>
+    <artifactId>webflux-14-9-crud</artifactId>
     <packaging>jar</packaging>
 
-    <name>webflux-14-8-rxjava2</name>
+    <name>webflux-14-9-crud</name>
     <url>http://maven.apache.org</url>
 
     <properties>
@@ -20,34 +20,29 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.reactivex.rxjava2</groupId>
-            <artifactId>rxjava</artifactId>
-            <version>2.2.20</version>
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.github.davidmoten</groupId>
-            <artifactId>rxjava2-jdbc</artifactId>
-            <version>0.2.7</version>
+             <groupId>org.projectlombok</groupId>
+             <artifactId>lombok</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
+             <groupId>mysql</groupId>
+             <artifactId>mysql-connector-java</artifactId>
+             <version>5.1.49</version>
         </dependency>
+
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>30.1-jre</version>
         </dependency>
 
-        <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>5.1.49</version>
-        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -59,7 +54,6 @@
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
         </dependency>
-
 
     </dependencies>
 </project>
