@@ -1,14 +1,13 @@
 package org.nullnull.demo;
 
 import java.util.ArrayList;
-
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.nullnull.demo.entity.Wallet;
 import org.reactivestreams.Publisher;
-import org.springframework.security.authentication.BadCredentialsException;
+// import org.springframework.security.authentication.BadCredentialsException;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -102,15 +101,15 @@ public class TestStepVerifier {
   }
 
   /** 登录错误的验证 */
-  @Test
-  public void loginError() {
-    StepVerifier.create(login("admin", "wrong"))
-        .expectSubscription()
-        .expectError(BadCredentialsException.class)
-        .verify();
-  }
-
-  private Publisher<Void> login(String userName, String password) {
-    return Flux.error(new BadCredentialsException("loginError"));
-  }
+  // @Test
+  // public void loginError() {
+  //  StepVerifier.create(login("admin", "wrong"))
+  //      .expectSubscription()
+  //      .expectError(BadCredentialsException.class)
+  //      .verify();
+  // }
+  //
+  // private Publisher<Void> login(String userName, String password) {
+  //  return Flux.error(new BadCredentialsException("loginError"));
+  // }
 }

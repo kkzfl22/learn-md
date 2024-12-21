@@ -30,6 +30,8 @@ public class Wallet {
   /** 币种 */
   private String currency;
 
+  public Wallet() {}
+
   public Wallet(
       String id,
       String owner,
@@ -51,5 +53,9 @@ public class Wallet {
 
   public static Wallet wallet(String owner, int balance, String currency) {
     return new Wallet(UUID.randomUUID().toString(), owner, balance, 0, 0, currency);
+  }
+
+  public static Wallet wallet(String id, String owner, int balance, String currency) {
+    return new Wallet(id, owner, balance, 0, 0, currency);
   }
 }
