@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-MVVM模型</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 容器 -->
+    <div id="root">
+       <h1>直接写的属性:{{name}}</h1>
+       <h2>Vue的自身属性:{{$createElement}}</h2>
+       <h3>原型对象属性:{{$nextTick}}</h3>
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        // data 的第一种写法
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+        console.log(vm);
+    </script>
+</body>
+</html>

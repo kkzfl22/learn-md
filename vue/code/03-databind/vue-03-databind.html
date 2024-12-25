@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-数据绑定</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <!-- 单向数据绑定 -->
+        <!-- 单向数据绑定:<input type="text" v-bind:value="name"/><br/> -->
+        <!-- 双向数据绑定 -->
+        <!-- 双向数据绑定:<input type="text" v-model:value="name"/>  -->
+
+        <!-- 简写 -->
+        <!-- 单向数据绑定 -->
+        单向数据绑定:<input type="text" :value="name"/><br/>
+        <!-- 双向数据绑定 -->
+        双向数据绑定:<input type="text" v-model="name"/>
+
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+    </script>
+</body>
+</html>

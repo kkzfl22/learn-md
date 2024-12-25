@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-EL和Data的两种写法</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 容器 -->
+    <div id="root">
+       你好：{{name}}
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        // el的第一种写法
+        // new Vue({
+        //     el: '#root',
+        //     data:{
+        //         name: 'nullnull'
+        //     }
+        // });
+        // 第二种写法，动态绑定
+        const v = new Vue({
+            // el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+        console.log(v)
+        v.$mount('#root')
+
+    </script>
+</body>
+</html>
