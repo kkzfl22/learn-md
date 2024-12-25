@@ -111,6 +111,8 @@ vue_dev_tools.crx
 </html>
 ```
 
+打开live server
+
 打开浏览器显示：
 
 ![image-20241224125246351](.\images\image-20241224125246351.png)
@@ -215,6 +217,270 @@ VUE的模板语法有两大类：
 
 
 ### 1.4 数据绑定
+
+源码：
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-数据绑定</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <!-- 单向数据绑定 -->
+        单向数据绑定:<input type="text" v-bind:value="name"/><br/>
+        <!-- 双向数据绑定 -->
+        双向数据绑定:<input type="text" v-model:value="name"/>
+
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+打开live server
+
+网页: http://127.0.0.1:5500/03-databind/vue-03-databind.html
+
+![image-20241225121605792](.\images\image-20241225121605792.png)
+
+在单个绑定的输入框中输入字符，其他数据并不会随着输入变化，而当在双向绑定的框中输入，VUE中信息会跟着变化，而由于单向绑定的框是读取的数据，也会连锁跟着变化。
+
+
+
+![image-20241225121736505](.\images\image-20241225121736505.png)
+
+还可以使用简写形式：
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-数据绑定</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <!-- 单向数据绑定 -->
+        <!-- 单向数据绑定:<input type="text" v-bind:value="name"/><br/> -->
+        <!-- 双向数据绑定 -->
+        <!-- 双向数据绑定:<input type="text" v-model:value="name"/>  -->
+
+        <!-- 简写 -->
+        <!-- 单向数据绑定 -->
+        单向数据绑定:<input type="text" :value="name"/><br/>
+        <!-- 双向数据绑定 -->
+        双向数据绑定:<input type="text" v-model="name"/>
+
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+效果与之前一致。
+
+**总结：**
+
+单向数据绑定：
+
+语法，v-bind:href="xxxx"或者简写:href
+
+特点：数据只能从data流向页面
+
+双向数据绑定：
+
+语法：v-model:value="xxx",简写：v-model="xxx"
+
+特点：数据不仅能从data流向页面，还能从页面流向data.
+
+	备注：
+	1.双向绑定一般都应用在表单类元素上（如：input、select等）
+	2.v-model:value 可以简写为 v-model，因为v-model默认收集的就是value值。
+
+
+
+
+
+### 1.4.1 El和Data的两种写法
+
+EL的两种写法，可以理解选择与动态选择。
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-EL和Data的两种写法</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 容器 -->
+    <div id="root">
+       你好：{{name}}
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        // el的第一种写法
+        // new Vue({
+        //     el: '#root',
+        //     data:{
+        //         name: 'nullnull'
+        //     }
+        // });
+        // el 第二种写法，动态设置
+        const v = new Vue({
+            // el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+        console.log(v)
+        v.$mount('#root')
+
+    </script>
+</body>
+</html>
+```
+
+data的两种写法：
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-EL和Data的两种写法</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 容器 -->
+    <div id="root">
+       你好：{{name}}
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        // data 的第一种写法
+        new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+        //data 第二种写法，方法式，但方法的返回值须为一个对象
+        const v = new Vue({
+            el: '#root',
+            data:function(){
+                //此处的this是Vue实例对象
+                console.log('----',this) 
+                return {
+                    name: "nullnull"
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
+```
+
+总结：
+
+el有两种写法：
+
+1. new Vue时候配制el属性
+2. 先创建Vue实例，随后再通过vm.$mount('#root')，指定el的值
+
+data也有两种写法：
+
+1. 对象式。
+2. 函数式。
+
+此处两种写法都可以。但到组件时，data必须使用函数式。
+
+重要的原则：
+
+由Vue管理的函数，一定不要写箭头函数，一旦写了箭头函数就不再是Vue实例了，而变成了windows了。
+
+
+
+
+
+### 1.5 MVVM模型
+
+1. M: 模型（Model）对应 data中的数据
+2. V：视图（view）模板
+3. VM：视图模型（ViewModel):Vue实例对象.
+
+![image-20241225122542893](.\images\image-20241225122542893.png)
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-MVVM模型</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 容器 -->
+    <div id="root">
+       <h1>直接写的属性:{{name}}</h1>
+       <h2>Vue的自身属性:{{$createElement}}</h2>
+       <h3>原型对象属性:{{$nextTick}}</h3>
+    </div>
+    <script type="text/javascript">
+        //阻止VUE在启动时生产警告信息
+        Vue.config.productionTip = false
+        // data 的第一种写法
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: 'nullnull'
+            }
+        });
+        console.log(vm);
+    </script>
+</body>
+</html>
+```
+
+![image-20241225124905441](.\images\image-20241225124905441.png)
+
+结论：
+
+data中的所有属性，最后都同现在vmt身上
+
+vm身上所有的属性 及 Vue原型上所有属性，在Vue模板中都可以直接使用。
 
 
 
