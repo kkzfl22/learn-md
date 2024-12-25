@@ -484,3 +484,228 @@ vm身上所有的属性 及 Vue原型上所有属性，在Vue模板中都可以�
 
 
 
+### 1.5.1 defineProperty回顾
+
+
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-Object.defineproperty方法</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <script type="text/javascript">
+        let number = 18;
+        let person = {
+            name:'空空',
+            sex: '男'
+        };
+
+        
+        Object.defineProperty(person,'age',{
+            value : 18,
+            //控制属性是否可以被枚举(不参与遍历),默认为false，不参数
+            enumerable: false,
+            //控制䅏是否可以被修改,默认为false，不能被修改
+            writable: false,
+            //控制属性是否可以被删除，默认值为false，不能被删除
+            configurable: false
+        });
+
+        //输出属性的key
+        console.log(Object.keys(person));
+        //输出对象信息
+        console.log(person);
+    </script>
+</body>
+</html>
+```
+
+观察控制台
+
+![image-20241225230820020](.\images\image-20241225230820020.png)
+
+通过观察即可发现，在没有特别指定的情况下，Object.defineProperty定义的属性不能被遍历到
+
+```html
+    <script type="text/javascript">
+        let number = 18;
+        let person = {
+            name:'空空',
+            sex: '男'
+        };
+
+        
+        Object.defineProperty(person,'age',{
+            value : 18,
+            //控制属性是否可以被枚举(不参与遍历),默认为false，不参数
+            enumerable: true,
+            //控制䅏是否可以被修改,默认为false，不能被修改
+            writable: false,
+            //控制属性是否可以被删除，默认值为false，不能被删除
+            configurable: false
+        });
+
+        //输出属性的key
+        console.log(Object.keys(person));
+        //输出对象信息
+        console.log(person);
+    </script>
+```
+
+当参数被`enumerable`被打开之后，便可以被遍历到
+
+![image-20241225231821152](.\images\image-20241225231821152.png)
+
+再尝试修改
+
+![image-20241225232403585](.\images\image-20241225232403585.png)
+
+当开关未被打开时，不能被修改
+
+此时打开开关：
+
+```javascript
+  Object.defineProperty(person,'age',{
+            value : 18,
+            //控制属性是否可以被枚举(不参与遍历),默认为false，不参数
+            enumerable: true,
+            //控制䅏是否可以被修改,默认为false，不能被修改
+            writable: true,
+            //控制属性是否可以被删除，默认值为false，不能被删除
+            configurable: false
+        });
+```
+
+观察发现，当修改被打开时，数据被成功的修改。
+
+![image-20241225232533074](.\images\image-20241225232533074.png)
+
+最后尝试删除操作，先按默认，参数关闭
+
+![image-20241225232706307](.\images\image-20241225232706307.png)
+
+数据是不能被删除的
+
+此时将开关打开
+
+```javascript
+        Object.defineProperty(person,'age',{
+            value : 18,
+            //控制属性是否可以被枚举(不参与遍历),默认为false，不参数
+            enumerable: false,
+            //控制䅏是否可以被修改,默认为false，不能被修改
+            writable: true,
+            //控制属性是否可以被删除，默认值为false，不能被删除
+            configurable: true
+        });
+```
+
+结果：
+
+![image-20241225232823028](.\images\image-20241225232823028.png)
+
+
+
+get函数与set函数
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-Object.defineproperty方法</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <script type="text/javascript">
+        let number = 18;
+        let person = {
+            name:'空空',
+            sex: '男'
+        };
+
+        
+        Object.defineProperty(person,'age',{
+            // value : 18,
+            // //控制属性是否可以被枚举(不参与遍历),默认为false，不参数
+            // enumerable: false,
+            // //控制䅏是否可以被修改,默认为false，不能被修改
+            // writable: true,
+            // //控制属性是否可以被删除，默认值为false，不能被删除
+            // configurable: true
+
+            //当有人读取person的age属性时，get函数(getter)就会被调用，且返回值就是age的值
+            get:function(){
+                console.log('有人读取了get属性');
+                return number;
+            },
+
+            //当有人修改person的age属性时，set函数（setter)就会被调用，且会收到修改的具体值
+            set(value){
+                console.log('有人修改了age属性,值为:',value);
+                number = value;
+            }
+        });
+
+        //输出属性的key
+        console.log(Object.keys(person));
+        //输出对象信息
+        console.log(person);
+    </script>
+</body>
+</html>
+```
+
+测试get函数
+
+![image-20241225233720389](.\images\image-20241225233720389.png)
+
+测试修改后读取
+
+![image-20241225234311819](.\images\image-20241225234311819.png)
+
+### 1.5.2 数据代理
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-数据代理</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 数据代理：通过一个对象代理另一个对象中属性的操作（读/写） -->
+    <script type="text/javascript">
+       let obj = {
+        x : 100
+       };
+       let objy = {
+        y : 200
+       };
+       Object.defineProperty(objy,'x',{
+        get(){
+            return obj.x;
+        },
+        set(value)
+        {
+            obj.x = value;
+        }
+       })
+    </script>
+</body>
+</html>
+```
+
+此时验证下，修改objy的x会不会影响obj.x
+
+![image-20241225235156971](.\images\image-20241225235156971.png)
+
+经过验证可以发现，修改objy的x值就会影响obj里面的x，此就是数据代理。
