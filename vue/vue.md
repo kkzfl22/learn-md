@@ -709,3 +709,311 @@ get函数与set函数
 ![image-20241225235156971](.\images\image-20241225235156971.png)
 
 经过验证可以发现，修改objy的x值就会影响obj里面的x，此就是数据代理。
+
+
+
+### 1.5.3 Vue中的数据代理
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的数据代理</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>姓名：{{name}}</h2>
+        <h3>家庭住址：{{address}}</h3>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'nullnull',
+                address:'上海'
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+打开控制台，查看Vm的信息可以发现：
+
+![image-20241226124653217](.\images\image-20241226124653217.png)
+
+Vue数据代理
+
+```vue
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'nullnull',
+                address:'上海'
+            }
+        })
+```
+
+然后VM就会创建一个VM对象
+
+```javascript
+VM{
+    $attrs: {xxx},
+    $children: {xxx}
+    ......
+   _data: {
+       name:'nullnull',
+       address:'上海'
+   }
+        
+}
+```
+
+那些时，便可以使用_data对象
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的数据代理</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>姓名：{{_data.name}}</h2>
+        <h3>家庭住址：{{_data.address}}</h3>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'nullnull',
+                address:'上海'
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+如果改成这样，那页面也是可以正常的访问到
+
+![image-20241226192222171](.\images\image-20241226192222171.png)
+
+到此时数据已经基本可以访问但是需要加上`_data`前缀，那就太不友好了，Vue帮我做了一件事情，就是将data中的属性都添加到了`Vm`身上，如果要获取name的值，就可以直接用vm的name的get方法，同理设置就可以调用set方法。 此操作的目在的于编码操作的方便。那此数据代理是如何实现的呢，此就是使用了`Object.defineProperty`
+
+总结：
+
+1. Vue中的数据代理：通过vm对象来代理data对象中属性的操作(读/写)
+
+2. Vue中数据代理的好处：更加方便的操作data中的数据
+
+3. 基本原理：通过Object.defineProperty()把data对象中的属性添加到vm上：
+
+   为每一个添加到vm上的属性，都指定一个getter和setter方法。
+
+   在getter和setter内部去操作，（读/写）data对应的属性。
+
+
+
+### 1.6.1  事件处理-1
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>你好，欢迎来到{{name}}的世界</h2>
+        <button @click="showInfo1">点击提示（不带参数）</button><br/><br/>
+        <button @click="showEvent(2,$event)">点击提示（带参数）</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo1(event){
+                    console.log(event.target.innerText);
+                    console.log('不带参数的',event);
+                    console.log(this);
+                    alert("不带参数提示");
+                },
+                showEvent(number,event){
+                    console.log(event.target.innerText);
+                    console.log('带参数的name',number);
+                    console.log('带参数的',event);
+                    console.log(this);
+                    alert("带参数提示")
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+首先点击不带参数的
+
+![image-20241226194925382](.\images\image-20241226194925382.png)
+
+再参数控制台：
+
+![image-20241226194955972](.\images\image-20241226194955972.png)
+
+可以发现，当前的不带参数的event对象就是这个点击按钮。当前的this是Vue对象。
+
+再占击带参数的按钮，会得到提示：
+
+![image-20241226195123044](.\images\image-20241226195123044.png)
+
+同时除了正常的参数外，还可以指定参数`$event`
+
+![image-20241226195324469](.\images\image-20241226195324469.png)
+
+事件的基本使用总结：
+
+1. 使用v-onxxx或者@xxx绑定事件，其中xxx 是事件名
+2. 事件的回调需要配制methods对象中，最终会在vm上。
+3. methods中配制的函数，不要用箭头函数，否则this就不是Vm了，而是windows了
+4. methods中配制的函数，都是被Vue所管理的函数，this的指向是vm或者组件实例对象。
+5. @click="demo"和@click="$demo($event)"效果一致，但后者可以传参数。
+
+### 1.6.2  事件处理-2
+
+**阻止默认事件**
+
+首先看不阻止默认事件
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <!-- 阻止默认事件 -->
+         <a href ="http://www.baidu.com" @click="showInfo">点我跳转</a>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo(event){
+                    console.log(event.target);
+                    alert(this);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+打开页面：
+
+![image-20241226200119792](.\images\image-20241226200119792.png)
+
+当点击后，就会弹出提示框`[object Object]`，点击之后，便会跳走。
+
+如果要阻止其跳转，可修改为:
+
+```html
+<!--将原来的-->
+<a href ="http://www.baidu.com" @click="showInfo">点我跳转</a>
+<!--改为-->
+<a href ="http://www.baidu.com" @click.prevent="showInfo">点我跳转</a>
+```
+
+当再次点击点我跳转时仅会弹出提示信息，不会跳转。
+
+
+
+**阻止事件冒泡**
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用-2冒泡</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+        .big1 {
+            height: 50px;
+            background-color: red;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- 阻止事件冒泡 -->
+        <div class="big1" @click="showInfo($event,1)">
+            <button @click="showInfo($event,2)">点我触发冒泡</button>
+        </div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo(event,number){
+                    console.log('调用方:',number);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+当打开服务：
+
+![image-20241226201430768](.\images\image-20241226201430768.png)
+
+当点击了触发冒泡后，首先还是按钮触发事件，然后就是dev又触发了一次事件，如果要阻止触发，可以修改为：
+
+```html
+<button @click="showInfo($event,2)">点我触发冒泡</button>
+<!--修改为：-->
+<button @click.stop="showInfo($event,2)">点我触发冒泡</button>
+```
+
+再次测试：
+
+![image-20241226201650380](.\images\image-20241226201650380.png)
+
+此时事件仅被触发了一次。
+

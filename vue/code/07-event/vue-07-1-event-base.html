@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>你好，欢迎来到{{name}}的世界</h2>
+        <button @click="showInfo1">点击提示（不带参数）</button><br/><br/>
+        <button @click="showEvent(2,$event)">点击提示（带参数）</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo1(event){
+                    console.log(event.target.innerText);
+                    console.log('不带参数的',event);
+                    console.log(this);
+                    alert("不带参数提示");
+                },
+                showEvent(number,event){
+                    console.log(event.target.innerText);
+                    console.log('带参数的name',number);
+                    console.log('带参数的',event);
+                    console.log(this);
+                    alert("带参数提示")
+                }
+            }
+        })
+    </script>
+</body>
+</html>
