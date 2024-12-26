@@ -1017,3 +1017,343 @@ VM{
 
 此时事件仅被触发了一次。
 
+**事件只触发一次**
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE事件只触发一次</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+       <!-- <事件只触发一次 -->
+        <button @click="showInfo">点我触发事件</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo(event){
+                    console.log(event.target);
+                    alert(this);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+当打开页面打，可以多点点击页面操作
+
+![image-20241226225129730](.\images\image-20241226225129730.png)
+
+针对事件只触发一次的需求，可以这样来实现：
+
+```html
+<button @click="showInfo">点我触发事件</button>
+改为
+<button @click.once="showInfo">点我触发事件</button>
+```
+
+这时候无论点击多少次，都只会触发一次事件
+
+
+
+**capture事件的捕获模式**
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用-事件的捕获模式</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+        .box1{
+				padding: 5px;
+				background-color: skyblue;
+			}
+			.box2{
+				padding: 5px;
+				background-color: orange;
+			}
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- 使用事件的捕获模式 -->
+         <div class="box1" @click="showInfo($event,1)">
+            div1
+            <div class="box2" @click="showInfo($event,2)">
+                div2
+            </div>
+         </div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo(event,number){
+                    console.log('调用方:',number);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+![image-20241226230323199](.\images\image-20241226230323199.png)
+
+事件需要先经过事件的捕获，然后再进行事件的冒泡。事件的捕获阶段是是由外往内，而事件冒泡是由内向外。如果不想在冒泡阶段进行事件的处理，可以这样来处理
+
+```html
+<div class="box1" @click="showInfo($event,1)">
+<!--改为-->
+<div class="box1" @click="showInfo($event,1)">
+```
+
+![image-20241226230424028](.\images\image-20241226230424028.png)
+
+**只有event.target是当前操作元素时才触发事件**
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用-event是当前操作无素时才触发</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+        .demo1{
+				height: 50px;
+				background-color: skyblue;
+			}
+    </style>
+
+</head>
+<body>
+    <div id="root">
+        <!-- 只有event.target是当前操作元素时才触发 -->
+         <div class="demo1" @click="showInfo($event,1)">
+           <button @click="showInfo($event,2)">点击触发</button>
+         </div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                showInfo(event,number){
+                    console.log('调用方:',number);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+点击后的效果
+
+![image-20241226230933768](.\images\image-20241226230933768.png)
+
+当我们不不想让div也触发事件时，就可以指定self
+
+```html
+<div class="demo1" @click="showInfo($event,1)">
+<!--改为-->
+<div class="demo1" @click.self="showInfo($event,1)">
+```
+
+这时候再触发时便不会再触发
+
+![image-20241226231253755](.\images\image-20241226231253755.png)
+
+
+
+
+
+**事件无需等待立即执行**
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用-event是当前操作无素时才触发</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+            .list{
+				width: 200px;
+				height: 200px;
+				background-color: peru;
+				overflow: auto;
+			}
+			li{
+				height: 100px;
+			}
+    </style>
+
+</head>
+<body>
+    <div id="root">
+        <!-- 事件的默认行为立即执行，无需等待事件回调执行完毕 -->
+        <!-- 流动有两种：一种是 scroll，wheel -->
+        <!-- @scroll="maxTimeMethod"是给滚动条添加的滚动事件,包括键盘的方向键滚动和滚动条的滚动 -->
+        <!-- @wheel="maxTimeMethod"是鼠标滚轮的滚动 -->
+         <!-- 区别：当使用wheel时，只要滚轮还在滚动，事件就能触发，而 scroll 不能滚动后便不再触发-->
+        <!-- <ul @scroll="maxTimeMethod" class="list"> -->
+        <ul @wheel="maxTimeMethod" class="list">
+            <li>1</li>
+            <li>2</li>
+            <li>3</li>
+            <li>4</li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                maxTimeMethod(){
+                   for(let i =0 ; i<100000;i++)
+                    {
+                        console.log('#');
+                    }
+                    console.log('终于执行完了');
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+当执行滚时，会发现，数据已经在执行了，但是滚动条没有动。
+
+![image-20241226232912074](.\images\image-20241226232912074.png)
+
+可以发现，事件已经在执行了，但是滚动条是没有动的。如果需要优先响应滚动条，可以这样修改
+
+```html
+<ul @wheel="maxTimeMethod" class="list">
+<!--改为-->
+<ul @wheel.passive="maxTimeMethod" class="list">
+```
+
+这时候，再打开页面即可观察到，不用再等待滚动条会立即滚动。
+
+
+
+总结：
+
+1.prevent：阻止默认事件（常用）；
+2.stop：阻止事件冒泡（常用）；
+3.once：事件只触发一次（常用）；
+4.capture：使用事件的捕获模式；
+5.self：只有event.target是当前操作的元素时才触发事件；
+6.passive：事件的默认行为立即执行，无需等待事件回调执行完毕
+
+
+
+### 1.6.3 键盘事件
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的键盘事件使用</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>欢迎来到{{name}}的世界!!!</h2>
+        <input type="text" placeholder="按回车提示输入" @keydown.enter="keyEvent($event)" />
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue'
+            },
+            methods:{
+                keyEvent(k){
+                    console.log('事件',k.key,k.keyCode);
+                    console.log(k.target.value);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+打开页面输入内容后回车
+
+![image-20241226233907969](.\images\image-20241226233907969.png)
+
+按键的总结：
+
+```html
+		<!-- 
+				1.Vue中常用的按键别名：
+							回车 => enter
+							删除 => delete (捕获“删除”和“退格”键)
+							退出 => esc
+							空格 => space
+							换行 => tab (特殊，必须配合keydown去使用)
+							上 => up
+							下 => down
+							左 => left
+							右 => right
+
+				2.Vue未提供别名的按键，可以使用按键原始的key值去绑定，但注意要转为kebab-case（短横线命名）
+
+				3.系统修饰键（用法特殊）：ctrl、alt、shift、meta
+							(1).配合keyup使用：按下修饰键的同时，再按下其他键，随后释放其他键，事件才被触发。
+							(2).配合keydown使用：正常触发事件。
+
+				4.也可以使用keyCode去指定具体的按键（不推荐）
+
+				5.Vue.config.keyCodes.自定义键名 = 键码，可以去定制按键别名
+		-->
+```
+
+
+
+
+
+
+
+## 结束

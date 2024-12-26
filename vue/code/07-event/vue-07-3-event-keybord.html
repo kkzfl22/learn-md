@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的键盘事件使用</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>欢迎来到{{name}}的世界!!!</h2>
+        <input type="text" placeholder="按回车提示输入" @keydown.enter="keyEvent($event)" />
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                keyEvent(k){
+                    console.log('事件',k.key,k.keyCode);
+                    console.log(k.target.value);
+                }
+            }
+        })
+    </script>
+</body>
+</html>

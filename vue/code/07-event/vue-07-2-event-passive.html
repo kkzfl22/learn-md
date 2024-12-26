@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE中的事件使用-event是当前操作无素时才触发</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+            .list{
+				width: 200px;
+				height: 200px;
+				background-color: peru;
+				overflow: auto;
+			}
+			li{
+				height: 100px;
+			}
+    </style>
+
+</head>
+<body>
+    <div id="root">
+        <!-- 事件的默认行为立即执行，无需等待事件回调执行完毕 -->
+        <!-- 流动有两种：一种是 scroll，wheel -->
+        <!-- @scroll="maxTimeMethod"是给滚动条添加的滚动事件,包括键盘的方向键滚动和滚动条的滚动 -->
+        <!-- @wheel="maxTimeMethod"是鼠标滚轮的滚动 -->
+         <!-- 区别：当使用wheel时，只要滚轮还在滚动，事件就能触发，而 scroll 不能滚动后便不再触发-->
+        <!-- <ul @scroll="maxTimeMethod" class="list"> -->
+        <ul @wheel.passive="maxTimeMethod" class="list">
+            <li>1</li>
+            <li>2</li>
+            <li>3</li>
+            <li>4</li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name:'Vue21'
+            },
+            methods:{
+                maxTimeMethod(){
+                   for(let i =0 ; i<100000;i++)
+                    {
+                        console.log('#');
+                    }
+                    console.log('终于执行完了');
+                }
+            }
+        })
+    </script>
+</body>
+</html>
