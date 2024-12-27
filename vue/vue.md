@@ -1352,6 +1352,49 @@ VM{
 
 
 
+### 1.7 计算属性
+
+#### 1.7.1 插件语法实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-插值实现姓名信息</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        姓：<input type="text" v-model="firstName" /> <br/><br/>
+        名：<input type="text" v-model="lastName" /> <br/><br/>
+        全名: <span>{{firstName}}-{{lastName}}</span>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName:'张',
+                lastName:'三'
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+打开服务:
+
+![image-20241227091945089](.\images\image-20241227091945089.png)
+
+#### 1.7.2 方法实现
+
+```html
+```
+
 
 
 
