@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-姓名信息-计算属性简写</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        姓：<input type="text" v-model="firstName" /> <br/><br/>
+        名：<input type="text" v-model="lastName" /> <br/><br/>
+        全名: <span>{{fullName}}</span>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName:'张',
+                lastName:'三'
+            },
+            methods:{
+            },
+            computed:{
+                //完整写法
+                /*fullName:{
+                    //get的作用：当有人读取fullname时，get会被调用，会返回值就作为fullname的值
+                    //get什么时候被调用呢？1，初次读取fullname时，2，所依赖的数据发生变化时
+                    //在计算属性中，存在缓存，不是每次都加载
+                    //当计算属性往VM对象中加入时，它并不直接加入了VM的一个方法，向是拿到get的返回值，放入至VM
+                    get(){
+                        console.log('get被调用了');
+                        return this.firstName + '-' + this.lastName;
+                    },
+                    //set什么时候会被调用，当fullName被修改时
+                    set(value){
+                        console.log('set',value);
+                        const arr = value.split('-');
+                        this.firstName = arr[0];
+                        this.lastName = arr[1];
+                    }
+                }*/
+               //简写
+               //简写仅针对只存在get函数的情况，如果既有get又有set不能简写
+               /*
+               fullName:function(){
+                console.log('get被调用了');
+                return this.firstName + '-'+this.lastName;
+               },*/
+               fullName(){
+                console.log('get被调用了');
+                return this.firstName + '-'+this.lastName;
+               }
+            }
+        })
+    </script>
+</body>
+</html>

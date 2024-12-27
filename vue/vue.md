@@ -1393,9 +1393,199 @@ VM{
 #### 1.7.2 方法实现
 
 ```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-插值实现姓名信息</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        姓：<input type="text" v-model="firstName" /> <br/><br/>
+        名：<input type="text" v-model="lastName" /> <br/><br/>
+        全名: <span>{{fullname()}}</span>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName:'张',
+                lastName:'三'
+            },
+            methods:{
+                fullname(){
+                    console.log('@--fullname');
+                    return this.firstName + '-' + this.lastName;
+                }
+            }
+        })
+    </script>
+</body>
+</html>
 ```
 
+打开网页
 
+![image-20241227223712250](.\images\image-20241227223712250.png)
+
+#### 1.7.3 插值语法
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-姓名信息-计算属性</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        姓：<input type="text" v-model="firstName" /> <br/><br/>
+        名：<input type="text" v-model="lastName" /> <br/><br/>
+        全名: <span>{{fullName}}</span><br/><br/>
+        全名: <span>{{fullName}}</span><br/><br/>
+        全名: <span>{{fullName}}</span><br/><br/>
+        全名: <span>{{fullName}}</span>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName:'张',
+                lastName:'三'
+            },
+            methods:{
+            },
+            computed:{
+                fullName:{
+                    //get的作用：当有人读取fullname时，get会被调用，会返回值就作为fullname的值
+                    //get什么时候被调用呢？1，初次读取fullname时，2，所依赖的数据发生变化时
+                    //在计算属性中，存在缓存，不是每次都加载
+                    get(){
+                        console.log('get被调用了');
+                        return this.firstName + '-' + this.lastName;
+                    },
+                    //set什么时候会被调用，当fullName被修改时
+                    set(value){
+                        console.log('set',value);
+                    }
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+![image-20241227225848386](.\images\image-20241227225848386.png)
+
+计算属性并不是每次都加载最新的值，是有缓存的。
+
+![image-20241227230611378](.\images\image-20241227230611378.png)
+
+当fullname的值被修改时，此set方法就会被调用。
+
+此时对set方法进行设置
+
+```html
+set(value){
+    console.log('set',value);
+    const arr = value.split('-');
+    this.firstName = arr[0];
+    this.lastName = arr[1];
+}
+```
+
+此时打开页面，再进行设置操作
+
+![image-20241227231344195](.\images\image-20241227231344195.png)
+
+观察Vue对象
+
+![image-20241227231440272](.\images\image-20241227231440272.png)
+
+总结：
+
+计算属性：
+
+​				1.定义：要用的属性不存在，要通过已有属性计算得来。
+​				2.原理：底层借助了Objcet.defineproperty方法提供的getter和setter。
+​				3.get函数什么时候执行？
+​							(1).初次读取时会执行一次。
+​							(2).当依赖的数据发生改变时会被再次调用。
+​				4.优势：与methods实现相比，内部有缓存机制（复用），效率更高，调试方便。
+​				5.备注：
+​						1.计算属性最终会出现在vm上，直接读取使用即可。
+​						2.如果计算属性要被修改，那必须写set函数去响应修改，且set中要引起计算时依赖的数据发生改变。
+
+
+
+计算属性的简写
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-姓名信息-计算属性简写</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        姓：<input type="text" v-model="firstName" /> <br/><br/>
+        名：<input type="text" v-model="lastName" /> <br/><br/>
+        全名: <span>{{fullName}}</span>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName:'张',
+                lastName:'三'
+            },
+            methods:{
+            },
+            computed:{
+                //完整写法
+                /*fullName:{
+                    //get的作用：当有人读取fullname时，get会被调用，会返回值就作为fullname的值
+                    //get什么时候被调用呢？1，初次读取fullname时，2，所依赖的数据发生变化时
+                    //在计算属性中，存在缓存，不是每次都加载
+                    //当计算属性往VM对象中加入时，它并不直接加入了VM的一个方法，向是拿到get的返回值，放入至VM
+                    get(){
+                        console.log('get被调用了');
+                        return this.firstName + '-' + this.lastName;
+                    },
+                    //set什么时候会被调用，当fullName被修改时
+                    set(value){
+                        console.log('set',value);
+                        const arr = value.split('-');
+                        this.firstName = arr[0];
+                        this.lastName = arr[1];
+                    }
+                }*/
+               //简写
+               //简写仅针对只存在get函数的情况，如果既有get又有set不能简写
+               fullName(){
+                console.log('get被调用了');
+                return this.firstName + '-'+this.lastName;
+               }
+            }
+        })
+    </script>
+</body>
+</html>
+```
 
 
 
