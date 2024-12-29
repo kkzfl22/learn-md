@@ -2,7 +2,7 @@
 
 
 
-## 1 .vue简介
+## 1 .vue入门
 
 ### 1.1 官网
 
@@ -1589,4 +1589,432 @@ set(value){
 
 
 
+
+
+### 1.8 监视属性
+
+#### 1.8.1 监视属性基础
+
+切换天气
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+效果
+
+![image-20241229213507745](.\images\image-20241229213507745.png)
+
+点击切换后
+
+![image-20241229213546657](.\images\image-20241229213546657.png)
+
+#### 1.8.2 监视属性语法
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            },
+            watch:{
+                isHot:{
+                    //初始化时让handler调用一下,如果不添加初始化的时候不执行
+                    immediate:true, 
+                    handler(newValue,oldValue)
+                    {
+                        console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                        
+                    }
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+执行：
+
+![image-20241229213822227](.\images\image-20241229213822227.png)
+
+切换后
+
+![image-20241229213902091](.\images\image-20241229213902091.png)
+
+可以观察到，在添加immediate后，首次值为'undefined'，因为首次还没有被赋值。而在第一次点击后，值就从初始化的false，切换到了false.
+
+#### 1.8.3 监视属性动态配制
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            },
+            watch:{
+                /* isHot:{
+                    //初始化时让handler调用一下,如果不添加初始化的时候不执行
+                    immediate:true, 
+                    handler(newValue,oldValue)
+                    {
+                        console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                        
+                    }
+                } */
+            }
+        });
+
+        vm.$watch('isHot',{
+            immediate:false,
+            handler(newValue,oldValue){
+                console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+此通过vm对象动态的配制watch，实现的效果与之前提一致。如果在创建对象时已经确定监视对象，则使用watch，如果在创建时不确定，通过监视对象改变后触发，则应该使用动态配制。
+
+监视属性总结：
+
+>1. 当被监视的属性变化时，回调函数自动调用，进行相关操作。
+>2. 监视的属性必须存在，才能进行监视。
+>3. 监视的两种写法：
+>   1. new Vue时传入watch的配制。
+>   2. 通过vm.$watch监视。
+
+#### 1.8.4 深度监视
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>多级结构的值1:{{deep1.deep2.deep3.dataValue1}}</h2><br/>
+        <button @click="deep1.deep2.deep3.dataValue1++">改变</button><br/>
+
+        <h2>多级结构的值2:{{deep1.deep2.deep3.dataValue2}}</h2><br/>
+        <button @click="deep1.deep2.deep3.dataValue2++">改变</button><br/>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                deep1:{
+                    deep2:{
+                        deep3:{
+                            dataValue1:1,
+                            dataValue2:1,
+                        }
+                    }
+                }
+            },
+            watch:{
+                //监视多级节点中某个属性的变化。
+                'deep1': {
+                    deep:true,
+                    handler()
+                    {
+                        console.log('收到通知，值被修改了');                        
+                    }
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+效果
+
+![image-20241229222929302](.\images\image-20241229222929302.png)
+
+总结：
+
+​    深度监视：
+
+​      （1）： Vue中的watch默认不监视对象内部值的改变（一层）
+
+​       (2):  配制deep:true 可以监测对象内部值改变（多层）
+
+​    备注：
+
+​       (1）. Vue 自身可以监测对象内部值的改变，会是Vue提供的watch默认不可以！
+
+​       (2) . 使用watch时根据数据的具体结构，否采用深度监视。
+
+#### 1.8.5 监视-简写
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            },
+            watch:{
+                //如果监视的属性不需要immediate也不需要deep,仅存在hadler时，则可以简写
+                isHot(newValue,oldValue){
+                    console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+动态配制的简写
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            },
+            //简写
+           /*  watch:{
+                //如果监视的属性不需要immediate也不需要deep,仅存在hadler时，则可以简写
+                isHot(newValue,oldValue){
+                    console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                }
+            } */
+        });
+
+        vm.$watch('isHot',function(newValue,oldValue){
+                    console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                });
+        
+    </script>
+</body>
+</html>
+```
+
+#### 1.8.6 监视-姓名实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-姓名</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+			姓：<input type="text" v-model="firstName"> <br/><br/>
+			名：<input type="text" v-model="lastName"> <br/><br/>
+			全名：<span>{{fullName}}</span> <br/><br/>
+	</div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                firstName: '张',
+                lastName: '三',
+                fullName: '张-三'
+            },
+            watch:{
+                firstName(value){
+                    setTimeout(() => {
+                        this.fullName = value + '-' + this.lastName;    
+                    }, 2500);
+                },
+                lastName(value){
+                    this.fullName = this.firstName + '-' + this.lastName;
+                }
+            }
+        });
+        
+    </script>
+</body>
+</html>
+```
+
+> computed和watch之间的区别：
+>
+> 1.computed能完成的功能，watch都可以完成。
+> 2.watch能完成的功能，computed不一定能完成，例如：watch可以进行异步操作。
+>
+> 两个重要的小原则：
+> 1.所被Vue管理的函数，最好写成普通函数，这样this的指向才是vm 或 组件实例对象。
+> 2.所有不被Vue所管理的函数（定时器的回调函数、ajax的回调函数等、Promise的回调函数），最好写成箭头函数，
+> 								这样this的指向才是vm 或 组件实例对象。
+
+
+
+
+
 ## 结束
+

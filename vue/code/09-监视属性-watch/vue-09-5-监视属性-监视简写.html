@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-切换天气</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>今天天气{{info}}</h2><br/>
+        <!-- 绑定事件的时候：@xxx="yyy" yyy可以写一些简单的语句 -->
+        <!-- <button @click="isHot = !isHot">切换天气</button> -->
+        <button @click="changeWather">切换天气</button>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                isHot: true,
+            },
+            computed:{
+                info:{
+                    get(){
+                        return this.isHot ? '炎热' : '凉爽';
+                    }
+                }
+            },
+            methods:{
+                changeWather(){
+                    this.isHot = !this.isHot;
+                }
+            },
+            //简写
+           /*  watch:{
+                //如果监视的属性不需要immediate也不需要deep,仅存在hadler时，则可以简写
+                isHot(newValue,oldValue){
+                    console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                }
+            } */
+        });
+
+        vm.$watch('isHot',function(newValue,oldValue){
+                    console.log('值被修改了:newValue',newValue,'oldValue',oldValue);
+                });
+        
+    </script>
+</body>
+</html>
