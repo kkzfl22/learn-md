@@ -2012,7 +2012,116 @@ set(value){
 > 2.所有不被Vue所管理的函数（定时器的回调函数、ajax的回调函数等、Promise的回调函数），最好写成箭头函数，
 > 								这样this的指向才是vm 或 组件实例对象。
 
+### 1.9 动态绑定样式
 
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-绑定样式</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <style>
+        .basic{
+            float: top;
+            padding-top: 15px;
+            width: 300px;
+            height: 200px;
+            border: 1px solid black;
+        }
+        .happy{
+				border: 4px solid red;;
+				background-color: rgba(255, 255, 0, 0.644);
+				background: linear-gradient(30deg,yellow,pink,orange,yellow);
+        }
+        .sad{
+            border: 4px dashed rgb(2, 197, 2);
+            background-color: gray;
+        }
+        .normal{
+            background-color: skyblue;
+        }
+
+        .null1{
+            background-color: yellowgreen;
+        }
+        .null2{
+            font-size: 30px;
+            text-shadow:2px 2px 10px red;
+        }
+        .null3{
+            border-radius: 20px;
+        }
+    </style>
+
+</head>
+<body>
+    <div id="root">
+        <!-- 绑定css样式字符串写法，适用于类名不确定，需要动态指定的场景 -->
+       <div class="basic" :class="mood" @click="changeMood">{{name}}</div>
+
+        <!-- 绑定css样式-数组写法，适用于要绑定的样式个数不确定，名字也不确定 -->
+        <div class="basic" :class="classArray">{{name}}</div>
+
+        <!--  绑定class样式--对象写法，适用于：要绑定的样式个数确定，名称确定，但动态决定用不用 -->
+        <div class="basic" :class="classObj">{{name}}</div>
+
+        <!--  绑定style样式,对象写法 -->
+        <div class="basic" :style="styleObj">{{name}}</div>
+
+        <!--  绑定style样式,数组写法 -->
+        <div class="basic" :style="styleArray">{{name}}</div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                mood: 'normal',
+                classArray: ['null1','null2','null3'],
+                classObj: {
+                    null1: false,
+                    null2: false
+                },
+                styleObj:{
+                    fontSize: '40px',
+                    color: 'red'
+                },
+                styleArray:[
+                    {
+                         fontSize: '40px',
+                         color: 'blue'
+                    },
+                    {
+                        backgroundColor: 'gray'
+                    }
+                ]
+            },
+            methods: {
+                changeMood(){
+                    const arr = ['happy','sad','normal'];
+                    const index = Math.floor(Math.random() * 3);
+                    this.mood = arr[index];
+                }
+            }           
+        })
+    </script>
+</body>
+</html>
+```
+
+>绑定样式：
+>					1. class样式
+>								写法:class="xxx" xxx可以是字符串、对象、数组。
+>										字符串写法适用于：类名不确定，要动态获取。
+>										对象写法适用于：要绑定多个样式，个数不确定，名字也不确定。
+>										数组写法适用于：要绑定多个样式，个数确定，名字也确定，但不确定用不用。
+>					2. style样式
+>								:style="{fontSize: xxx}"其中xxx是动态值。
+>								:style="[a,b]"其中a、b是样式对象。
 
 
 
