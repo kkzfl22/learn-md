@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-条件渲染</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+       <h2>当前n的值是:{{n}}</h2>
+       <button @click="n++">点击n+1</button>
+       <!-- 使用v-show作条件渲染会在页面添加一个样式：style="display: none;" -->
+       <!-- <h2 v-show="false">欢迎来到1{{name}}</h2>
+       <h2 v-show="n % 2 == 1">欢迎来到1{{name}}</h2> -->
+
+       <!-- 使用v-if做条件渲染,使用v-if条判断时，页面连标签都不会出现 -->
+       <!-- <h2 v-if="n % 2 == 1">欢迎来到2{{name}}</h2> -->
+
+       <!-- 使用if-elseif-else语法 -->
+       <h2 v-if="n == 1">欢迎来到3-if1:{{name}}</h2>
+       <h2 v-else-if ="n == 2">欢迎来到3-elseif2:{{name}}</h2>
+       <h2 v-else>欢迎来到3-if3:{{name}}</h2>
+       <br/>
+
+       
+        <!-- 如果要使用if将多个标签进行一起的控制显示-->
+         <template v-if="n === 1">
+                <h2>你好</h2>
+				<h2>nullnull</h2>
+				<h2>上海</h2>
+         </template>
+
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                n: 0,
+                name: "nullnull"
+            }                
+        })
+    </script>
+</body>
+</html>
