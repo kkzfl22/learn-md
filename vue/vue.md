@@ -2123,6 +2123,139 @@ set(value){
 >								:style="{fontSize: xxx}"其中xxx是动态值。
 >								:style="[a,b]"其中a、b是样式对象。
 
+### 1.10 条件渲染
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-条件渲染</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+       <h2>当前n的值是:{{n}}</h2>
+       <button @click="n++">点击n+1</button>
+       <!-- 使用v-show作条件渲染会在页面添加一个样式：style="display: none;" -->
+       <!-- <h2 v-show="false">欢迎来到1{{name}}</h2>
+       <h2 v-show="n % 2 == 1">欢迎来到1{{name}}</h2> -->
+
+       <!-- 使用v-if做条件渲染,使用v-if条判断时，页面连标签都不会出现 -->
+       <!-- <h2 v-if="n % 2 == 1">欢迎来到2{{name}}</h2> -->
+
+       <!-- 使用if-elseif-else语法 -->
+       <h2 v-if="n == 1">欢迎来到3-if1:{{name}}</h2>
+       <h2 v-else-if ="n == 2">欢迎来到3-elseif2:{{name}}</h2>
+       <h2 v-else>欢迎来到3-if3:{{name}}</h2>
+       <br/>
+
+       
+        <!-- 如果要使用if将多个标签进行一起的控制显示-->
+         <template v-if="n === 1">
+                <h2>你好</h2>
+				<h2>nullnull</h2>
+				<h2>上海</h2>
+         </template>
+
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                n: 0,
+                name: "nullnull"
+            }                
+        })
+    </script>
+</body>
+</html>
+```
+
+
+
+### 1.11 列表渲染
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-条件渲染</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+      <!-- 遍历数组, 使用in或者of都可以 -->
+       <h2>按数组遍历</h2>
+       <ul>
+            <li v-for="(p,index) in dataArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+       </ul>
+       <!-- 遍历对象 -->
+       <h2>按对象遍历</h2>
+       <ul>
+            <li v-for="(p,index) of dataObjCar" :key="index">
+                {{p}} 
+            </li>
+        </ul>
+        <!-- 遍历字符串 -->
+        <h2>按字符串遍历</h2>
+         <ul>
+            <li v-for="(char,index) of dataStr" :key="index">
+                {{char}}
+            </li>
+         </ul>
+         <!-- 遍历指定的次数 -->
+         <h2>遍历指定的次数</h2>
+         <ul>
+            <li v-for="(number,index) of 3" :key="index">
+                {{number}} - {{index}}
+            </li>
+         </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '张三',
+                        age: 18
+                    },
+                    {
+                        id: '002',
+                        name:'李四',
+                        age: 19
+                    },
+                    {
+                        id: '003',
+                        name: '王五',
+                        age: 20
+                    }
+                ],
+                dataObjCar:{
+                    name:'宝马M3',
+                    price: '118万',
+                    color: '蓝色'
+                },
+                dataStr: 'nullnull'
+            }                
+        })
+    </script>
+</body>
+</html>
+```
+
 
 
 ## 结束
