@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表过滤排序</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <input type="text" placeholder="请输入名称" v-model="keyWord"> 
+        <button @click="sortType=0">原顺序</button>
+        <button @click="sortType=1">年龄升序</button>
+        <button @click="sortType=2">年龄降序</button>
+        <ul>
+            <li v-for="(p,index) of fliterArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                //0原顺序 1降序 2升序
+                sortType: 0,
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 22
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 33
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 15
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ],
+                fliterArray: []
+            },
+            watch: {
+                keyWord:{
+                    //初始化时让handler调用一下,如果不添加初始化的时候不执行
+                    immediate: true,
+                    handler(val){
+                        const filterRsp = this.dataArray.filter((item)=>{
+                            return item.name.indexOf(val) !== -1;
+                        });
+
+                        this.fliterArray  = filterRsp;
+                    }                    
+                },
+                sortType: {
+                    handler(value){
+                        const filterRsp =  this.fliterArray;
+                        //年龄升序
+                        if(this.sortType == 1)
+                        {
+                            this.fliterArray = filterRsp.sort((item1,item2)=>{
+                                return item1.age - item2.age;
+                            })
+                        }
+
+                        //年龄降序
+                        if(this.sortType == 2)
+                        {
+                            this.fliterArray = filterRsp.sort((item1,item2)=>{
+                                return  item2.age - item1.age;
+                            })
+                        }
+                    }
+                }
+            }
+        })
+    </script>
+</body>
+</html>

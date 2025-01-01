@@ -2179,13 +2179,15 @@ set(value){
 
 ### 1.11 列表渲染
 
+#### 1.11.1 v-for使用
+
 ```html
 <!DOCTYPE html>
 <html>
 <body>
 <head>
     <meta charset="UTF-8"/>
-    <title>VUE-条件渲染</title>
+    <title>VUE-列表渲染</title>
     <script type="text/javascript" src="../js/vue.js"></script>
 </head>
 <body>
@@ -2257,6 +2259,506 @@ set(value){
 ```
 
 
+
+#### 1.11.2 key的使用
+
+key使用index所存在的问题
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表渲染</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>人员列表（遍历数组）</h2>
+        <button @click="add">添加一个对象</button>
+        <ul>
+            <li v-for="(p,index) of dataArray" :key="index">
+                {{p.name}} - {{p.age}}
+                <input type="text" />
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '张三',
+                        age: 18
+                    },
+                    {
+                        id: '002',
+                        name:'李四',
+                        age: 19
+                    },
+                    {
+                        id: '003',
+                        name: '王五',
+                        age: 20
+                    }
+                ]
+            },
+            methods: {
+                add(){
+                    const p = {
+                        id: '004',
+                        name: '老刘',
+                        age: 28 
+                    };
+                    this.dataArray.unshift(p);
+                }
+            }                
+        })
+    </script>
+</body>
+</html>
+```
+
+打开服务，并在浏览器上访问：输入信息，然后点击添加一个对象
+
+![image-20250101093139193](.\images\image-20250101093139193.png)
+
+此时就会发现对象已经错乱了。那是为什么呢？
+
+![img](.\images\20250101_092749018.jpg)
+
+这是由于在虚拟Dom在向真实Dom转换的过程中会进行对比，对比的键就是指定的Key，而key采用的index编号，此编号在每次遍历时就会重新生成，而真实的Dom并不会,这就会导致原来索引为0的内容老张与现在新创建的索引为0的老刘相对应，从而造成错乱，那要解决这个问题也很容易，一般不建议使用index使用key，除非明确不存在修改的场景，或者不会有打乱索引排序的操作。
+
+解决方案：
+
+1. 使用数据主键作为Key
+2. 新的数据插入到最后。
+
+数据使用id作为Key
+
+```html
+<!-- 将原来的 -->
+<li v-for="(p,index) of dataArray" :key="index">
+<!-- 改为 -->
+<li v-for="(p,index) of dataArray" :key="p.id">
+```
+
+此时页面即可正常操作
+
+![image-20250101093721871](.\images\image-20250101093721871.png)
+
+新的数据插入到最后
+
+```html
+<!-- 将原来的 -->
+this.dataArray.unshift(p);
+<!-- 改为 -->
+this.dataArray.push(p);
+```
+
+页面即可正常操作
+
+![image-20250101093937743](D:\java\myself\learn\learn-md\vue\images\image-20250101093937743.png)
+
+react、Vue中的Key有什么用呢？
+
+>1. 虚拟Dom中Key的作用：
+>
+>   Key是虚拟DOm对象的标识，当数据发生变化时，Vue会根据【新数据】生成【新的虚拟Dom】，
+>
+>   随后Vue进行【新虚拟Dom】与【旧虚拟DOM】的差异比较，
+>
+>   比较规则：
+>
+>   1. 旧虚拟Dom中找到了与新虚拟DOM中相同的Key：
+>
+>      若虚拟DOM中内容没变，直接使用之前的虚拟DOM！
+>
+>      若虚拟DOM中的内容发生了变化，则生成新的真实DOM，随后替换页面中之前的真实DOM。
+>
+>   2. 旧虚拟DOM中未找到与新虚拟DOM相同的Key：
+>
+>      创建新的真实DOM，随后渲染到页面。
+>
+>2. 使用index作为key可能会引发的问题：
+>
+>   1. 若对数据进行逆序添加、逆序删除等破坏顺序操作：会产生没有必要的真实DOM更新，界面效果没问题，但效率低。
+>
+>   2. 如果结构中还包含输入类的DOM：会产生错误的DOM更新，界面有问题。
+>
+>3. 开发中如何选择Key？
+>
+>   1.  最好选择使用数据的唯一标识作为key，比如id，手机号、身份证号、学号等唯一值。
+>   2. 如果不存在数据的逆序添加、逆序删除等破坏顺序操作，仅用于渲染列表用于展示，使用index是没有问题的。
+>
+>   
+
+
+
+#### 1.11.3 列表过滤
+
+使用watch来实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表过滤</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <input type="text" placeholder="请输入名称" v-model="keyWord">
+        <ul>
+            <li v-for="(p,index) of fliterArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 18
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 19
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 20
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ],
+                fliterArray: []
+            },
+            watch:{
+                keyWord:{
+                    //初始化时让handler调用一下,如果不添加初始化的时候不执行
+                    immediate: true,
+                    handler(val){
+                        this.fliterArray = this.dataArray.filter((p)=>{
+                            return p.name.indexOf(val) !== -1;
+                        });
+                    }
+                }
+            }       
+        })
+    </script>
+</body>
+</html>
+```
+
+
+
+![image-20250101102735653](.\images\image-20250101102735653.png)
+
+使用计算属性来实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表过滤</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <input type="text" placeholder="请输入名称" v-model="keyWord">
+        <ul>
+            <li v-for="(p,index) of fliterArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 18
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 19
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 20
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ]
+            },
+            computed: {
+                fliterArray() {
+                    return this.dataArray.filter( (p) => {
+                        return p.name.indexOf(this.keyWord) !== -1;   
+                    }                                            
+                    );
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+效果
+
+![image-20250101103436829](.\images\image-20250101103436829.png)
+
+
+
+#### 1.11.4 列表过滤排序
+
+使用计算属性来实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表过滤排序</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <input type="text" placeholder="请输入名称" v-model="keyWord"> 
+        <button @click="sortType=0">原顺序</button>
+        <button @click="sortType=1">年龄升序</button>
+        <button @click="sortType=2">年龄降序</button>
+        <ul>
+            <li v-for="(p,index) of fliterArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                //0原顺序 1降序 2升序
+                sortType: 0,
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 22
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 33
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 15
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ]
+            },
+            computed: {
+                fliterArray() {
+                    //数据过滤操作
+                     const filterArrayRsp =  this.dataArray.filter( (p) => {
+                        return p.name.indexOf(this.keyWord) !== -1;   
+                    }                                            
+                    );
+                    //数据排序操作
+                    if(this.sortType === 0)
+                    {
+                        return filterArrayRsp;
+                    }
+
+                    //升序
+                    if(this.sortType === 1)
+                    {
+                        filterArrayRsp.sort((item1,item2)=> {
+                            return item1.age - item2.age;
+                        })
+                    }
+
+                    //年龄降序
+                    if(this.sortType === 2)
+                    {
+                        filterArrayRsp.sort((item1,item2)=> {
+                            return item2.age - item1.age;
+                        })
+                    }
+
+
+                    return filterArrayRsp;
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+输出 
+
+![image-20250101111202730](.\images\image-20250101111202730.png)
+
+使用watch来实现
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表过滤排序</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <input type="text" placeholder="请输入名称" v-model="keyWord"> 
+        <button @click="sortType=0">原顺序</button>
+        <button @click="sortType=1">年龄升序</button>
+        <button @click="sortType=2">年龄降序</button>
+        <ul>
+            <li v-for="(p,index) of fliterArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                //0原顺序 1降序 2升序
+                sortType: 0,
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 22
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 33
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 15
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ],
+                fliterArray: []
+            },
+            watch: {
+                keyWord:{
+                    //初始化时让handler调用一下,如果不添加初始化的时候不执行
+                    immediate: true,
+                    handler(val){
+                        const filterRsp = this.dataArray.filter((item)=>{
+                            return item.name.indexOf(val) !== -1;
+                        });
+
+                        this.fliterArray  = filterRsp;
+                    }                    
+                },
+                sortType: {
+                    handler(value){
+                        const filterRsp =  this.fliterArray;
+                        //年龄升序
+                        if(this.sortType == 1)
+                        {
+                            this.fliterArray = filterRsp.sort((item1,item2)=>{
+                                return item1.age - item2.age;
+                            })
+                        }
+
+                        //年龄降序
+                        if(this.sortType == 2)
+                        {
+                            this.fliterArray = filterRsp.sort((item1,item2)=>{
+                                return  item2.age - item1.age;
+                            })
+                        }
+                    }
+                }
+            }
+        })
+    </script>
+</body>
+</html>
+```
+
+输出:
+
+![image-20250101111548591](.\images\image-20250101111548591.png)
 
 ## 结束
 
