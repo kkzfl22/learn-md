@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+    </div>
+    <script type="text/javascript">
+       let data = {
+        name: 'nullnull',
+        address: '上海'
+       }
+    
+       const obj = new ObjServer(data);
+       console.log(obj);
+
+
+
+       function ObjServer(obj){
+        //汇总对外中所有的属性为一个数组 
+        const keys = Object.keys(obj);
+        //遍历
+        keys.forEach((k)=>{
+                Object.defineProperty(this,k,{
+                    get(){
+                        return obj[k];
+                    },
+                    set(value){
+                        console.log("数据被改变变了，最新的数据是:",value);
+                        obj[k] = value;
+                    }
+                })
+        });
+
+       }
+    </script>
+</body>
+</html>

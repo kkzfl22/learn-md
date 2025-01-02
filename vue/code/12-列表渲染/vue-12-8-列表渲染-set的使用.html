@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h1>学校信息</h1>
+        <h2>学校名称：{{school.name}}</h2>
+        <h2>学校地址：{{school.address}}</h2>
+        <h2>校长：{{school.leader}}</h2>
+        <hr/>
+        <h2>学生信息</h2>
+        <button @click="addSex">添加一个属性属性</button>
+        <h2>姓名：{{student.name}}</h2>
+        <h2 v-if="student.sex">性别：{{student.sex}}</h2>
+        <h2>年龄：真实{{student.age.rAge}}，对外{{student.age.sAge}}</h2>
+			<h2>朋友们</h2>
+			<ul>
+				<li v-for="(f,index) in student.friends" :key="index">
+					{{f.name}}--{{f.age}}
+				</li>
+			</ul>
+    </div>
+    <script type="text/javascript">
+        Vue.config.productionTip = false //阻止 vue 在启动时生成生产提示。
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                school:{
+                    name: 'nullnull',
+                    address: '上海'
+                },
+                student:{
+                    name: 'tom',
+                    age:{
+                        rAge:40,
+                        sAge:29
+                    },
+                    friends:[
+                        {name:'jerry',age:35},
+                        {name:'tony',age:36}
+                    ]
+                }
+            },
+            methods:{
+                addSex(){
+                    Vue.set(this.student,'sex','男');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
