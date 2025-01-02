@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-更新的问题</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h2>人员列表</h2>
+        <!-- 绑定键盘输入事件 -->
+        <button @click="updateMei">更新马冬梅的信息</button>
+        <ul>
+            <li v-for="(p,index) of dataArray" :key="p.id">
+                {{p.name}} - {{p.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                name: "nullnull",
+                keyWord: '',
+                //0原顺序 1降序 2升序
+                sortType: 0,
+                dataArray:[
+                    {
+                        id:'001',
+                        name: '马冬梅',
+                        age: 22
+                    },
+                    {
+                        id: '002',
+                        name:'周冬雨',
+                        age: 33
+                    },
+                    {
+                        id: '003',
+                        name: '周杰伦',
+                        age: 15
+                    },
+                    {
+                        id: '004',
+                        name: '温兆伦',
+                        age: 23
+                    }
+                ]
+            },
+            methods: {
+                updateMei(){
+                    /* 
+                    此修改值的方式是成功
+                    this.dataArray[0].name = '马马', 
+                    this.dataArray[0].age = 50,
+                    this.dataArray[0].sex = '男'
+                    */
+
+                    //此修改是不成功的
+                    //splice 方法可以接受三个及以上的参数：
+                    // start：必需。规定从何处开始修改数组。
+                    // deleteCount：必需。规定应该删除多少元素。如果设置为 0，则不删除任何元素。
+                    // item1, ..., itemN：可选。要添加进数组的新元素。
+                    //从下标为0的位置开始，修改1个元素
+                    this.dataArray.splice(0,1,{
+                        id:'001',
+                        name: '马冬梅2',
+                        age: 25
+                    })
+                }
+            },
+        })
+    </script>
+</body>
+</html>
