@@ -3195,6 +3195,81 @@ react、Vue中的Key有什么用呢？
 
 
 
+#### 1.12 收集表单数据
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-列表渲染</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <form @submit.prevent="submit">
+                <!-- v-model.trim ：数据去掉前后的空格  -->
+            账号：<input type="text" name="username" v-model.trim="userInfo.userName"> <br/><br/>
+            密码：<input type="password" name="password" v-model="userInfo.password"> <br/><br/>
+            <!-- v-model.number，数据使用数字类型  -->
+            年龄: <input type="number" name="age" v-model.number="userInfo.age"> <br/><br/>
+            性别: 
+            男<input type="radio" name="sex" v-model="userInfo.sex" value="man" >
+            女<input type="radio" name="sex" v-model="userInfo.sex" value="woman" > <br/><br/>
+            爱好：
+            学习<input type="checkbox" v-model="userInfo.hobby" value="study">
+            游戏<input type="checkbox" v-model="userInfo.hobby" value="game">
+            吃饭<input type="checkbox" v-model="userInfo.hobby" value="eat"><br/><br/>
+            所在城市:
+            <select v-model="userInfo.city">
+                <option value="">请选择</option>
+                <option value="beijing">北京</option>
+                <option value="shanghai">上海</option>
+                <option value="wuhan">武汉</option>
+                <option value="chengdu">成都</option>
+            </select>
+            <br/><br/>
+            其他信息
+            <textarea v-model="userInfo.other"></textarea><br/><br/>
+            <input type="checkbox" v-model="userInfo.agree">
+            阅读并接受<a href="http://www.atguigu.com">《用户协议》</a>
+            <button>提交</button>
+
+        </form>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                userInfo:{
+                    userName: '',
+                    password: '',
+                    age: 18,
+                    sex: 'woman',
+                    hobby: [
+                        "game"
+                    ],
+                    city: "shanghai",
+                    other: '',
+                    agree: ''
+                }                
+            },
+            methods:{
+                submit(){
+                    console.log(JSON.stringify(this.userInfo));
+                }
+            }           
+        })
+    </script>
+</body>
+</html>
+```
+
+
+
 
 
 ## 结束
