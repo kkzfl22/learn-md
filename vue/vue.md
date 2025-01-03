@@ -2848,6 +2848,353 @@ react、Vue中的Key有什么用呢？
 
 由此问题将引出Vue的监视的原理
 
+#### 1.11.6 Vue的属性模拟监视
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+    </div>
+    <script type="text/javascript">
+       let data = {
+        name: 'nullnull',
+        address: '上海'
+       }
+    
+       const obj = new ObjServer(data);
+       console.log(obj);
+
+
+
+       function ObjServer(obj){
+        //汇总对外中所有的属性为一个数组 
+        const keys = Object.keys(obj);
+        //遍历
+        keys.forEach((k)=>{
+                Object.defineProperty(this,k,{
+                    get(){
+                        return obj[k];
+                    },
+                    set(value){
+                        console.log("数据被改变变了，最新的数据是:",value);
+                        obj[k] = value;
+                    }
+                })
+        });
+
+       }
+    </script>
+</body>
+</html>
+```
+
+#### 1.11.7 模拟监视
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+    </div>
+    <script type="text/javascript">
+       let data = {
+        name: 'nullnull',
+        address: '上海'
+       }
+    
+       const obj = new ObjServer(data);
+       console.log(obj);
+
+
+
+       function ObjServer(obj){
+        //汇总对外中所有的属性为一个数组 
+        const keys = Object.keys(obj);
+        //遍历
+        keys.forEach((k)=>{
+                Object.defineProperty(this,k,{
+                    get(){
+                        return obj[k];
+                    },
+                    set(value){
+                        console.log("数据被改变变了，最新的数据是:",value);
+                        obj[k] = value;
+                    }
+                })
+        });
+
+       }
+    </script>
+</body>
+</html>
+```
+
+#### 1.11.8 Vue的属性set使用
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h1>学校信息</h1>
+        <h2>学校名称：{{school.name}}</h2>
+        <h2>学校地址：{{school.address}}</h2>
+        <h2>校长：{{school.leader}}</h2>
+        <hr/>
+        <h2>学生信息</h2>
+        <button @click="addSex">添加一个性别属性</button>
+        <h2>姓名：{{student.name}}</h2>
+        <h2 v-if="student.sex">性别：{{student.sex}}</h2>
+        <h2>年龄：真实{{student.age.rAge}}，对外{{student.age.sAge}}</h2>
+			<h2>朋友们</h2>
+			<ul>
+				<li v-for="(f,index) in student.friends" :key="index">
+					{{f.name}}--{{f.age}}
+				</li>
+			</ul>
+    </div>
+    <script type="text/javascript">
+        Vue.config.productionTip = false //阻止 vue 在启动时生成生产提示。
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                school:{
+                    name: 'nullnull',
+                    address: '上海'
+                },
+                student:{
+                    name: 'tom',
+                    age:{
+                        rAge:40,
+                        sAge:29
+                    },
+                    friends:[
+                        {name:'jerry',age:35},
+                        {name:'tony',age:36}
+                    ]
+                }
+            },
+            methods:{
+                addSex(){
+                    //Vue.set(this.student,'sex','男');
+                    //此实例本身就是vue，所以可使用this
+                    this.$set(this.student,'sex','男')
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+
+
+#### 1.11.9 的属性数组元素的动态添加
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-模拟一个监控</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h1>学校信息</h1>
+        <h2>学校名称：{{school.name}}</h2>
+        <h2>学校地址：{{school.address}}</h2>
+        <h2>校长：{{school.leader}}</h2>
+        <hr/>
+        <h2>学生信息</h2>
+        <button @click="addSex">添加一个性别属性</button>
+        <h2>姓名：{{student.name}}</h2>
+        <h2 v-if="student.sex">性别：{{student.sex}}</h2>
+        <h2>年龄：真实{{student.age.rAge}}，对外{{student.age.sAge}}</h2>
+
+        <button @click.once="addHobby">添加一个数组的元素</button>
+
+        <h2>爱好</h2>
+        <ul>
+            <li v-for="(h,index) in student.hobby" :key="index">
+                {{h}}
+            </li>
+        </ul>
+
+        <h2>朋友们</h2>
+        <ul>
+            <li v-for="(f,index) in student.friends" :key="index">
+                {{f.name}}--{{f.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        Vue.config.productionTip = false //阻止 vue 在启动时生成生产提示。
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                school:{
+                    name: 'nullnull',
+                    address: '上海'
+                },
+                student:{
+                    name: 'tom',
+                    age:{
+                        rAge:40,
+                        sAge:29
+                    },
+                    hobby:[
+                        "写代码",
+                        "跑步",
+                        "打球"
+                    ],
+                    friends:[
+                        {name:'jerry',age:35},
+                        {name:'tony',age:36}
+                    ]
+                }
+            },
+            methods:{
+                addSex(){
+                    //Vue.set(this.student,'sex','男');
+                    //此实例本身就是vue，所以可使用this
+                    this.$set(this.student,'sex','男')
+                },
+                addHobby(){
+                    //第一种写法
+                    //this.student.hobby.push('睡觉');
+                    //第二种写法
+                    this.$set(this.student.hobby,3,'睡觉');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+#### 1.11.10 总结
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-10-总结</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <h1>学生信息</h1>
+        <button @click="student.age++">年龄+1</button><br/><br/>
+        <button @click="addSex">添加性别属性，默认：男</button><br/><br/>
+        <button @click="updSex">修改性别为女</button><br/><br/>
+        <button @click="addFriend">在列表首位添加一个朋友</button><br/><br/>
+        <button @click="updateFriend">修改第一位朋友的名称</button><br/><br/>
+        <button @click="addhobby">添加一个爱好</button><br/><br/>
+        <button @click="updhobby">修改一个爱好</button><br/><br/>
+        <button @click="filterhobby">过滤掉爱好中的开车</button><br/><br/>
+        <br/>
+        <hr/>
+        <h3>姓名：{{student.name}}</h3>
+        <h3>年龄：{{student.age}}</h3>
+        <h3 v-if="student.sex">性别：{{student.sex}}</h3>
+        <h3>爱好：</h3>
+        <ul>
+            <li v-for="(h,index) in student.hobby" :key="index">
+                {{h}}
+            </li>
+        </ul>
+        <h3>朋友们：</h3>
+        <ul>
+            <li v-for="(f,index) in student.friends" :key="index">
+                {{f.name}}--{{f.age}}
+            </li>
+        </ul>
+    </div>
+    <script type="text/javascript">
+        Vue.config.productionTip = false //阻止 vue 在启动时生成生产提示。
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                student:{
+                    name: 'nullnull',
+                    age: 18,
+                    friends:[
+                        {name:'张三',age:42},
+                        {name:'李四',age:38},
+                        {name:'王五',age:36}
+                    ],
+                    hobby: ['睡觉','写代码','游戏']
+                }
+            },
+            methods:{
+                addSex(){
+                    this.$set(this.student,'sex','男');
+                },
+                updSex(){
+                    this.$set(this.student,'sex','女');
+                },
+                addFriend(){
+                    this.student.friends.unshift({name:'tony',age:40});
+                },
+                updateFriend(){
+                    this.student.friends[0].name='二麻子';
+                },
+                addhobby(){
+                    this.student.hobby.push('学习');
+                },
+                updhobby(){
+                    //第一种写法
+                    // this.student.hobby.splice(0,1,'开车');
+                    //第二种写法
+                    // Vue.set(this.student.hobby,0,'开车');
+                    //第三种写法
+                    this.$set(this.student.hobby,0,'开车');
+                },
+                filterhobby(){
+                    this.student.hobby =   this.student.hobby.filter((h)=>{
+                        return h != '开车';
+                    })
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+```
+
+
+
 
 
 ## 结束
