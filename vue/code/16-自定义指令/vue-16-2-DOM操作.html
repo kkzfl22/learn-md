@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>回顾Dom操作</title>
+    <style>
+        .backStyle{
+            background-color: blue;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <button id="btn">点我创建一个输入框</button>
+    </div>
+ 
+    <script type="text/javascript">
+        const btn = document.getElementById('btn');
+        btn.onclick=()=>{
+            const input = document.createElement('input');
+            input.className = 'backStyle';
+            input.value = 99;
+
+            document.body.appendChild(input);
+            
+            //此设置到页面时，有时机的限制，必须将元素加入页面后，才能进行页面的显示操作
+            input.focus();
+        
+            console.log(input.parentElement);
+        }
+
+    </script>
+</body>
+</html>

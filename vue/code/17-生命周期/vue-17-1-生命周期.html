@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-命令周期</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>{{num}}</h2>
+        <button @click="add()">点我加1</button>
+        <button @click="bye()">点我销毁</button>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               num: 1
+            },
+            methods: {
+                add(){
+                    console.log('add');
+                    this.num++;
+                },
+                bye(){
+                    console.log('bye');
+                    this.$destroy();
+                }
+            },
+            watch:{
+                num(){
+                    console.log('num变了');
+                } 
+            },
+            //在初始化之前，具体是在初始化数据监听、数据代理
+            //在beforeCreate无法通过vm访问到data中的数据、methods中的方法
+            beforeCreate() {
+                console.log('1,beforeCreate调用');
+                console.log('data中的this',this);
+                console.log('data中的_data还无法被访问',this._data);
+                //debugger;
+            },
+            //在初始化之后，具体是在初始化数据监听、数据代理
+            //在created方法中可以访问到data中的数据、methods中的方法
+            created(){
+                console.log('2,created调用');
+                console.log('data中的this',this);
+                console.log('data中的_data可以被访问',this._data);
+                //debugger;
+            },
+            //在将内存中的虚拟DOM转换为真实DOM插入页面之前
+            //1. 此时页面呈现未经Vue编译的DOM结构。
+            //2. 所有对DOM的操作，最终都不奏效
+            beforeMount(){
+                console.log('3,beforeMount调用');
+                console.log("显示显示未经过编译的DOM结构");
+                //在此处做任何的设置，结果都不奏效
+                document.querySelector('h2').innerText='不生效';
+                // debugger;
+            },
+            //在将内存中的虚拟DOM转换为真实DOM插入页面之后
+            //此时页面显示经过VUE编译的DOM
+            //对DOM的操作均有效，但需要尽量避免，到此初始化后
+            //一般在此进行开启定时器，发送网络请求，订阅消息，绑定自定义事件等初始化操作
+            mounted(){
+                console.log('4,mounted');
+                console.log('可以进行一些初始化操作');
+                //debugger;
+            },
+            //在将虚拟DOM更新到页面之前，
+            //数据是最新的，但页面是旧的，即页面尚未数据保持同步
+            beforeUpdate() {
+                console.log('5,beforeUpdate');
+                console.log('已经能够收到最新的值:'+this.num);
+                //debugger;
+            },
+            //在将虚拟DOM更新到页面之后，
+            //数据是最新的，但页面也是新的，即页面和数据保持同步
+            updated(){
+                console.log('6,updated');
+                console.log('页面和数据都完成更新');
+                //debugger;
+            },
+            //VM实例对象销毁之前，
+            //此时VM中所有的,data、methods、指令等待，都处于可用状态，马上要执行销毁过程
+            //一般在此阶段，关闭定时器、取消订阅消息、解绑自定义事件等收尾工作
+            //此处已经不在响应页面的变化。
+            beforeDestroy(){
+                console.log('7,beforeDestory');
+                console.log('销毁之前');
+                this.num = 12
+                //debugger;
+            },
+            //VM实例对象销毁之后
+            destroyed() {
+                console.log('8,destroyed');
+                console.log('销毁完毕之后');
+            }
+        });        
+    </script>
+</body>
+</html>

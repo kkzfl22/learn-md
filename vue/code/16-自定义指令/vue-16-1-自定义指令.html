@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-自定义指令</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 需求1：定义一个v-big指令，和v-text功能类似，但会把绑定的数值放大10倍。 -->
+    <div id="root">
+        <h2>{{name}}</h2>
+        <h2>当前的初始值是:<span v-text="num"></span></h2>
+        <!-- 自定义指令将num的放大10倍 -->
+        <h2>放大10倍后的值:<span v-big="num"></span></h2>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: 'nullnull',
+               num: 1
+            },
+            directives:{
+                big(element,binging){
+                    console.log("element对象是",element instanceof HTMLElement);
+                    console.log("element对象是",binging);
+                    element.innerText = binging.value*10;
+                }
+            }
+        });        
+    </script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义指令</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+		<!-- 
+				自定义指令总结：
+						一、定义语法：
+									(1).局部指令：
+												new Vue({															new Vue({
+													directives:{指令名:配置对象}   或   		directives{指令名:回调函数}
+												}) 																		})
+									(2).全局指令：
+													Vue.directive(指令名,配置对象) 或   Vue.directive(指令名,回调函数)
+
+						二、配置对象中常用的3个回调：
+									(1).bind：指令与元素成功绑定时调用。
+									(2).inserted：指令所在元素被插入页面时调用。
+									(3).update：指令所在模板结构被重新解析时调用。
+
+						三、备注：
+									1.指令定义时不加v-，但使用时要加v-；
+									2.指令名如果是多个单词，要使用kebab-case命名方式，不要用camelCase命名。
+		-->
+        <!-- 需求2：定义一个v-fbind指令，和v-bind功能类似，但可以让其所绑定的input元素默认获取焦点。 -->
+        <div id="root">
+            <h2>{{name}}</h2>
+            <h2>当前的初始值是:<span v-text="num"></span></h2>
+            <button @click="num++">点我加1</button>
+            <br />
+            <hr />
+            <input type="text" v-fbind:value="num">
+        </div>
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+            //定义全局指令
+            Vue.directive('fbind',{
+                          //指令与元素成功绑定时（页面加载时）
+                          bind(element,binding){
+                              //注意，在所有的指令中，此处的this都是window对象
+                              console.log(this);
+                              element.value = binding.value;
+                          },
+                          //指令所在元素被插入页面时
+                          inserted(element,binding){
+                              //让当前的input框获得焦点
+                              element.focus();
+                          },
+                          //指令所在的模板被重新解析时
+                          update(element,binding){
+                              element.value = binding.value;
+                          }
+                      });
+            
+
+            const vm = new Vue({
+                el: '#root',
+                data: {
+                    name: 'nullnull',
+                    num: 1
+                },
+                directives: {
+                    //局部指令的写法
+                    /*   fbind:{
+                          //指令与元素成功绑定时（页面加载时）
+                          bind(element,binding){
+                              //注意，在所有的指令中，此处的this都是window对象
+                              console.log(this);
+                              element.value = binding.value;
+                          },
+                          //指令所在元素被插入页面时
+                          inserted(element,binding){
+                              //让当前的input框获得焦点
+                              element.focus();
+                          },
+                          //指令所在的模板被重新解析时
+                          update(element,binding){
+                              element.value = binding.value;
+                          }
+                      }  */
+                }
+            });        
+        </script>
+    </body>
+
+</html>

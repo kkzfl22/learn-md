@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-pre</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    
+</head>
+<body>
+		<!-- 
+			v-pre指令：
+					1.跳过其所在节点的编译过程。
+					2.可利用它跳过：没有使用指令语法、没有使用插值语法的节点，会加快编译。
+		-->
+    <div id="root">
+        <h2 v-pre>这就一个普通的内容，不用解析</h2>
+        <h2 v-once>当前的初始值是:{{num}}</h2>
+        <h2 >当前的值是:{{num}}</h2>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               num: 1
+            }
+        });        
+    </script>
+
+</body>
+</html>

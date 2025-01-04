@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<body>
+<head>
+    <meta charset="UTF-8"/>
+    <title>VUE-指令-v-cloak</title>
+    <style>
+        [v-cloak]{
+            display: none;
+        }
+    </style>
+    
+</head>
+<body>
+    
+    <div id="root">
+       <h2 v-cloak>{{name}}</h2>
+       <!-- 当网速过慢时，此Vue.js会延迟加载5秒 -->
+       <script type="text/javascript" src="http://localhost:8080/resource/5s/vue.js"></script>
+    </div>
+    <script type="text/javascript" src="../js/vue.js"></script>
+    <script type="text/javascript">
+        //阻止 vue 在启动时生成生产提示。
+        Vue.config.productionTip = false 
+
+        const vm = new Vue({
+            el: '#root',
+            data:{
+               name: '你好,nullnull'
+            }
+        });        
+    </script>
+
+</body>
+</html>
