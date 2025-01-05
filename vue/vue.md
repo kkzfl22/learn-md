@@ -4113,6 +4113,455 @@ v-pre指令：
 >
 >
 
+### 1.17 非单文件组件
+
+
+
+#### 1.17.1 基本操作
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <!-- 使用组件，使用注册的名称作为标签名 -->
+            <!-- 全局标签 -->
+            <hello></hello>
+            <hr />
+            <h1>{{msg}}</h1>
+            <hr>
+            <!-- 局部标签 -->
+            <school></school>
+            <hr />
+            <student></student>
+        </div>
+
+        <hr />
+        <hr />
+
+        <div id="root2">
+            <!-- 使用组件，使用注册的名称作为标签名 -->
+            <!-- 全局标签 -->
+            <hello></hello>
+        </div>
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+            <div>
+               	<h2>学校名称：{{schoolName}}</h2>
+                <h2>学校地址：{{address}}</h2>
+                <button @click="showName">点我提示学校名</button>	 
+            </div>
+            `,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        alert(this.schoolName);
+                    }
+                },
+            });
+
+            //创建学生组件
+            const student = Vue.extend({
+                template: `
+            <div>
+                <h2>学生名称：{{studentName}}</h2>
+                <h2>学生年龄：{{studentAge}}</h2>
+                <button @click="showStudentName">点我学生名称</button>	   
+            </div>
+            `,
+                data() {
+                    return {
+                        studentName: '张三',
+                        studentAge: 28
+                    };
+                },
+                methods: {
+                    showStudentName() {
+                        alert(this.studentName);
+                    }
+                }
+            });
+
+            //创建hello组件
+            const hello = Vue.extend({
+                template: `
+            <div>
+                <h2>你好啊! {{name}}</h2>
+            </div>
+            `,
+                data() {
+                    return {
+                        name: 'nullnull'
+                    };
+                }
+            });
+
+
+            //第二步注册组件
+
+            //全局注册 hello组件
+            Vue.component('hello', hello);
+
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                data: {
+                    msg: '你好啊'
+                },
+                //此为局部注册组件
+                components: {
+                    school: school,
+                    student
+                }
+            });
+
+            new Vue({
+                el: '#root2'
+            });
+
+        </script>
+    </body>
+
+</html>
+```
+
+输出
+
+![image-20250105150635375](.\images\image-20250105150635375.png)
+
+
+
+#### 1.17.2 注意事项
+
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-注意事项</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <h1>{{msg}}</h1>
+            <!-- 使用自定义的组件 -->
+            <data-msg></data-msg>
+        </div>
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+            //定义组件
+            const stData = Vue.extend({
+                //定义组件的名称，用于Vue工具的名称显示
+                name: 'comonent-name',
+                template:`
+                    <div>
+                        <h2>名称：{{name}}</h2>
+                        <h2>地址: {{address}}</h2>
+                    </div>
+                `,
+                data(){
+                    return {
+                        name: 'nullnull',
+                        address: 'shanghai'
+                    }
+                }
+            });
+
+            //局部组件的使用
+            new Vue({
+                el: '#root',
+                data:{
+                    msg: '欢迎来到Vue的世界!!'
+                },
+                components:{
+                    'data-msg': stData
+                }
+            });
+
+        </script>
+    </body>
+
+</html>
+```
+
+>几个注意点：
+>1.关于组件名:
+>一个单词组成：
+>第一种写法(首字母小写)：school
+>第二种写法(首字母大写)：School
+>多个单词组成：
+>第一种写法(kebab-case命名)：my-school
+>第二种写法(CamelCase命名)：MySchool (需要Vue脚手架支持)
+>备注：
+>(1).组件名尽可能回避HTML中已有的元素名称，例如：h2、H2都不行。
+>(2).可以使用name配置项指定组件在开发者工具中呈现的名字。
+>
+>2.关于组件标签:
+>第一种写法：<school></school>
+>第二种写法：<school/>
+>备注：不用使用脚手架时，<school/>会导致后续组件不能渲染。
+>
+>3.一个简写方式：
+>const school = Vue.extend(options) 可简写为：const school = options
+>
+>
+
+#### 1.17.3 嵌套
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-嵌套</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <app></app>            
+        </div>
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+
+            //创建学生组件
+            const student = Vue.extend({
+                template: `
+                <div>
+                    <h2>学生名称：{{studentName}}</h2>
+                    <h2>学生年龄：{{studentAge}}</h2>
+                    <button @click="showStudentName">点我学生名称</button>	   
+                </div>
+            `,
+                data() {
+                    return {
+                        studentName: '张三',
+                        studentAge: 28
+                    };
+                },
+                methods: {
+                    showStudentName() {
+                        alert(this.studentName);
+                    }
+                }
+            });
+
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+            <div>
+               	<h2>学校名称：{{schoolName}}</h2>
+                <h2>学校地址：{{address}}</h2>
+                <button @click="showName">点我提示学校名</button>	 
+                <hr/>
+                <hr/>
+                <student></student>
+            </div>
+            `,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        alert(this.schoolName);
+                    }
+                },
+                components:{
+                    student:student
+                }
+            });
+
+            //创建hello组件
+            const hello = Vue.extend({
+                template: `
+            <div>
+                <h2>你好啊! {{name}}</h2>
+            </div>
+            `,
+                data() {
+                    return {
+                        name: 'nullnull'
+                    };
+                }
+            });
+
+            //定义App组件，管理所有组件
+            const app = Vue.extend({
+                template:`
+                <div>
+                    <hello></hello>
+                    <school></school>
+                </div>
+                `,
+                components:{
+                    hello:hello,
+                    school:school
+                }
+            });
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                //此为局部注册组件
+                components: {
+                    app: app
+                    
+                }
+            });
+        </script>
+    </body>
+
+</html>
+```
+
+输出：
+
+![image-20250105204527035](.\images\image-20250105204527035.png)
+
+
+
+#### 1.17.4 VueComponent
+
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-VueComponent</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <!-- 
+          Vue.extend = function (extendOptions) {
+          ......
+          //定义子类构造函数
+          var Sub = function VueComponent(options) {
+              this._init(options);
+          };
+          //创建一个新的对象并赋值给原型链
+          Sub.prototype = Object.create(Super.prototype);
+          //修正子类的构造函数引用
+          Sub.prototype.constructor = Sub;
+          Sub.cid = cid++;
+          ......
+          return Sub;
+      };
+  }
+
+        -->
+
+        <div id="root">
+            <school></school>
+        </div>
+
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+                <div>
+                    <h2>学校名称：{{schoolName}}</h2>
+                    <h2>学校地址：{{address}}</h2>
+                    <button @click="showName">点我提示学校名</button>	 
+                    <hr/>
+                </div>`,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        console.log('showName',this);
+                        alert(this.schoolName);
+                    }
+                }
+            });
+
+
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                //此为局部注册组件
+                components: {
+                    school: school
+                }
+            });
+        </script>
+    </body>
+
+</html>
+```
+
+输出：
+
+![image-20250105210520350](.\images\image-20250105210520350.png)
+
+>关于VueComponent：
+>1.school组件本质是一个名为VueComponent的构造函数，且不是程序员定义的，是Vue.extend生成的。
+>
+>2.我们只需要写<school/>或<school></school>，Vue解析时会帮我们创建school组件的实例对象，
+>即Vue帮我们执行的：new VueComponent(options)。
+>
+>3.特别注意：每次调用Vue.extend，返回的都是一个全新的VueComponent！！！！
+>
+>4.关于this指向：
+>(1).组件配置中：
+>data函数、methods中的函数、watch中的函数、computed中的函数 它们的this均是【VueComponent实例对象】。
+>(2).new Vue(options)配置中：
+>data函数、methods中的函数、watch中的函数、computed中的函数 它们的this均是【Vue实例对象】。
+>
+>5.VueComponent的实例对象，以后简称vc（也可称之为：组件实例对象）。
+>Vue的实例对象，以后简称vm。
+
+
+
+
+
+#### 1.17.5 关于Vue与VueComponent关系
+
+![](.\images\内置关系20250105_224251789.jpg)
+
 
 
 ## 结束

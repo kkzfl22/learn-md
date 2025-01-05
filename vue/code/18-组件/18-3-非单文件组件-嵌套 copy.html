@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-嵌套</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <app></app>            
+        </div>
+
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+
+            //创建学生组件
+            const student = Vue.extend({
+                template: `
+                <div>
+                    <h2>学生名称：{{studentName}}</h2>
+                    <h2>学生年龄：{{studentAge}}</h2>
+                    <button @click="showStudentName">点我学生名称</button>	   
+                </div>
+            `,
+                data() {
+                    return {
+                        studentName: '张三',
+                        studentAge: 28
+                    };
+                },
+                methods: {
+                    showStudentName() {
+                        alert(this.studentName);
+                    }
+                }
+            });
+
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+            <div>
+               	<h2>学校名称：{{schoolName}}</h2>
+                <h2>学校地址：{{address}}</h2>
+                <button @click="showName">点我提示学校名</button>	 
+                <hr/>
+                <hr/>
+                <student></student>
+            </div>
+            `,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        alert(this.schoolName);
+                    }
+                },
+                components:{
+                    student:student
+                }
+            });
+
+
+
+            //创建hello组件
+            const hello = Vue.extend({
+                template: `
+            <div>
+                <h2>你好啊! {{name}}</h2>
+            </div>
+            `,
+                data() {
+                    return {
+                        name: 'nullnull'
+                    };
+                }
+            });
+
+            //定义App组件，管理所有组件
+            const app = Vue.extend({
+                template:`
+                <div>
+                    <hello></hello>
+                    <school></school>
+                </div>
+                `,
+                components:{
+                    hello:hello,
+                    school:school
+                }
+            });
+
+
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                //此为局部注册组件
+                components: {
+                    app: app
+                    
+                }
+            });
+
+
+        </script>
+    </body>
+
+</html>
