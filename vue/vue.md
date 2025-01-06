@@ -4560,7 +4560,204 @@ v-pre指令：
 
 #### 1.17.5 关于Vue与VueComponent关系
 
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-VueComponent</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <!-- 
+          Vue.extend = function (extendOptions) {
+          ......
+          //定义子类构造函数
+          var Sub = function VueComponent(options) {
+              this._init(options);
+          };
+          //创建一个新的对象并赋值给原型链
+          Sub.prototype = Object.create(Super.prototype);
+          //修正子类的构造函数引用
+          Sub.prototype.constructor = Sub;
+          Sub.cid = cid++;
+          ......
+          return Sub;
+      };
+  }
+
+        -->
+
+        <div id="root">
+            <school></school>
+        </div>
+
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+                <div>
+                    <h2>学校名称：{{schoolName}}</h2>
+                    <h2>学校地址：{{address}}</h2>
+                    <button @click="showName">点我提示学校名</button>	 
+                    <hr/>
+                </div>`,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        console.log('showName',this);
+                        alert(this.schoolName);
+                    }
+                }
+            });
+
+
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                //此为局部注册组件
+                components: {
+                    school: school
+                }
+            });
+        </script>
+    </body>
+
+</html>
+```
+
+结果：
+
+	关于VueComponent：
+	1.school组件本质是一个名为VueComponent的构造函数，且不是程序员定义的，是Vue.extend生成的。
+	2.我们只需要写<school/>或<school></school>，Vue解析时会帮我们创建school组件的实例对象，
+	即Vue帮我们执行的：new VueComponent(options)。
+	3.特别注意：每次调用Vue.extend，返回的都是一个全新的VueComponent！！！！
+	
+	4.关于this指向：
+	(1).组件配置中：
+	data函数、methods中的函数、watch中的函数、computed中的函数 它们的this均是【VueComponent实例对象】。
+	(2).new Vue(options)配置中：
+	data函数、methods中的函数、watch中的函数、computed中的函数 它们的this均是【Vue实例对象】。
+	
+	5.VueComponent的实例对象，以后简称vc（也可称之为：组件实例对象）。
+	Vue的实例对象，以后简称vm。
+
+
+
+
+
 ![](.\images\内置关系20250105_224251789.jpg)
+
+
+
+#### 1.17.6 重要的内置关系
+
+```html
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-自定义标签-重要的内置关系</title>
+        <script type="text/javascript" src="../js/vue.js"></script>
+    </head>
+
+    <body>
+        <div id="root">
+            <school></school>
+        </div>
+
+
+        <script type="text/javascript">
+            //阻止 vue 在启动时生成生产提示。
+            Vue.config.productionTip = false
+
+
+            //第一步创建学校组件
+            const school = Vue.extend({
+                template: `
+                <div>
+                    <h2>学校名称：{{schoolName}}</h2>
+                    <h2>学校地址：{{address}}</h2>
+                    <button @click="showName">点我提示学校名</button>	 
+                    <hr/>
+                </div>`,
+                data() {
+                    return {
+                        schoolName: '人民大学',
+                        address: '北京'
+                    }
+                },
+                methods: {
+                    showName() {
+                        console.log('showName',this);
+                        alert(this.schoolName);
+                    }
+                }
+            });
+
+
+            //局部注册，此在创建Vue实例对象中
+            new Vue({
+                el: '#root',
+                //此为局部注册组件
+                components: {
+                    school: school
+                }
+            });
+
+            //1,定义一个构造函数
+            function Demo(){
+                this.a = 1;
+                this.b = 2;
+            }
+
+            //创建一个Demo的实例对象
+            const d = new Demo();
+
+            //显示原型属性
+            console.log(Demo.prototype);
+
+            //隐式原型属性
+            console.log(d.__proto__);
+        
+            console.log(Demo.prototype === d.__proto__);
+
+            //通过显示原型属性操作原型对象，追加一个X属性，值为99
+            Demo.prototype.x = 99;
+
+            console.log('@',d);
+
+        </script>
+    </body>
+
+</html>
+```
+
+输出信息
+
+![image-20250106200021057](.\images\image-20250106200021057.png)
+
+
+
+### 1.18 单文件组件
 
 
 
