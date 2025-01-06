@@ -4766,5 +4766,17 @@ v-pre指令：
 
 
 
+## 2. VUE脚手架
+
+```sh
+# 如出现下载缓慢请配置 npm 淘宝镜像
+npm config set registry https://registry.npm.taobao.org
+
+# 全局安装@vue/cli。
+npm install -g @vue/cli
+```
+
+
+
 ## 结束
 
