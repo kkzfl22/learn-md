@@ -4768,15 +4768,183 @@ v-pre指令：
 
 ## 2. VUE脚手架
 
+安装npm
+
 ```sh
+# 在安装目录下新建两个文件夹【node_global】和【node_cache】
+
+ npm config set prefix "D:\soft\dev\node-v18.19.0\nodejs\node_global"       //路径改为自己的
+ npm config set cache "D:\soft\dev\node-v18.19.0\nodejs\node_cache"         //路径改为自己的
+ 
+ 
+ # 检查配制是否成功
+ npm config get prefix
+ npm config get cache
+ 
+```
+
+
+
+
+
+```sh
+
 # 如出现下载缓慢请配置 npm 淘宝镜像
 npm config set registry https://registry.npm.taobao.org
 
 # 全局安装@vue/cli。
 npm install -g @vue/cli
+
+
+```
+
+错误：
+
+```sh
+#D:\soft\dev\vue>npm install -g @vue/cli
+npm error code CERT_HAS_EXPIRED
+npm error errno CERT_HAS_EXPIRED
+npm error request to https://registry.npm.taobao.org/@vue%2fcli failed, reason: certificate has expired
+npm error A complete log of this run can be found in: C:\Users\Maxwell\AppData\Local\npm-cache\_logs\2025-01-07T02_35_34_270Z-debug-0.log
+
+
+# 解决办法
+npm config set strict-ssl false
 ```
 
 
+
+#### 2.1 hello-word
+
+准备一个容器页面
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>VUE-组件练习</title>
+    </head>
+    <body>
+        <div id="app">
+        </div>
+    </body>
+</html>
+```
+
+引入App.js
+
+```js
+import Vue from 'vue'
+import App from './App.vue'
+
+//关闭vue的生产提示
+Vue.config.productionTip = false
+
+new Vue({
+   el: '#app',
+   render: h => h(App)
+});
+```
+
+引入核心组件App.vue
+
+```vue
+<template>
+    <div>
+        <School></School>
+        <Student></Student>
+    </div>
+</template>
+
+<script>
+//引入组件
+import School from './components/School'
+import Student from './components/Student'
+
+export default{
+    name: 'App',
+    components:{
+        School,
+        Student
+    }
+}
+</script>
+
+```
+
+School.vue
+
+```vue
+<template>
+  <div class="school-style">
+    <h2>学校名称：{{ name }}</h2>
+    <h2>学校地址：{{ address }}</h2>
+    <button @click="showName">点我提示学校信息</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "SchoolData",
+  data() {
+    return {
+      name: "nullnull",
+      address: "上海"
+    };
+  },
+  methods: {
+    showName() {
+      alert("学校名称:" + this.name);
+    },
+  },
+};
+</script>
+
+<style>
+.school-style {
+  background-color: blue;
+}
+</style>
+
+
+```
+
+学生的Student.vue
+
+```vue
+<template>
+  <div>
+    <h2>学生姓名：{{ name }}</h2>
+    <h2>学生年龄：{{ age }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "StudentData",
+  data() {
+    return {
+      name: "张三",
+      age: 19,
+    };
+  },
+};
+</script>
+
+
+```
+
+进行编译
+
+```sh
+npm run serve
+```
+
+打开浏览器访问：
+
+![image-20250107202424076](.\images\image-20250107202424076.png)
 
 ## 结束
 
