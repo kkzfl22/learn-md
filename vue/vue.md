@@ -4796,6 +4796,11 @@ npm config set registry https://registry.npm.taobao.org
 npm install -g @vue/cli
 
 
+# 切换到要创建项目的目录，使用以下命令创项目
+vue create xxxx
+
+# 启动项目
+vue run serve
 ```
 
 错误：
@@ -4812,9 +4817,7 @@ npm error A complete log of this run can be found in: C:\Users\Maxwell\AppData\L
 npm config set strict-ssl false
 ```
 
-
-
-#### 2.1 hello-word
+### 2.1 hello-word
 
 准备一个容器页面
 
@@ -4945,6 +4948,142 @@ npm run serve
 打开浏览器访问：
 
 ![image-20250107202424076](.\images\image-20250107202424076.png)
+
+### 2.2 VUE架手架
+
+```
+├── node_modules 
+├── public
+│   ├── favicon.ico: 页签图标
+│   └── index.html: 主页面
+├── src
+│   ├── assets: 存放静态资源
+│   │   └── logo.png
+│   │── component: 存放组件
+│   │   └── HelloWorld.vue
+│   │── App.vue: 汇总所有组件
+│   │── main.js: 入口文件
+├── .gitignore: git版本管制忽略的配置
+├── babel.config.js: babel的配置文件
+├── package.json: 应用包配置文件 
+├── README.md: 应用描述文件
+├── package-lock.json：包版本控制文件
+```
+
+#### 2.2.1 关于不同版本的Vue
+
+1. vue.js与vue.runtime.xxx.js的区别：
+   1. vue.js是完整版的Vue，包含：核心功能 + 模板解析器。
+   2. vue.runtime.xxx.js是运行版的Vue，只包含：核心功能；没有模板解析器。
+2. 因为vue.runtime.xxx.js没有模板解析器，所以不能使用template这个配置项，需要使用render函数接收到的createElement函数去指定具体内容。
+
+#### 2.2.2 vue.config.js配置文件
+
+1. 使用vue inspect > output.js可以查看到Vue脚手架的默认配置。
+2. 使用vue.config.js可以对脚手架进行个性化定制，详情见：https://cli.vuejs.org/zh
+
+
+
+### 2.3 ref属性
+
+组件
+
+componets\School.vue
+
+```vue
+<template>
+  <div class="school">
+    <h2>学校名称: {{ name }}</h2>
+    <h2>学校地址: {{ address }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+    name: 'School',
+    data() {
+        return {
+            name: '交大',
+            address: '闵行'
+        }
+    },
+};
+</script>
+
+<style>
+.school {
+  background-color: gray;
+}
+</style>
+```
+
+App.vue
+
+```vue
+<template>
+  <div>
+     <h1 v-text="msg" ref="title"></h1>
+     <button ref="btn" @click="showDom">点击显示元素</button>
+     <School ref="sch"/>
+  </div>
+</template>
+
+<script>
+//引入组件
+import School from './componets/School.vue';
+
+
+export default {
+  name: 'App',
+  components: {
+    School
+  },
+  data(){
+    return {
+      msg: '欢迎学习Vue'
+    }
+  },
+  methods: {
+    showDom(){
+      //通过ref标签查找元素,类似于document.getElementById
+      console.log('title',this.$refs.title);
+      console.log('btn',this.$refs.btn);
+      console.log('btn',this.$refs.sch);
+    }
+  },
+};
+</script>
+```
+
+main.js
+
+```js
+import Vue from 'vue'
+import App from './App.vue'
+
+Vue.config.productionTip = false
+
+new Vue({
+  render: h => h(App),
+}).$mount('#app')
+
+```
+
+页面效果
+
+![image-20250108201809606](.\images\image-20250108201809606.png)
+
+总结：
+
+1. 被用来给元素或子组件注册引用信息（id的替代者）
+2. 应用在html标签上获取的是真实DOM元素，应用在组件标签上是组件实例对象（vc）
+3. 使用方式：
+   1. 打标识：```<h1 ref="xxx">.....</h1>``` 或 ```<School ref="xxx"></School>```
+   2. 获取：```this.$refs.xxx```
+
+
+
+
 
 ## 结束
 
