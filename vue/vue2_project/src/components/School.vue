@@ -16,6 +16,8 @@ export default {
             name: '上海交大',
             address: '闵行'
         }
-    }
+    },
+    //局部混入
+    mixins:[hunhe,hunhe2]
 }
 </script>

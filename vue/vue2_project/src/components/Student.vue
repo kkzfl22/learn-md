@@ -16,6 +16,8 @@ export default {
             name: 'nullnull',
             sex: '男'
         }
-    }
+    },
+     //局部混入
+    mixins:[hunhe,hunhe2]
 }
 </script>
