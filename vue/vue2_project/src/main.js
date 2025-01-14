@@ -3,13 +3,15 @@ import Vue from 'vue'
 //引入App
 import App from './App.vue'
 
+//引入混入
 import {hunhe,hunhe2} from './mixin'
 
 //关闭Vue的生产提示
 Vue.config.productionTip = false
 
-//Vue.mixin(hunhe)
-//Vue.mixin(hunhe2)
+//全局混入
+Vue.mixin(hunhe)
+Vue.mixin(hunhe2)
 
 //创建VM
 new Vue({

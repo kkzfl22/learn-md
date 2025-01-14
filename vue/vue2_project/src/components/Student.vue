@@ -7,17 +7,22 @@
 
 <script>
 //局部混合
-import {hunhe,hunh2} from '../mixin'
+//import {hunhe,hunhe2} from '../mixin'
 
 export default {
     name: "Student",
     data() {
         return {
             name: 'nullnull',
+            //当属性出现了局部与全局混合时，局部优先
             sex: '男'
         }
     },
-     //局部混入
-    mixins:[hunhe,hunhe2]
+    //需要注意的是mounteds这类的生命周期的方法，不管是局部，还是全局都会调用
+    mounted() {
+        console.log("学生的mounted")
+    },
+    //局部混合
+   // mixins:[hunhe,hunhe2]
 }
 </script>

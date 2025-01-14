@@ -5188,9 +5188,178 @@ new Vue({
 
 ![image-20250113193647840](.\images\image-20250113193647840.png)
 
+### 2.5 mixins混入
+
+组件
+
+src\components\School.vue
+
+```vue
+<template>
+    <div>
+        <h2 @click="showName">学校名称: {{name}}</h2>
+        <h2>学校地址: {{address}}</h2>
+    </div>
+</template>
+
+<script>
+//局部混合
+import {hunhe,hunhe2} from '../mixin'
+
+export default {
+    name: "School",
+    data() {
+        return {
+            name: '上海交大',
+            //当属性出现了局部与全局混合时，局部优先
+            address: '闵行'
+        }
+    },
+    //需要注意的是mounteds这类的生命周期的方法，不管是局部，还是全局都会调用
+    mounted() {
+        console.log("学校的mounted")
+    },
+    //局部混合
+    mixins:[hunhe,hunhe2]
+}
+</script>
+```
+
+src\components\Student.vue
+
+```html
+<template>
+    <div>
+        <h2 @click="showName">姓名: {{name}}</h2>
+        <h2>性别: {{sex}}</h2>
+    </div>
+</template>
+
+<script>
+//局部混合
+import {hunhe,hunhe2} from '../mixin'
+
+export default {
+    name: "Student",
+    data() {
+        return {
+            name: 'nullnull',
+            //当属性出现了局部与全局混合时，局部优先
+            sex: '男'
+        }
+    },
+    //需要注意的是mounteds这类的生命周期的方法，不管是局部，还是全局都会调用
+    mounted() {
+        console.log("学生的mounted")
+    },
+    //局部混合
+   mixins:[hunhe,hunhe2]
+}
+</script>
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+      <School/>
+      <hr/>
+      <Student/>
+  </div>
+</template>
+
+<script>
+  import Student from './components/Student'
+  import School from './components/School'
+
+  export default {
+    name : 'App',
+    components: {Student,School}
+  }
+</script>
+```
+
+src\mixin.js
+
+```javascript
+export const hunhe = {
+    methods: {
+        showName(){
+            alert(this.name);
+        }
+    },
+}
+export const hunhe2 = {
+    data() {
+        return {
+            x: 100,
+            y: 200
+        }
+    },
+}
+```
+
+src\main.js
+
+```javascript
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+启动服务以查看数据
+
+![image-20250114092646011](.\images\image-20250114092646011.png)
 
 
-#### 2.5 
+
+![image-20250114093552497](.\images\image-20250114093552497.png)
+
+4个标签，2个存在局部的mounted方法，所以一共加起来是6次。
+
+全局混入，注意上面的局部混入
+
+```javascript
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+//引入混入
+import {hunhe,hunhe2} from './mixin'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//全局混入
+Vue.mixin(hunhe)
+Vue.mixin(hunhe2)
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+查看
+
+![image-20250114092902725](.\images\image-20250114092902725.png)
+
+
+
+
 
 
 
