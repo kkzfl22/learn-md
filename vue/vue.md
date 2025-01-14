@@ -5359,7 +5359,157 @@ new Vue({
 
 
 
+### 2.6 plugin 插件
 
+src\components\School.vue
+
+```vue
+<template>
+    <div>
+        <h2>学校名称: {{name | mySlice}}</h2>
+        <h2>学校地址: {{address}}</h2>
+        <button @click="onTest">测试一下</button>
+    </div>
+</template>
+
+<script>
+export default {
+    name: "School",
+    data() {
+        return {
+            name: '上海交大某某校区',
+            address: '闵行'
+        }
+    },
+    methods:{
+        onTest(){
+            this.testHello();
+        }
+    }
+}
+</script>
+```
+
+src\components\Student.vue
+
+```vue
+<template>
+    <div>
+        <h2>姓名: {{name}}</h2>
+        <h2>性别: {{sex}}</h2>
+        <input type="text" v-fbind:value="name" />
+    </div>
+</template>
+
+<script>
+export default {
+    name: "Student",
+    data() {
+        return {
+            name: 'nullnull',
+            sex: '男'
+        }
+    }
+}
+</script>
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+      <School/>
+      <hr/>
+      <Student/>
+  </div>
+</template>
+
+<script>
+  import Student from './components/Student'
+  import School from './components/School'
+
+  export default {
+    name : 'App',
+    components: {Student,School}
+  }
+</script>
+
+```
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入插件
+import plugin from './plugin'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//应用插件
+Vue.use(plugin,1,2,3)
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+src\plugin.js
+
+```js
+export default {
+    install(Vue, x, y, z) {
+        console.log(x, y, z);
+        //定义全局过滤器
+        Vue.filter('mySlice', function (value) {
+            return value.slice(0, 4);
+        })
+
+        //定义指令
+        Vue.directive('fbind', {
+            //指令与元素首次页面加载时
+            bind(element, binding) {
+                element.value = binding.value;
+            },
+            //指令所在的元素被插入页面时
+            inserted(element, binding) {
+                element.focus();
+            },
+            //指令所在的模块被重新解析时
+            updated(element, binding) {
+                element.value = binding.value;
+            }
+        })
+
+        //定义混入
+        Vue.mixin({
+            data() {
+                return {
+                    x: 100,
+                    y: 200
+                }
+            }
+        })
+
+        //给Vue的原型对象添加一个方法，(vm和vc就都能用了)
+        Vue.prototype.testHello = () => {
+            alert("测试一下");
+        }
+    }
+}
+```
+
+验证
+
+![image-20250114124707125](.\images\image-20250114124707125.png)
 
 
 
