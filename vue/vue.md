@@ -6434,5 +6434,170 @@ body {
 
 
 
+
+
+### 2.12 自定义事件
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+
+
+src\App.vue
+
+```vue
+<template>
+  <div class="app">
+    <h1>{{ msg }},学生是: {{ studentName }}</h1>
+
+    <!-- 方式1：通过父组件组子组件传递函数类型的props实现，子给父传递数据 -->
+    <School :getSchoolName="getSchoolName" />
+
+    <hr />
+    <!-- 方式2：通过父组件绑定一个自定义事件实现子给父传递数据（使用@或者v-on） -->
+    <!-- <Student v-on:userClick="getStudentName" /> -->
+    <!-- <Student @userClick="getStudentName" /> -->
+
+    <!-- 方式3：通过父组件组子组件绑定一个自定义事件实现，子给父传递数据（使用ref） -->
+    <Student ref="student" />
+  </div>
+</template>
+
+<script>
+import Student from "./components/Student.vue";
+import School from "./components/School.vue";
+
+export default {
+  name: "App",
+  components: {
+    School,
+    Student,
+  },
+  data() {
+    return {
+      msg: "你好啊!",
+      studentName: "空空",
+    };
+  },
+  methods: {
+    getSchoolName(name) {
+      console.log("App收到了学校名：", name);
+    },
+    getStudentName(name, ...params) {
+      console.log("App收到了学生名", name, params);
+    },
+  },
+  mounted() {
+    //绑定自定义事件
+    this.$refs.student.$on("userClick", this.getStudentName);
+    // 绑定自定义事件（一次性）
+    // this.$refs.student.$once("userClick", this.getStudentName);
+  },
+};
+</script>
+
+<style>
+.app {
+  background-color: gray;
+}
+</style>
+```
+
+src\components\School.vue
+
+```vue
+<template>
+  <div class="school">
+    <h2>学校名称: {{ name }}</h2>
+    <h2>学校地址: {{ address }}</h2>
+    <button @click="sendSchoolName">点击显示学校名称</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "School",
+  props: ["getSchoolName"],
+  data() {
+    return {
+      name: "交大",
+      address: "上海闵行",
+    };
+  },
+  methods:{
+    sendSchoolName()
+    {
+      this.getSchoolName(this.name);
+    }
+  }
+};
+</script>
+
+<style scoped>
+.school {
+  background-color: skyblue;
+  padding: 5px;
+}
+</style>
+```
+
+src\components\Student.vue
+
+```vue
+<template>
+  <div class="student">
+    <h2>学生姓名:{{ name }}</h2>
+    <h2>学生姓别:{{ sex }}</h2>
+    <button @click="sendStudentName">把学生名发送给App</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Student",
+  data() {
+    return {
+      name: "nullnull",
+      sex: "男",
+    };
+  },
+  methods: {
+    sendStudentName() {
+      this.$emit("userClick", this.name, 111, 222, 333);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.student {
+  background-color: pink;
+  padding: 5px;
+  margin-top: 30px;
+}
+</style>
+```
+
+页面查看
+
+![image-20250118224343561](.\images\image-20250118224343561.png)
+
 ## 结束
 
