@@ -1,54 +1,52 @@
 <template>
-    <div>
-        <h1>{{msg}}</h1>
-        <h2>姓名: {{name}}</h2>
-        <h2>年龄: {{myAge}}</h2>
-        <h2>性别: {{sex}}</h2>
-        <button @click="updateMsg">点我修改年龄</button>
-    </div>
+	<div class="student">
+		<h2>学生姓名：{{name}}</h2>
+		<h2>学生性别：{{sex}}</h2>
+		<h2>当前求和为：{{number}}</h2>
+		<button @click="add">点我number++</button>
+		<button @click="sendStudentlName">把学生名给App</button>
+		<button @click="unbind">解绑atguigu事件</button>
+		<button @click="death">销毁当前Student组件的实例(vc)</button>
+	</div>
 </template>
 
 <script>
-export default {
-    name: "Student",
-    data() {
-        return {
-            msg: '这是一个学生的信息',
-            myAge: this.age
-        }
-    },
-    methods: {
-        updateMsg(){
-            console.log('update');
-            this.myAge += 1;
-        }
-    },
-    //1. 简单声明接收
-    //props: ['name','age','sex']
-    //2. 接收的同时限制类型
-    // props:{
-    //   name: String,
-    //   age: Number,
-    //   sex: String  
-    // }
-    //3, 接收的同时对数据类型、默认值、必要性进行限制
-    props:{
-        name: {
-            //指定name的类型为字符串
-            type:String,
-            //指定name是必须的
-            required:true
-        },
-        age:{
-            type:Number,
-            //指定默认值为19
-            default: 19
-        },
-        sex:{
-            type:String,
-            required:true
-        }
-    }
-    
-}
+	export default {
+		name:'Student',
+		data() {
+			return {
+				name:'张三',
+				sex:'男',
+				number:0
+			}
+		},
+		methods: {
+			add(){
+				console.log('add回调被调用了')
+				this.number++
+			},
+			sendStudentlName(){
+				//触发Student组件实例身上的atguigu事件
+				this.$emit('atguigu',this.name,666,888,900)
+				// this.$emit('demo')
+				// this.$emit('click')
+			},
+			unbind(){
+				this.$off('atguigu') //解绑一个自定义事件
+				// this.$off(['atguigu','demo']) //解绑多个自定义事件
+				// this.$off() //解绑所有的自定义事件
+			},
+			death(){
+				this.$destroy() //销毁了当前Student组件的实例，销毁后所有Student实例的自定义事件全都不奏效。
+			}
+		},
+	}
 </script>
+
+<style lang="less" scoped>
+	.student{
+		background-color: pink;
+		padding: 5px;
+		margin-top: 30px;
+	}
+</style>

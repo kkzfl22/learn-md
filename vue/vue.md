@@ -6135,5 +6135,304 @@ export default {
 
 
 
+### 2.10 store存储
+
+src\localStoreage.html
+
+```html
+<!DOCTYPE html>
+<html lang="">
+
+<head>
+    <title>localStoreAge</title>
+</head>
+
+<body>
+    <div id="app">
+        <!-- localStorage在浏览器关闭后，数据仍然可以操作，但清空浏览器缓存后，将不再可用 -->
+        <button onclick="saveData()">点我保存一个数据</button>
+        <button onclick="readData()">点我读取一个数据</button>
+        <button onclick="deleteData()">点我删除一个数据</button>
+        <button onclick="deleteAllData()">点我清空一个数据</button>
+    </div>
+
+    <script text="text/JavaScript">
+        let data = { name: 'nullnull', age: 18 }
+
+        // 保存数据的方法
+        function saveData() {
+            localStorage.setItem('data1', 'hello!!!');
+            localStorage.setItem('data2', 666);
+            localStorage.setItem('data3', JSON.stringify(data));
+        }
+
+        //读取数据
+        function readData() {
+            console.log(localStorage.getItem('data1'));
+            console.log(localStorage.getItem('data2'));
+
+            const result = localStorage.getItem('data3');
+            console.log(JSON.parse(result));
+        }
+
+        //删除数据
+        function deleteData() {
+            localStorage.removeItem('data2');
+        }
+
+        //清空数据
+        function deleteAllData()
+        {
+            localStorage.clear();
+        }
+
+    </script>
+</body>
+</html>
+```
+
+打开网页
+
+![image-20250118175233306](.\images\image-20250118175233306.png)
+
+点击保存
+
+![image-20250118175335715](.\images\image-20250118175335715.png)
+
+读取的数据
+
+![image-20250118175544665](.\images\image-20250118175544665.png)
+
+点击删除数据
+
+![image-20250118175625425](.\images\image-20250118175625425.png)
+
+点击清空后
+
+![image-20250118175658679](.\images\image-20250118175658679.png)
+
+
+
+
+
+src\sessionStoreage.html
+
+```html
+<!DOCTYPE html>
+<html lang="">
+
+<head>
+    <title>sessionStorage</title>
+</head>
+
+<body>
+    <div id="app">
+        <!-- sessionStorage在浏览器关闭后，数据将不再做保存操作 -->
+        <button onclick="saveData()">点我保存一个数据</button>
+        <button onclick="readData()">点我读取一个数据</button>
+        <button onclick="deleteData()">点我删除一个数据</button>
+        <button onclick="deleteAllData()">点我清空一个数据</button>
+    </div>
+
+    <script text="text/JavaScript">
+        let data = { name: 'nullnull', age: 18 }
+
+        // 保存数据的方法
+        function saveData() {
+            sessionStorage.setItem('data1', 'hello!!!');
+            sessionStorage.setItem('data2', 666);
+            sessionStorage.setItem('data3', JSON.stringify(data));
+        }
+
+        //读取数据
+        function readData() {
+            console.log(sessionStorage.getItem('data1'));
+            console.log(sessionStorage.getItem('data2'));
+
+            const result = sessionStorage.getItem('data3');
+            console.log(JSON.parse(result));
+        }
+
+        //删除数据
+        function deleteData() {
+            sessionStorage.removeItem('data2');
+        }
+
+        //清空数据
+        function deleteAllData()
+        {
+            sessionStorage.clear();
+        }
+
+    </script>
+</body>
+
+</html>
+```
+
+保存后查看，与localStoreAge几乎一样。
+
+![image-20250118175937643](.\images\image-20250118175937643.png)
+
+**总结**
+
+1. 存储内容大小一般支持5MB左右（不同浏览器可能还不一样）
+
+2. 浏览器端通过 Window.sessionStorage 和 Window.localStorage 属性来实现本地存储机制。
+
+3. 相关API：
+
+   1. ```xxxxxStorage.setItem('key', 'value');```
+      	该方法接受一个键和值作为参数，会把键值对添加到存储中，如果键名存在，则更新其对应的值。
+
+   2. ```xxxxxStorage.getItem('person');```
+
+      ​		该方法接受一个键名作为参数，返回键名对应的值。
+
+   3. ```xxxxxStorage.removeItem('key');```
+
+      ​		该方法接受一个键名作为参数，并把该键名从存储中删除。
+
+   4. ``` xxxxxStorage.clear()```
+
+      ​		该方法会清空存储中的所有数据。
+
+4. 备注：
+
+   1. SessionStorage存储的内容会随着浏览器窗口关闭而消失。
+   2. LocalStorage存储的内容，需要手动清除才会消失。
+   3. ```xxxxxStorage.getItem(xxx)```如果xxx对应的value获取不到，那么getItem的返回值是null。
+   4. ```JSON.parse(null)```的结果依然是null。
+
+
+
+### 2.11 todolist添加localStore的存储
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <NullHeader :addTodoItem="addTodoItem" />
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        />
+        <NullFooter
+          :todos="todos"
+          :checkAllOrNot="checkAllOrNot"
+          :cleanFinish="cleanFinish"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      //将数据存储至localStorage中
+      todos: JSON.parse(localStorage.getItem("todos")) || [],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    deleteTodoBox(id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done) {
+      this.todos.forEach((item) => {
+        item.done = done;
+      });
+    },
+    cleanFinish() {
+      this.todos = this.todos.filter((item) => {
+        return !item.done;
+      });
+    },
+  },
+  watch: {
+    // 当检测到数据改变时，将数据进行保存至localStorage操作
+    todos: {
+      deep: true,
+      handler(value) {
+        localStorage.setItem('todos',JSON.stringify(value))
+      },
+    },
+  },
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+```
+
+保存数据
+
+![image-20250118181334126](.\images\image-20250118181334126.png)
+
+
+
 ## 结束
 
