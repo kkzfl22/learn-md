@@ -12,6 +12,9 @@ https://vuejs.org/
 
 # 中文官网
 https://cn.vuejs.org/
+
+# 相关API查阅
+https://developer.mozilla.org/zh-CN
 ```
 
 **介绍与描述**
@@ -5512,6 +5515,623 @@ export default {
 ![image-20250114124707125](.\images\image-20250114124707125.png)
 
 
+
+### 2.7 scoped（样式冲突）
+
+src\components\School.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2 title="title">学校名称: {{ name }}</h2>
+    <h2>{{ address }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "School",
+  data() {
+    return {
+      name: "交大",
+      address: "上海闵行",
+    };
+  },
+};
+</script>
+
+<style>
+  /* 样式冲突，在不同的组件中使用相同的样式名就会导致样式冲突 */
+  .demo {
+    background-color: skyblue;
+  }
+  .title{
+    background-color: blue
+}
+</style>
+```
+
+src\components\Student.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2 title="title">学生姓名:{{name}}</h2>
+    <h2>姓名:{{sex}}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+    name: 'Student',
+    data() {
+        return {
+            name: 'nullnull',
+            sex: '男'
+        }
+    },
+};
+</script>
+
+<style>
+    /* 样式冲突， */
+    .demo{
+        background-color: pink;
+    }
+</style>
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <h1 class="title">你好啊</h1>
+    <School/>
+    <hr/>
+    <Student/>
+  </div>
+</template>
+
+<script>
+
+// 由引入的顺序，在冲突时使用哪个样式，后引入的覆盖前面的
+import Student from './components/Student.vue'
+import School from './components/School.vue'
+
+export default {
+    name: 'App',
+    components:{
+        School,
+        Student
+    }
+}
+</script>
+
+<style>
+    .title{
+        background-color: red
+    }
+</style>
+```
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+效果
+
+![image-20250118094046777](.\images\image-20250118094046777.png)
+
+此时便发生了样式冲突，后引入的组件覆盖了前面的样式。
+
+那如何解决？
+
+给每个引入的样式添加scoped属性
+
+```vue
+<template>
+  <div class="demo">
+    <h2 title="title">学校名称: {{ name }}</h2>
+    <h2>{{ address }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "School",
+  data() {
+    return {
+      name: "交大",
+      address: "上海闵行",
+    };
+  },
+};
+</script>
+
+<style scoped>
+  /* 样式冲突，在不同的组件中使用相同的样式名就会导致样式冲突,添加scoped */
+  .demo {
+    background-color: skyblue;
+  }
+  .title{
+    background-color: blue
+}
+</style>
+```
+
+另外一个组件也添加下scoped属性，页面的样式就正常了
+
+![image-20250118094541223](.\images\image-20250118094541223.png)
+
+那是如何做到的？
+
+![image-20250118094708572](.\images\image-20250118094708572.png)
+
+通过给每个组件都生成一个ID，然后样式只对此ID生效。
+
+
+
+**总结：**
+
+1. 作用：让样式在局部生效，防止冲突。
+2. 写法：```<style scoped>```
+
+
+
+### 2.8 todoList
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <NullHeader :addTodoItem="addTodoItem" />
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        />
+        <NullFooter :todos="todos"
+        :checkAllOrNot="checkAllOrNot"
+        :cleanFinish="cleanFinish"
+         />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      todos: [
+        { id: "001", title: "吃饭", done: false },
+        { id: "002", title: "睡觉", done: false },
+        { id: "003", title: "RC", done: true },
+      ],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    deleteTodoBox(id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done){
+      this.todos.forEach(item => {
+        item.done = done;
+      })
+    },
+    cleanFinish()
+    {
+        this.todos = this.todos.filter(item => {
+          return !item.done;
+        });
+    }
+
+  },
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+```
+
+src\components\NullHeader.vue
+
+```vue
+<template>
+    <div class="todo-header">
+        <input type="text" placeholder="请输入你的任务名称，按回车键确认" @keyup.enter="userInput"/>
+    </div>
+</template>
+
+<script>
+import {nanoid} from 'nanoid'
+
+export default {
+    name: 'NullHeader',
+    props: ["addTodoItem"],
+    methods: {
+        userInput(event){
+            //校验数据不能为空
+            if(!event.target.value.trim())
+            {
+                alert('输入不能为空');
+                return;
+            }
+            //将用户输入的信息包装成一个todo对象
+            const todoObj = {id: nanoid(),title: event.target.value,done:false};
+            //此时必须使用this，才是vc对象。调用receive方法
+            //通过APP组件添加一个数据
+            this.addTodoItem(todoObj);
+            //清空输入
+            event.target.value = '';
+        }
+    }
+}
+</script>
+
+<style scoped>
+	/*header*/
+	.todo-header input {
+		width: 560px;
+		height: 28px;
+		font-size: 14px;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 4px 7px;
+	}
+
+	.todo-header input:focus {
+		outline: none;
+		border-color: rgba(82, 168, 236, 0.8);
+		box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+	}
+</style>
+```
+
+src\components\NullList.vue
+
+```vue
+<template>
+  <ul class="todo-main">
+    <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+      :checkedTodoBox="checkedTodoBox"
+	  :deleteTodoBox="deleteTodoBox"
+    />
+  </ul>
+</template>
+
+<script>
+import NullItem from "./NullItem.vue";
+
+export default {
+  name: "NullFooter",
+  components: { NullItem },
+  props: ["todos", "checkedTodoBox","deleteTodoBox"],
+};
+</script>
+
+<style scoped>
+/*main*/
+.todo-main {
+  margin-left: 0px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding: 0px;
+}
+
+.todo-empty {
+  height: 40px;
+  line-height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding-left: 5px;
+  margin-top: 10px;
+}
+</style>
+```
+
+src\components\NullItem.vue
+
+```vue
+<template>
+  <li>
+    <label>
+      <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" />
+	  <!-- 如下代码也能实现功能，但不推荐，违反了原则，因为修改了props中的值 -->
+	  <!-- <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" /> -->
+      <span>{{todoItem.title}}</span>
+    </label>
+    <button class="btn btn-danger" @click="deleteHandler(todoItem.id)">删除</button>
+  </li>
+</template>
+
+<script>
+export default {
+  name: "NullItem",
+  //声明接收传递过来的todoItem对象
+  props: ["todoItem","checkedTodoBox","deleteTodoBox"],
+  methods:{
+	checkHandler(id){
+		//通知组件将对应的done值取反。
+		this.checkedTodoBox(id);
+	},
+	deleteHandler(id){
+		if(confirm('确定删除数据吗?'))
+		{
+			this.deleteTodoBox(id);
+		}
+	}
+  }
+};
+</script>
+
+<style scoped>
+/*item*/
+li {
+  list-style: none;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+li label {
+  float: left;
+  cursor: pointer;
+}
+
+li label li input {
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
+}
+
+li button {
+  float: right;
+  display: none;
+  margin-top: 3px;
+}
+
+li:before {
+  content: initial;
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li:hover {
+  background-color: #ddd;
+}
+
+/* 鼠标悬浮时进行显示。 */
+li:hover button {
+  display: block;
+}
+</style>
+```
+
+src\components\NullFooter.vue
+
+```vue
+<template>
+  <!-- 使用数据集的大小，非0即为true -->
+  <div class="todo-footer" v-show="countTotal">
+    <label>
+      <!-- <input type="checkbox" :checked="isAllChecked" @change="checkAll" /> -->
+      <input type="checkbox" v-model="isAllChecked" />
+    </label>
+    <span>
+      <span>已完成{{ countDoneNum }}</span> / 全部{{ countTotal }}
+    </span>
+    <button class="btn btn-danger" @click="cleanAll">清除已完成任务</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "NullFooter",
+  props: ["todos", "checkAllOrNot","cleanFinish"],
+  computed: {
+    countTotal() {
+      return this.todos.length;
+    },
+    countDoneNum: {
+      get() {
+        let num = 0;
+        this.todos.forEach((item) => {
+          if (item.done) {
+            num++;
+          }
+        });
+
+        return num;
+      },
+    },
+    isAllChecked: {
+      get() {
+        return this.countTotal == this.countDoneNum && this.countTotal > 0;
+      },
+      //set在传递时，值就为true或者false，表示选择与未选择
+      set(value) {
+        this.checkAllOrNot(value);
+      },
+    },
+  },
+  methods: {
+    // 此使用计算属性来实现更为便捷
+    // checkAll(e)
+    // {
+    //   this.checkAllOrNot(e.target.checked);
+    // }
+    cleanAll()
+    {
+      this.cleanFinish();
+    }
+  },
+};
+</script>
+
+<style scoped>
+/*footer*/
+.todo-footer {
+  height: 40px;
+  line-height: 40px;
+  padding-left: 6px;
+  margin-top: 5px;
+}
+
+.todo-footer label {
+  display: inline-block;
+  margin-right: 20px;
+  cursor: pointer;
+}
+
+.todo-footer label input {
+  position: relative;
+  top: -1px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.todo-footer button {
+  float: right;
+  margin-top: 5px;
+}
+</style>
+```
+
+
+
+页面效果
+
+![image-20250118131419013](.\images\image-20250118131419013.png)
+
+**总结**
+
+1. 组件化编码流程：
+
+   ​	(1).拆分静态组件：组件要按照功能点拆分，命名不要与html元素冲突。
+
+   ​	(2).实现动态组件：考虑好数据的存放位置，数据是一个组件在用，还是一些组件在用：
+
+   ​			1).一个组件在用：放在组件自身即可。
+
+   ​			2). 一些组件在用：放在他们共同的父组件上（<span style="color:red">状态提升</span>）。
+
+   ​	(3).实现交互：从绑定事件开始。
+
+2. props适用于：
+
+   ​	(1).父组件 ==> 子组件 通信
+
+   ​	(2).子组件 ==> 父组件 通信（要求父先给子一个函数）
+
+3. 使用v-model时要切记：v-model绑定的值不能是props传过来的值，因为props是不可以修改的！
+
+4. props传过来的若是对象类型的值，修改对象中的属性时Vue不会报错，但不推荐这样做。
 
 
 
