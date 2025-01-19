@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <h1 class="title">你好啊</h1>
+  <div class="app">
+    <h1>你好啊</h1>
     <School/>
     <hr/>
     <Student/>
@@ -23,7 +23,7 @@ export default {
 </script>
 
 <style>
-    .title{
-        color: red
+    .app{
+        background-color: springgreen;
     }
 </style>

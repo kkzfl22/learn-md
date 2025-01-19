@@ -1,33 +1,28 @@
 <template>
-  <div class="school">
-    <h2>学校名称: {{ name }}</h2>
-    <h2>学校地址: {{ address }}</h2>
-    <button @click="sendSchoolName">点击显示学校名称</button>
+  <div class="demo">
+    <h2 class="title">学校名称: {{ name }}</h2>
+    <h2>{{ address }}</h2>
   </div>
 </template>
 
 <script>
 export default {
   name: "School",
-  props: ["getSchoolName"],
   data() {
     return {
       name: "交大",
       address: "上海闵行",
     };
   },
-  methods:{
-    sendSchoolName()
-    {
-      this.getSchoolName(this.name);
-    }
-  }
 };
 </script>
 
 <style scoped>
-.school {
-  background-color: skyblue;
-  padding: 5px;
+  /* 样式冲突，在不同的组件中使用相同的样式名就会导致样式冲突 */
+  .demo {
+    background-color: skyblue;
+  }
+  .title{
+    background-color: blue
 }
 </style>

@@ -6438,6 +6438,8 @@ body {
 
 ### 2.12 自定义事件
 
+#### 绑定自定义事件
+
 src\main.js
 
 ```js
@@ -6598,6 +6600,1350 @@ export default {
 页面查看
 
 ![image-20250118224343561](.\images\image-20250118224343561.png)
+
+
+
+#### 解绑自定义事件
+
+```vue
+<template>
+  <div class="student">
+    <h2>学生姓名:{{ name }}</h2>
+    <h2>学生姓别:{{ sex }}</h2>
+    <button @click="sendStudentName">把学生名发送给App</button>
+    <button @click="unbind">解绑userClick事件</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Student",
+  data() {
+    return {
+      name: "nullnull",
+      sex: "男",
+    };
+  },
+  methods: {
+    sendStudentName() {
+      this.$emit("userClick", this.name, 111, 222, 333);
+    },
+    unbind(){
+      //解绑一个自定义事件
+      this.$off('userClick');
+      //解绑多个自定义事件
+      //this.$off(['userClick'])
+      //解绑所有自定义事件
+      //this.$off()
+    }
+  },
+};
+</script>
+
+<style scoped>
+.student {
+  background-color: pink;
+  padding: 5px;
+  margin-top: 30px;
+}
+</style>
+```
+
+
+
+#### 注意事项ref
+
+```vue
+<template>
+  <div class="app">
+    <h1>{{ msg }},学生是: {{ studentName }}</h1>
+
+    <!-- 方式1：通过父组件组子组件传递函数类型的props实现，子给父传递数据 -->
+    <School :getSchoolName="getSchoolName" />
+
+    <hr />
+    <!-- 方式2：通过父组件绑定一个自定义事件实现子给父传递数据（使用@或者v-on） -->
+    <!-- <Student v-on:userClick="getStudentName" /> -->
+    <!-- <Student @userClick="getStudentName" /> -->
+
+    <!-- 方式3：通过父组件组子组件绑定一个自定义事件实现，子给父传递数据（使用ref） -->
+    <Student ref="student" />
+  </div>
+</template>
+
+<script>
+import Student from "./components/Student.vue";
+import School from "./components/School.vue";
+
+export default {
+  name: "App",
+  components: {
+    School,
+    Student,
+  },
+  data() {
+    return {
+      msg: "你好啊!",
+      studentName: "",
+    };
+  },
+  methods: {
+    getSchoolName(name) {
+      console.log("App收到了学校名：", name);
+    },
+    // getStudentName(name, ...params) {
+    //   console.log("App收到了学生名", name, params);
+    //   this.studentName = name;
+    // },
+  },
+  mounted() {
+    //绑定自定义事件
+    //this.$refs.student.$on("userClick", this.getStudentName);
+    // 绑定自定义事件（一次性）
+    // this.$refs.student.$once("userClick", this.getStudentName);
+
+    //使用此方式绑定自定义事件
+    //如果采用此方式将不能对studentName属性值进行设置。
+    //此时在APP中的This并不是App的VC，此时的VC的对象是Student，
+    //用VUE的解释就是谁触发了事件，此是的this就是谁，由于是Student触发了事件，所以此时的VC就是Student。
+    // this.$refs.student.$on("userClick", function (name, ...params) {
+    //   console.log("App收到了学生名", name, params);
+    //   this.studentName = name;
+    // });
+
+    //如果使用是箭头函数，由于箭头函数没有this，就会向外找，此时的this就是App对象的VC。
+    this.$refs.student.$on("userClick", (name, ...params) => {
+      console.log("App收到了学生名2", name, params);
+      this.studentName = name;
+    });
+
+
+    //绑定自定义事件
+    //如果方法写在了methods ，并且还是普通函数，那此getStudentName的实例对象一定是App的实例对象。
+    //this.$refs.student.$on("userClick", this.getStudentName);
+  },
+};
+</script>
+
+<style>
+.app {
+  background-color: gray;
+}
+</style>
+```
+
+输出：
+
+![image-20250119201028860](.\images\image-20250119201028860.png)
+
+
+
+#### 组件使用原生的事件
+
+```vue
+<template>
+  <div class="app">
+    <h1>{{ msg }},学生是: {{ studentName }}</h1>
+
+    <!-- 方式1：通过父组件组子组件传递函数类型的props实现，子给父传递数据 -->
+    <School :getSchoolName="getSchoolName" />
+
+    <hr />
+    <!-- 方式2：通过父组件绑定一个自定义事件实现子给父传递数据（使用@或者v-on） -->
+    <!-- <Student v-on:userClick="getStudentName" /> -->
+    <!-- <Student @userClick="getStudentName" /> -->
+
+    <!-- 方式3：通过父组件组子组件绑定一个自定义事件实现，子给父传递数据（使用ref） -->
+    <!-- <Student ref="student"/> -->
+    <!-- 告诉Vue使用原生的click事件,此时事件就被绑定到了Student最外层的div元素上 -->
+    <Student ref="student" @click.native="show" />
+  </div>
+</template>
+
+<script>
+import Student from "./components/Student.vue";
+import School from "./components/School.vue";
+
+export default {
+  name: "App",
+  components: {
+    School,
+    Student,
+  },
+  data() {
+    return {
+      msg: "你好啊!",
+      studentName: "",
+    };
+  },
+  methods: {
+    getSchoolName(name) {
+      console.log("App收到了学校名：", name);
+    },
+    getStudentName(name, ...params) {
+      console.log("App收到了学生名", name, params);
+      this.studentName = name;
+    },
+    show() {
+      alert("show invoke");
+    },
+  },
+  mounted() {
+    //绑定自定义事件
+    //this.$refs.student.$on("userClick", this.getStudentName);
+    // 绑定自定义事件（一次性）
+    // this.$refs.student.$once("userClick", this.getStudentName);
+
+    //使用此方式绑定自定义事件
+    //如果采用此方式将不能对studentName属性值进行设置。
+    //此时在APP中的This并不是App的VC，此时的VC的对象是Student，
+    //用VUE的解释就是谁触发了事件，此是的this就是谁，由于是Student触发了事件，所以此时的VC就是Student。
+    // this.$refs.student.$on("userClick", function (name, ...params) {
+    //   console.log("App收到了学生名", name, params);
+    //   this.studentName = name;
+    // });
+
+    //如果使用是箭头函数，由于箭头函数没有this，就会向外找，此时的this就是App对象的VC。
+    this.$refs.student.$on("userClick", (name, ...params) => {
+      console.log("App收到了学生名2", name, params);
+      this.studentName = name;
+    });
+
+    //绑定自定义事件,推荐使用此方式，不用考滤箭头函数还是普通 函数的问题
+    //如果方法写在了methods ，并且还是普通函数，那此getStudentName的实例对象一定是App的实例对象。
+    //this.$refs.student.$on("userClick", this.getStudentName);
+  },
+};
+</script>
+
+<style>
+.app {
+  background-color: gray;
+}
+</style>
+```
+
+访问网页,对网页进行访问。
+
+![image-20250119203014710](.\images\image-20250119203014710.png)
+
+
+
+#### 总结
+
+1. 一种组件间通信的方式，适用于：<strong style="color:red">子组件 ===> 父组件</strong>
+
+2. 使用场景：A是父组件，B是子组件，B想给A传数据，那么就要在A中给B绑定自定义事件（<span style="color:red">事件的回调在A中</span>）。
+
+3. 绑定自定义事件：
+
+   1. 第一种方式，在父组件中：```<Demo @atguigu="test"/>```  或 ```<Demo v-on:atguigu="test"/>```
+
+   2. 第二种方式，在父组件中：
+
+      ```js
+      <Demo ref="demo"/>
+      ......
+      mounted(){
+         this.$refs.xxx.$on('atguigu',this.test)
+      }
+      ```
+
+   3. 若想让自定义事件只能触发一次，可以使用```once```修饰符，或```$once```方法。
+
+4. 触发自定义事件：```this.$emit('atguigu',数据)```		
+
+5. 解绑自定义事件```this.$off('atguigu')```
+
+6. 组件上也可以绑定原生DOM事件，需要使用```native```修饰符。
+
+7. 注意：通过```this.$refs.xxx.$on('atguigu',回调)```绑定自定义事件时，回调<span style="color:red">要么配置在methods中</span>，<span style="color:red">要么用箭头函数</span>，否则this指向会出问题！
+
+
+
+### 2.13 todolist使用自定义事件
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <!-- <NullHeader :addTodoItem="addTodoItem" /> -->
+        <!-- 使用自定义事件改写 -->
+        <NullHeader @addTodoItem="addTodoItem" />
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        />
+        <!-- <NullFooter
+          :todos="todos"
+          :checkAllOrNot="checkAllOrNot"
+          :cleanFinish="cleanFinish"
+        /> -->
+        <!-- 使用自定义事件改写  -->
+        <NullFooter
+          :todos="todos"
+          @checkAllOrNot="checkAllOrNot"
+          @cleanFinish="cleanFinish"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      //将数据存储至localStorage中
+      todos: JSON.parse(localStorage.getItem("todos")) || [],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    deleteTodoBox(id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done) {
+      this.todos.forEach((item) => {
+        item.done = done;
+      });
+    },
+    cleanFinish() {
+      this.todos = this.todos.filter((item) => {
+        return !item.done;
+      });
+    },
+  },
+  watch: {
+    // 当检测到数据改变时，将数据进行保存至localStorage操作
+    todos: {
+      deep: true,
+      handler(value) {
+        localStorage.setItem("todos", JSON.stringify(value));
+      },
+    },
+  },
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+
+```
+
+src\components\NullFooter.vue
+
+```vue
+<template>
+  <!-- 使用数据集的大小，非0即为true -->
+  <div class="todo-footer" v-show="countTotal">
+    <label>
+      <!-- <input type="checkbox" :checked="isAllChecked" @change="checkAll" /> -->
+      <input type="checkbox" v-model="isAllChecked" />
+    </label>
+    <span>
+      <span>已完成{{ countDoneNum }}</span> / 全部{{ countTotal }}
+    </span>
+    <button class="btn btn-danger" @click="cleanAll">清除已完成任务</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "NullFooter",
+  //此时数据还是需要传递的，但方法无需再传递
+  // props: ["todos", "checkAllOrNot","cleanFinish"],
+  props: ["todos"],
+  computed: {
+    countTotal() {
+      return this.todos.length;
+    },
+    countDoneNum: {
+      get() {
+        let num = 0;
+        this.todos.forEach((item) => {
+          if (item.done) {
+            num++;
+          }
+        });
+
+        return num;
+      },
+    },
+    isAllChecked: {
+      get() {
+        return this.countTotal == this.countDoneNum && this.countTotal > 0;
+      },
+      //set在传递时，值就为true或者false，表示选择与未选择
+      set(value) {
+        //使用自定义事件调用
+        // this.checkAllOrNot(value);
+        this.$emit('checkAllOrNot', value);
+      },
+    },
+  },
+  methods: {
+    // 此使用计算属性来实现更为便捷
+    // checkAll(e)
+    // {
+    //   this.checkAllOrNot(e.target.checked);
+    // }
+    cleanAll() {
+      //使用自定义事件来改写
+      // this.cleanFinish();
+      this.$emit('cleanFinish');
+    },
+  },
+};
+</script>
+
+<style scoped>
+/*footer*/
+.todo-footer {
+  height: 40px;
+  line-height: 40px;
+  padding-left: 6px;
+  margin-top: 5px;
+}
+
+.todo-footer label {
+  display: inline-block;
+  margin-right: 20px;
+  cursor: pointer;
+}
+
+.todo-footer label input {
+  position: relative;
+  top: -1px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.todo-footer button {
+  float: right;
+  margin-top: 5px;
+}
+</style>
+
+```
+
+src\components\NullHeader.vue
+
+```vue
+<template>
+    <div class="todo-header">
+        <input type="text" placeholder="请输入你的任务名称，按回车键确认" @keyup.enter="userInput"/>
+    </div>
+</template>
+
+<script>
+import {nanoid} from 'nanoid'
+
+export default {
+    name: 'NullHeader',
+    //使用自定义事件无需再接收参数
+    //props: ["addTodoItem"],
+    methods: {
+        userInput(event){
+            //校验数据不能为空
+            if(!event.target.value.trim())
+            {
+                alert('输入不能为空');
+                return;
+            }
+            //将用户输入的信息包装成一个todo对象
+            const todoObj = {id: nanoid(),title: event.target.value,done:false};
+            //此时必须使用this，才是vc对象。调用receive方法
+            //通过APP组件添加一个数据
+            //此时不需要再调用添加方法，触发一个事件即可
+            //this.addTodoItem(todoObj);
+            this.$emit('addTodoItem',todoObj);
+            //清空输入
+            event.target.value = '';
+        }
+    }
+}
+</script>
+
+<style scoped>
+	/*header*/
+	.todo-header input {
+		width: 560px;
+		height: 28px;
+		font-size: 14px;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 4px 7px;
+	}
+
+	.todo-header input:focus {
+		outline: none;
+		border-color: rgba(82, 168, 236, 0.8);
+		box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+	}
+</style>
+```
+
+src\components\NullList.vue
+
+```vue
+<template>
+  <ul class="todo-main">
+    <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+      :checkedTodoBox="checkedTodoBox"
+	  :deleteTodoBox="deleteTodoBox"
+    />
+  </ul>
+</template>
+
+<script>
+import NullItem from "./NullItem.vue";
+
+export default {
+  name: "NullFooter",
+  components: { NullItem },
+  props: ["todos", "checkedTodoBox","deleteTodoBox"],
+};
+</script>
+
+<style scoped>
+/*main*/
+.todo-main {
+  margin-left: 0px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding: 0px;
+}
+
+.todo-empty {
+  height: 40px;
+  line-height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding-left: 5px;
+  margin-top: 10px;
+}
+</style>
+```
+
+src\components\NullItem.vue
+
+```vue
+<template>
+  <li>
+    <label>
+      <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" />
+	  <!-- 如下代码也能实现功能，但不推荐，违反了原则，因为修改了props中的值 -->
+	  <!-- <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" /> -->
+      <span>{{todoItem.title}}</span>
+    </label>
+    <button class="btn btn-danger" @click="deleteHandler(todoItem.id)">删除</button>
+  </li>
+</template>
+
+<script>
+export default {
+  name: "NullItem",
+  //声明接收传递过来的todoItem对象
+  props: ["todoItem","checkedTodoBox","deleteTodoBox"],
+  methods:{
+	checkHandler(id){
+		//通知组件将对应的done值取反。
+		this.checkedTodoBox(id);
+	},
+	deleteHandler(id){
+		if(confirm('确定删除数据吗?'))
+		{
+			this.deleteTodoBox(id);
+		}
+	}
+  }
+};
+</script>
+
+<style scoped>
+/*item*/
+li {
+  list-style: none;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+li label {
+  float: left;
+  cursor: pointer;
+}
+
+li label li input {
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
+}
+
+li button {
+  float: right;
+  display: none;
+  margin-top: 3px;
+}
+
+li:before {
+  content: initial;
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li:hover {
+  background-color: #ddd;
+}
+
+/* 鼠标悬浮时进行显示。 */
+li:hover button {
+  display: block;
+}
+</style>
+```
+
+启动服务，进行页面操作，添加元素，并清除元素
+
+![image-20250119210851873](.\images\image-20250119210851873.png)
+
+
+
+### 2.13 事件总线
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App),
+    beforeCreate(){
+        //注册一个全局的事件总线
+        Vue.prototype.$bus = this;
+    }
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div class="app">
+    <h1>你好啊</h1>
+    <School/>
+    <hr/>
+    <Student/>
+  </div>
+</template>
+
+<script>
+
+// 由引入的顺序，在冲突时使用哪个样式，后引入的覆盖前面的
+import Student from './components/Student.vue'
+import School from './components/School.vue'
+
+export default {
+    name: 'App',
+    components:{
+        School,
+        Student
+    }
+}
+</script>
+
+<style>
+    .app{
+        background-color: springgreen;
+    }
+</style>
+```
+
+src\components\School.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2>学校名称: {{ name }}</h2>
+    <h2>{{ address }}</h2>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "School",
+  data() {
+    return {
+      name: "交大",
+      address: "上海闵行",
+    };
+  },
+  mounted(){
+    this.$bus.$on('hello',(data)=>{
+      console.log('我是School组件，收到了数据',data);
+    })
+  },
+  beforeDestroy(){
+    //当组件销毁时，自动解绑当前组件所用的事件。
+    this.$bug.$off('hello');
+  }
+};
+</script>
+
+<style scoped>
+.demo {
+  background-color: skyblue;
+}
+</style>
+
+```
+
+src\components\Student.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2>学生姓名:{{ name }}</h2>
+    <h2>学生性别:{{ sex }}</h2>
+    <button @click="sendStudentName">把学生名称传递给School组件</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Student",
+  data() {
+    return {
+      name: "nullnull",
+      sex: "男",
+    };
+  },
+  methods: {
+    sendStudentName() {
+      //将当前的学生名称传递给事件总线
+      this.$bus.$emit('hello',this.name);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.demo {
+  background-color: pink;
+}
+</style>
+
+```
+
+打开页面点击按钮
+
+![image-20250119222354866](.\images\image-20250119222354866.png)
+
+#### 总结
+
+1. 一种组件间通信的方式，适用于<span style="color:red">任意组件间通信</span>。
+
+2. 安装全局事件总线：
+
+   ```js
+   new Vue({
+   	......
+   	beforeCreate() {
+   		Vue.prototype.$bus = this //安装全局事件总线，$bus就是当前应用的vm
+   	},
+       ......
+   }) 
+   ```
+
+3. 使用事件总线：
+
+   1. 接收数据：A组件想接收数据，则在A组件中给$bus绑定自定义事件，事件的<span style="color:red">回调留在A组件自身。</span>
+
+      ```js
+      methods(){
+        demo(data){......}
+      }
+      ......
+      mounted() {
+        this.$bus.$on('xxxx',this.demo)
+      }
+      ```
+
+   2. 提供数据：```this.$bus.$emit('xxxx',数据)```
+
+4. 最好在beforeDestroy钩子中，用$off去解绑<span style="color:red">当前组件所用到的</span>事件。
+
+
+
+
+
+### 2.14 todolist使用全局事件总线
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App),
+    beforeCreate(){
+        //注册全局事件总线
+        Vue.prototype.$bus = this;
+    }
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <!-- <NullHeader :addTodoItem="addTodoItem" /> -->
+        <!-- 使用自定义事件改写 -->
+        <NullHeader @addTodoItem="addTodoItem" />
+        <!--        
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        /> -->
+        <!-- 使用全局事件总线来处理 -->
+        <NullList :todos="todos" />
+
+        <!-- <NullFooter
+          :todos="todos"
+          :checkAllOrNot="checkAllOrNot"
+          :cleanFinish="cleanFinish"
+        /> -->
+        <!-- 使用自定义事件改写  -->
+        <NullFooter
+          :todos="todos"
+          @checkAllOrNot="checkAllOrNot"
+          @cleanFinish="cleanFinish"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      //将数据存储至localStorage中
+      todos: JSON.parse(localStorage.getItem("todos")) || [],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    deleteTodoBox(id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done) {
+      this.todos.forEach((item) => {
+        item.done = done;
+      });
+    },
+    cleanFinish() {
+      this.todos = this.todos.filter((item) => {
+        return !item.done;
+      });
+    },
+  },
+  watch: {
+    // 当检测到数据改变时，将数据进行保存至localStorage操作
+    todos: {
+      deep: true,
+      handler(value) {
+        localStorage.setItem("todos", JSON.stringify(value));
+      },
+    },
+  },
+  mounted(){
+    //注册全局事件
+    this.$bus.$on('checkedTodoBox',this.checkedTodoBox);
+    this.$bus.$on('deleteTodoBox',this.deleteTodoBox);
+  },
+  beforeDestroy(){
+    //组件销毁时，解绑事件
+    this.$bus.$off('checkedTodoBox');
+    this.$bus.$off('deleteTodoBox');
+  }
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+
+```
+
+src\components\NullList.vue
+
+```vue
+<template>
+  <ul class="todo-main">
+    <!-- <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+      :checkedTodoBox="checkedTodoBox"
+	  :deleteTodoBox="deleteTodoBox"
+    /> -->
+
+    <!-- 使用事件总线后，无需传递 -->
+    <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+    />
+  </ul>
+</template>
+
+<script>
+import NullItem from "./NullItem.vue";
+
+export default {
+  name: "NullFooter",
+  components: { NullItem },
+  //使用事件总线后，无需通过props传递
+  // props: ["todos", "checkedTodoBox","deleteTodoBox"],
+  props: ["todos"],
+};
+</script>
+
+<style scoped>
+/*main*/
+.todo-main {
+  margin-left: 0px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding: 0px;
+}
+
+.todo-empty {
+  height: 40px;
+  line-height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding-left: 5px;
+  margin-top: 10px;
+}
+</style>
+```
+
+src\components\NullItem.vue
+
+```vue
+<template>
+  <li>
+    <label>
+      <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" />
+	  <!-- 如下代码也能实现功能，但不推荐，违反了原则，因为修改了props中的值 -->
+	  <!-- <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" /> -->
+      <span>{{todoItem.title}}</span>
+    </label>
+    <button class="btn btn-danger" @click="deleteHandler(todoItem.id)">删除</button>
+  </li>
+</template>
+
+<script>
+export default {
+  name: "NullItem",
+  //声明接收传递过来的todoItem对象
+  // props: ["todoItem","checkedTodoBox","deleteTodoBox"],
+  //使用事件总线，无需传递
+  props: ["todoItem"],
+  methods:{
+	checkHandler(id){
+		//通知组件将对应的done值取反。
+		// this.checkedTodoBox(id);
+    //使用全局事件总线触发
+    this.$bus.$emit('checkedTodoBox',id)
+	},
+	deleteHandler(id){
+		if(confirm('确定删除数据吗?'))
+		{
+			//this.deleteTodoBox(id);
+      //使用全局事件总线触发
+      this.$bus.$emit('deleteTodoBox',id);
+		}
+	}
+  }
+};
+</script>
+
+<style scoped>
+/*item*/
+li {
+  list-style: none;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+li label {
+  float: left;
+  cursor: pointer;
+}
+
+li label li input {
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
+}
+
+li button {
+  float: right;
+  display: none;
+  margin-top: 3px;
+}
+
+li:before {
+  content: initial;
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li:hover {
+  background-color: #ddd;
+}
+
+/* 鼠标悬浮时进行显示。 */
+li:hover button {
+  display: block;
+}
+</style>
+```
+
+src\components\NullHeader.vue
+
+```vue
+<template>
+    <div class="todo-header">
+        <input type="text" placeholder="请输入你的任务名称，按回车键确认" @keyup.enter="userInput"/>
+    </div>
+</template>
+
+<script>
+import {nanoid} from 'nanoid'
+
+export default {
+    name: 'NullHeader',
+    //使用自定义事件无需再接收参数
+    //props: ["addTodoItem"],
+    methods: {
+        userInput(event){
+            //校验数据不能为空
+            if(!event.target.value.trim())
+            {
+                alert('输入不能为空');
+                return;
+            }
+            //将用户输入的信息包装成一个todo对象
+            const todoObj = {id: nanoid(),title: event.target.value,done:false};
+            //此时必须使用this，才是vc对象。调用receive方法
+            //通过APP组件添加一个数据
+            //此时不需要再调用添加方法，触发一个事件即可
+            //this.addTodoItem(todoObj);
+            this.$emit('addTodoItem',todoObj);
+            //清空输入
+            event.target.value = '';
+        }
+    }
+}
+</script>
+
+<style scoped>
+	/*header*/
+	.todo-header input {
+		width: 560px;
+		height: 28px;
+		font-size: 14px;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 4px 7px;
+	}
+
+	.todo-header input:focus {
+		outline: none;
+		border-color: rgba(82, 168, 236, 0.8);
+		box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+	}
+</style>
+```
+
+
+
+src\components\NullFooter.vue
+
+```vue
+<template>
+  <!-- 使用数据集的大小，非0即为true -->
+  <div class="todo-footer" v-show="countTotal">
+    <label>
+      <!-- <input type="checkbox" :checked="isAllChecked" @change="checkAll" /> -->
+      <input type="checkbox" v-model="isAllChecked" />
+    </label>
+    <span>
+      <span>已完成{{ countDoneNum }}</span> / 全部{{ countTotal }}
+    </span>
+    <button class="btn btn-danger" @click="cleanAll">清除已完成任务</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "NullFooter",
+  //此时数据还是需要传递的，但方法无需再传递
+  // props: ["todos", "checkAllOrNot","cleanFinish"],
+  props: ["todos"],
+  computed: {
+    countTotal() {
+      return this.todos.length;
+    },
+    countDoneNum: {
+      get() {
+        let num = 0;
+        this.todos.forEach((item) => {
+          if (item.done) {
+            num++;
+          }
+        });
+
+        return num;
+      },
+    },
+    isAllChecked: {
+      get() {
+        return this.countTotal == this.countDoneNum && this.countTotal > 0;
+      },
+      //set在传递时，值就为true或者false，表示选择与未选择
+      set(value) {
+        //使用自定义事件调用
+        // this.checkAllOrNot(value);
+        this.$emit('checkAllOrNot', value);
+      },
+    },
+  },
+  methods: {
+    // 此使用计算属性来实现更为便捷
+    // checkAll(e)
+    // {
+    //   this.checkAllOrNot(e.target.checked);
+    // }
+    cleanAll() {
+      //使用自定义事件来改写
+      // this.cleanFinish();
+      this.$emit('cleanFinish');
+    },
+  },
+};
+</script>
+
+<style scoped>
+/*footer*/
+.todo-footer {
+  height: 40px;
+  line-height: 40px;
+  padding-left: 6px;
+  margin-top: 5px;
+}
+
+.todo-footer label {
+  display: inline-block;
+  margin-right: 20px;
+  cursor: pointer;
+}
+
+.todo-footer label input {
+  position: relative;
+  top: -1px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.todo-footer button {
+  float: right;
+  margin-top: 5px;
+}
+</style>
+
+```
+
+
+
+页面效果
+
+![image-20250119225942765](.\images\image-20250119225942765.png)
+
+
 
 ## 结束
 

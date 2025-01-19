@@ -1,8 +1,7 @@
 <template>
-  <div class="student">
-    <h2>学生姓名:{{ name }}</h2>
-    <h2>学生姓别:{{ sex }}</h2>
-    <button @click="sendStudentName">把学生名发送给App</button>
+  <div class="demo">
+    <h2 class="title">学生姓名:{{ name }}</h2>
+    <h2>姓名:{{ sex }}</h2>
   </div>
 </template>
 
@@ -15,18 +14,12 @@ export default {
       sex: "男",
     };
   },
-  methods: {
-    sendStudentName() {
-      this.$emit("userClick", this.name, 111, 222, 333);
-    },
-  },
 };
 </script>
 
 <style scoped>
-.student {
+/* 样式冲突，在不同的组件中使用相同的样式名就会导致样式冲突,添加scoped */
+.demo {
   background-color: pink;
-  padding: 5px;
-  margin-top: 30px;
 }
 </style>
