@@ -7945,5 +7945,634 @@ export default {
 
 
 
+
+
+### 2.15 pubsub-发布订阅模式
+
+此需在额外安装第三方库
+
+```sh
+npm i pubsub-js
+```
+
+
+
+
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App)
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <h1 class="title">你好啊</h1>
+    <School/>
+    <hr/>
+    <Student/>
+  </div>
+</template>
+
+<script>
+
+// 由引入的顺序，在冲突时使用哪个样式，后引入的覆盖前面的
+import Student from './components/Student.vue'
+import School from './components/School.vue'
+
+export default {
+    name: 'App',
+    components:{
+        School,
+        Student
+    }
+}
+</script>
+
+<style>
+    .title{
+        color: red
+    }
+</style>
+```
+
+src\components\Student.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2 class="title">学生姓名:{{ name }}</h2>
+    <h2>姓名:{{ sex }}</h2>
+    <button @click="sendStudentName">把学生名称交给School组件</button>
+  </div>
+</template>
+
+<script>
+//  npm i pubsub-js 安装
+import pubsub from 'pubsub-js'
+export default {
+  name: "Student",
+  data() {
+    return {
+      name: "nullnull",
+      sex: "男",
+    };
+  },
+  methods:{
+    sendStudentName(){
+      pubsub.publish('hello',123);
+    }
+  }
+};
+</script>
+
+<style scoped>
+.demo {
+  background-color: pink;
+}
+</style>
+```
+
+src\components\School.vue
+
+```vue
+<template>
+  <div class="demo">
+    <h2>学校名称: {{ name }}</h2>
+    <h2>学校地址：{{ address }}</h2>
+  </div>
+</template>
+
+<script>
+import pubsub from "pubsub-js";
+export default {
+  name: "School",
+  data() {
+    return {
+      name: "交大",
+      address: "上海闵行",
+    };
+  },
+  mounted(){
+   this.pubId =  pubsub.subscribe('hello',(msgName,data)=>{
+      console.log(this);
+      console.log('有人发布了hello事件，执行了subscribe方法',msgName,data);
+    })
+  },
+  beforeDestory(){
+    //当组件销毁时，解绑掉注册的事件
+    pubsub.unsubscribe(this.pubId);
+  }
+};
+</script>
+
+<style scoped>
+.demo {
+  background-color: skyblue;
+}
+</style>
+
+```
+
+访问网页
+
+![image-20250120230428610](.\images\image-20250120230428610.png)
+
+
+
+### 2.16 totoList的删除使用发布订阅
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建VM
+new Vue({
+    el: '#app',
+	render: h => h(App),
+    beforeCreate(){
+        //注册全局事件总线
+        Vue.prototype.$bus = this;
+    }
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <!-- <NullHeader :addTodoItem="addTodoItem" /> -->
+        <!-- 使用自定义事件改写 -->
+        <NullHeader @addTodoItem="addTodoItem" />
+        <!--        
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        /> -->
+        <!-- 使用全局事件总线来处理 -->
+        <NullList :todos="todos" />
+
+        <!-- <NullFooter
+          :todos="todos"
+          :checkAllOrNot="checkAllOrNot"
+          :cleanFinish="cleanFinish"
+        /> -->
+        <!-- 使用自定义事件改写  -->
+        <NullFooter
+          :todos="todos"
+          @checkAllOrNot="checkAllOrNot"
+          @cleanFinish="cleanFinish"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import pubsub from 'pubsub-js'
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      //将数据存储至localStorage中
+      todos: JSON.parse(localStorage.getItem("todos")) || [],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    //deleteTodoBox首个参数必须是msgName,或者可以写成_
+    // deleteTodoBox(msgName,id) {
+    deleteTodoBox(_,id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done) {
+      this.todos.forEach((item) => {
+        item.done = done;
+      });
+    },
+    cleanFinish() {
+      this.todos = this.todos.filter((item) => {
+        return !item.done;
+      });
+    },
+  },
+  watch: {
+    // 当检测到数据改变时，将数据进行保存至localStorage操作
+    todos: {
+      deep: true,
+      handler(value) {
+        localStorage.setItem("todos", JSON.stringify(value));
+      },
+    },
+  },
+  mounted(){
+    //注册全局事件
+    this.$bus.$on('checkedTodoBox',this.checkedTodoBox);
+    //改为使用pubsub来实现
+    //this.$bus.$on('deleteTodoBox',this.deleteTodoBox);
+    this.pubId = pubsub.subscribe('deleteTodoBox',this.deleteTodoBox)
+  },
+  beforeDestroy(){
+    //组件销毁时，解绑事件
+    this.$bus.$off('checkedTodoBox');
+    // this.$bus.$off('deleteTodoBox');
+    pubsub.unsubscribe(this.pubId);
+  }
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+
+```
+
+src\components\NullFooter.vue
+
+```vue
+<template>
+  <!-- 使用数据集的大小，非0即为true -->
+  <div class="todo-footer" v-show="countTotal">
+    <label>
+      <!-- <input type="checkbox" :checked="isAllChecked" @change="checkAll" /> -->
+      <input type="checkbox" v-model="isAllChecked" />
+    </label>
+    <span>
+      <span>已完成{{ countDoneNum }}</span> / 全部{{ countTotal }}
+    </span>
+    <button class="btn btn-danger" @click="cleanAll">清除已完成任务</button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "NullFooter",
+  //此时数据还是需要传递的，但方法无需再传递
+  // props: ["todos", "checkAllOrNot","cleanFinish"],
+  props: ["todos"],
+  computed: {
+    countTotal() {
+      return this.todos.length;
+    },
+    countDoneNum: {
+      get() {
+        let num = 0;
+        this.todos.forEach((item) => {
+          if (item.done) {
+            num++;
+          }
+        });
+
+        return num;
+      },
+    },
+    isAllChecked: {
+      get() {
+        return this.countTotal == this.countDoneNum && this.countTotal > 0;
+      },
+      //set在传递时，值就为true或者false，表示选择与未选择
+      set(value) {
+        //使用自定义事件调用
+        // this.checkAllOrNot(value);
+        this.$emit('checkAllOrNot', value);
+      },
+    },
+  },
+  methods: {
+    // 此使用计算属性来实现更为便捷
+    // checkAll(e)
+    // {
+    //   this.checkAllOrNot(e.target.checked);
+    // }
+    cleanAll() {
+      //使用自定义事件来改写
+      // this.cleanFinish();
+      this.$emit('cleanFinish');
+    },
+  },
+};
+</script>
+
+<style scoped>
+/*footer*/
+.todo-footer {
+  height: 40px;
+  line-height: 40px;
+  padding-left: 6px;
+  margin-top: 5px;
+}
+
+.todo-footer label {
+  display: inline-block;
+  margin-right: 20px;
+  cursor: pointer;
+}
+
+.todo-footer label input {
+  position: relative;
+  top: -1px;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.todo-footer button {
+  float: right;
+  margin-top: 5px;
+}
+</style>
+
+```
+
+src\components\NullHeader.vue
+
+```vue
+<template>
+    <div class="todo-header">
+        <input type="text" placeholder="请输入你的任务名称，按回车键确认" @keyup.enter="userInput"/>
+    </div>
+</template>
+
+<script>
+import {nanoid} from 'nanoid'
+
+export default {
+    name: 'NullHeader',
+    //使用自定义事件无需再接收参数
+    //props: ["addTodoItem"],
+    methods: {
+        userInput(event){
+            //校验数据不能为空
+            if(!event.target.value.trim())
+            {
+                alert('输入不能为空');
+                return;
+            }
+            //将用户输入的信息包装成一个todo对象
+            const todoObj = {id: nanoid(),title: event.target.value,done:false};
+            //此时必须使用this，才是vc对象。调用receive方法
+            //通过APP组件添加一个数据
+            //此时不需要再调用添加方法，触发一个事件即可
+            //this.addTodoItem(todoObj);
+            this.$emit('addTodoItem',todoObj);
+            //清空输入
+            event.target.value = '';
+        }
+    }
+}
+</script>
+
+<style scoped>
+	/*header*/
+	.todo-header input {
+		width: 560px;
+		height: 28px;
+		font-size: 14px;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 4px 7px;
+	}
+
+	.todo-header input:focus {
+		outline: none;
+		border-color: rgba(82, 168, 236, 0.8);
+		box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(82, 168, 236, 0.6);
+	}
+</style>
+```
+
+src\components\NullList.vue
+
+```vue
+<template>
+  <ul class="todo-main">
+    <!-- <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+      :checkedTodoBox="checkedTodoBox"
+	  :deleteTodoBox="deleteTodoBox"
+    /> -->
+
+    <!-- 使用事件总线后，无需传递 -->
+    <NullItem
+      v-for="todoItem in todos"
+      :key="todoItem.id"
+      :todoItem="todoItem"
+    />
+  </ul>
+</template>
+
+<script>
+import NullItem from "./NullItem.vue";
+
+export default {
+  name: "NullFooter",
+  components: { NullItem },
+  //使用事件总线后，无需通过props传递
+  // props: ["todos", "checkedTodoBox","deleteTodoBox"],
+  props: ["todos"],
+};
+</script>
+
+<style scoped>
+/*main*/
+.todo-main {
+  margin-left: 0px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding: 0px;
+}
+
+.todo-empty {
+  height: 40px;
+  line-height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding-left: 5px;
+  margin-top: 10px;
+}
+</style>
+```
+
+src\components\NullItem.vue
+
+```vue
+<template>
+  <li>
+    <label>
+      <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" />
+	  <!-- 如下代码也能实现功能，但不推荐，违反了原则，因为修改了props中的值 -->
+	  <!-- <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" /> -->
+      <span>{{todoItem.title}}</span>
+    </label>
+    <button class="btn btn-danger" @click="deleteHandler(todoItem.id)">删除</button>
+  </li>
+</template>
+
+<script>
+import pubsub from 'pubsub-js'
+export default {
+  name: "NullItem",
+  //声明接收传递过来的todoItem对象
+  // props: ["todoItem","checkedTodoBox","deleteTodoBox"],
+  //使用事件总线，无需传递
+  props: ["todoItem"],
+  methods:{
+	checkHandler(id){
+		//通知组件将对应的done值取反。
+		// this.checkedTodoBox(id);
+    //使用全局事件总线触发
+    this.$bus.$emit('checkedTodoBox',id)
+	},
+	deleteHandler(id){
+		if(confirm('确定删除数据吗?'))
+		{
+			//this.deleteTodoBox(id);
+      //使用全局事件总线触发
+      // this.$bus.$emit('deleteTodoBox',id);
+      //使用pubsub来操作
+      pubsub.publish('deleteTodoBox',id);
+		}
+	}
+  }
+};
+</script>
+
+<style scoped>
+/*item*/
+li {
+  list-style: none;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+li label {
+  float: left;
+  cursor: pointer;
+}
+
+li label li input {
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
+}
+
+li button {
+  float: right;
+  display: none;
+  margin-top: 3px;
+}
+
+li:before {
+  content: initial;
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li:hover {
+  background-color: #ddd;
+}
+
+/* 鼠标悬浮时进行显示。 */
+li:hover button {
+  display: block;
+}
+</style>
+```
+
+打开网页,操作先添加一个名称，再做删除
+
+![image-20250120231800368](.\images\image-20250120231800368.png)
+
+
+
 ## 结束
 
