@@ -8574,5 +8574,322 @@ li:hover button {
 
 
 
+### 2.17 nextTick
+
+本案例在totoList的删除使用发布订阅上继续
+
+这里会添加一个功能，那就是编辑数据。
+
+
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <div class="todo-container">
+      <div class="todo-wrap">
+        <!-- 将一个函数传递给子组件 -->
+        <!-- <NullHeader :addTodoItem="addTodoItem" /> -->
+        <!-- 使用自定义事件改写 -->
+        <NullHeader @addTodoItem="addTodoItem" />
+        <!--        
+        <NullList
+          :todos="todos"
+          :checkedTodoBox="checkedTodoBox"
+          :deleteTodoBox="deleteTodoBox"
+        /> -->
+        <!-- 使用全局事件总线来处理 -->
+        <NullList :todos="todos" />
+
+        <!-- <NullFooter
+          :todos="todos"
+          :checkAllOrNot="checkAllOrNot"
+          :cleanFinish="cleanFinish"
+        /> -->
+        <!-- 使用自定义事件改写  -->
+        <NullFooter
+          :todos="todos"
+          @checkAllOrNot="checkAllOrNot"
+          @cleanFinish="cleanFinish"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import pubsub from "pubsub-js";
+import NullHeader from "./components/NullHeader.vue";
+import NullList from "./components/NullList.vue";
+import NullFooter from "./components/NullFooter.vue";
+
+export default {
+  name: "App",
+  components: { NullHeader, NullList, NullFooter },
+  data() {
+    return {
+      //将数据存储至localStorage中
+      todos: JSON.parse(localStorage.getItem("todos")) || [],
+    };
+  },
+  methods: {
+    addTodoItem(todoItem) {
+      this.todos.unshift(todoItem);
+    },
+    checkedTodoBox(id) {
+      console.log("调用了APP中的checkedTodoBox", id);
+      this.todos.forEach((item) => {
+        if (item.id === id) {
+          item.done = !item.done;
+        }
+      });
+    },
+    //deleteTodoBox首个参数必须是msgName,或者可以写成_
+    // deleteTodoBox(msgName,id) {
+    deleteTodoBox(_, id) {
+      this.todos = this.todos.filter((item) => {
+        return item.id != id;
+      });
+    },
+    checkAllOrNot(done) {
+      this.todos.forEach((item) => {
+        item.done = done;
+      });
+    },
+    cleanFinish() {
+      this.todos = this.todos.filter((item) => {
+        return !item.done;
+      });
+    },
+    //修改数据的方法
+    updateTodo(id,title){
+      console.log('收到了updateTodo')
+      this.todos.forEach((todo)=>{
+        if(todo.id === id){
+          todo.title = title;
+        }
+      })
+    }
+  },
+  watch: {
+    // 当检测到数据改变时，将数据进行保存至localStorage操作
+    todos: {
+      deep: true,
+      handler(value) {
+        localStorage.setItem("todos", JSON.stringify(value));
+      },
+    },
+  },
+  mounted() {
+    //注册全局事件
+    this.$bus.$on("checkedTodoBox", this.checkedTodoBox);
+    //改为使用pubsub来实现
+    //this.$bus.$on('deleteTodoBox',this.deleteTodoBox);
+    this.pubId = pubsub.subscribe("deleteTodoBox", this.deleteTodoBox);
+
+    //给修改注册一个事件
+    this.$bus.$on('updateTodo',this.updateTodo);
+  },
+  beforeDestroy() {
+    //组件销毁时，解绑事件
+    this.$bus.$off("checkedTodoBox");
+    this.$bus.$off("updateTodo");
+    // this.$bus.$off('deleteTodoBox');
+    pubsub.unsubscribe(this.pubId);
+  },
+};
+</script>
+
+<style>
+/*base*/
+body {
+  background: #fff;
+}
+.btn {
+  display: inline-block;
+  padding: 4px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.btn-danger {
+  color: #fff;
+  background-color: #da4f49;
+  border: 1px solid #bd362f;
+}
+.btn-edit {
+  color: #fff;
+  background-color: skyblue;
+  border: 1px solid rgb(103, 159, 180);
+  margin-right: 6px;
+}
+
+.btn-danger:hover {
+  color: #fff;
+  background-color: #bd362f;
+}
+.btn:focus {
+  outline: none;
+}
+.todo-container {
+  width: 600px;
+  margin: 0 auto;
+}
+.todo-container .todo-wrap {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+</style>
+
+```
+
+src\components\NullItem.vue
+
+```vue
+<template>
+  <li>
+    <label>
+      <input
+        type="checkbox"
+        :checked="todoItem.done"
+        @change="checkHandler(todoItem.id)"
+      />
+      <!-- 如下代码也能实现功能，但不推荐，违反了原则，因为修改了props中的值 -->
+      <!-- <input type="checkbox" :checked="todoItem.done" @change="checkHandler(todoItem.id)" /> -->
+      <span v-show="!todoItem.isEdit">{{ todoItem.title }}</span>
+      <!-- ref="inputTitle" 引用标识会生成一个引用的ID -->
+      <input
+        type="text"
+        v-show="todoItem.isEdit"
+        :value="todoItem.title"
+        @blur="handleBlur(todoItem,$event)"
+        @keyup.enter="handleBlur(todoItem,$event)"
+        ref="inputTitle"
+      />
+    </label>
+    <button class="btn btn-danger" @click="deleteHandler(todoItem.id)">
+      删除
+    </button>
+    <button class="btn btn-edit" @click="editHandler(todoItem)">编辑</button>
+  </li>
+</template>
+
+<script>
+import pubsub from "pubsub-js";
+export default {
+  name: "NullItem",
+  //声明接收传递过来的todoItem对象
+  // props: ["todoItem","checkedTodoBox","deleteTodoBox"],
+  //使用事件总线，无需传递
+  props: ["todoItem"],
+  methods: {
+    checkHandler(id) {
+      //通知组件将对应的done值取反。
+      // this.checkedTodoBox(id);
+      //使用全局事件总线触发
+      this.$bus.$emit("checkedTodoBox", id);
+    },
+    deleteHandler(id) {
+      if (confirm("确定删除数据吗?")) {
+        //this.deleteTodoBox(id);
+        //使用全局事件总线触发
+        // this.$bus.$emit('deleteTodoBox',id);
+        //使用pubsub来操作
+        pubsub.publish("deleteTodoBox", id);
+      }
+    },
+    // 编辑
+    editHandler(todo) {
+      //检查是否包含isEdit属性，如果当前包含，设置设置为可以编辑
+      if (todo.hasOwnProperty("isEdit")) {
+        todo.isEdit = true;
+      } else {
+        this.$set(todo, "isEdit", true);
+      }
+      this.$nextTick(function(){
+        this.$refs.inputTitle.focus();
+      })
+    },
+    //失去焦点回调，执行真正修改逻辑
+    handleBlur(todoItem, event) {
+      todoItem.isEdit = false;
+      if (!event.target.value.trim()) {
+        return alert("输入不能为空");
+      }
+      this.$bus.$emit('updateTodo',todoItem.id,event.target.value);
+    },
+  },
+};
+</script>
+
+<style scoped>
+/*item*/
+li {
+  list-style: none;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 5px;
+  border-bottom: 1px solid #ddd;
+}
+
+li label {
+  float: left;
+  cursor: pointer;
+}
+
+li label li input {
+  vertical-align: middle;
+  margin-right: 6px;
+  position: relative;
+  top: -1px;
+}
+
+li button {
+  float: right;
+  display: none;
+  margin-top: 3px;
+}
+
+li:before {
+  content: initial;
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li:hover {
+  background-color: #ddd;
+}
+
+/* 鼠标悬浮时进行显示。 */
+li:hover button {
+  display: block;
+}
+</style>
+```
+
+
+
+#### 总结
+
+## nextTick
+
+1. 语法：```this.$nextTick(回调函数)```
+2. 作用：在下一次 DOM 更新结束后执行其指定的回调。
+3. 什么时候用：当改变数据后，要基于更新后的新DOM进行某些操作时，要在nextTick所指定的回调函数中执行。
+
+
+
+
+
 ## 结束
 
