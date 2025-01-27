@@ -8879,15 +8879,248 @@ li:hover button {
 
 
 
-#### 总结
-
-## nextTick
+#### 总结nextTick
 
 1. 语法：```this.$nextTick(回调函数)```
 2. 作用：在下一次 DOM 更新结束后执行其指定的回调。
 3. 什么时候用：当改变数据后，要基于更新后的新DOM进行某些操作时，要在nextTick所指定的回调函数中执行。
 
 
+
+### 2.18 过度与动画
+
+src\main.js
+
+```html
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	},
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <Test />
+    <hr />
+    <Test2 />
+    <hr />
+    <hr />
+    <Test3 />
+  </div>
+</template>
+
+<script>
+import Test from "./components/Test.vue";
+import Test2 from "./components/Test2.vue";
+import Test3 from "./components/Test3.vue";
+
+export default {
+  name: "App",
+  components: { Test, Test2,Test3 },
+};
+</script>
+
+```
+
+src\components\Test.vue
+
+```vue
+<template>
+  <div>
+    <button @click="isShow = !isShow">显示/隐藏</button>
+    <transition name="nullnull" appear>
+      <h1 v-show="isShow">你好啊</h1>
+    </transition>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Test",
+  data() {
+    return {
+      isShow: true,
+    };
+  },
+};
+</script>
+
+<style scoped>
+h1 {
+  background-color: orange;
+}
+.nullnull-enter-active {
+  animation: nullnull 0.5s linear;
+}
+.nullnull-leave-active {
+  animation: nullnull 0.5s linear reverse;
+}
+@keyframes nullnull {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0px);
+  }
+}
+</style>
+```
+
+
+
+src\components\Test2.vue
+
+```vue
+<template>
+  <div>
+    <button @click="isShow = !isShow">显示/隐藏</button>
+    <transition-group name="nullnull" appear>
+      <h1 v-show="isShow" key="1">你好啊</h1>
+      <h1 v-show="!isShow" key="2">天黑了，睡觉</h1>
+    </transition-group>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Test",
+  data() {
+    return {
+      isShow: true,
+    };
+  },
+};
+</script>
+
+<style scoped>
+h1 {
+  background-color: orange;
+}
+
+/* 进入的起点、离开的终点 */
+.nullnull-enter,
+.nullnull-leave-to {
+  transform: translateX(-100%);
+}
+.nullnull-enter-active,
+.nullnull-leave-active {
+  transition: 0.5s linear;
+}
+/* 进入的终点、离开的起点 */
+.nullnull-enter-to,
+.nullnull-leave {
+  transform: translateX(0);
+}
+</style>
+```
+
+src\components\Test3.vue
+
+引入第三方样式
+
+安装:
+
+```sh
+https://animate.style/
+
+
+npm install animate.css --save
+
+# 基础的样式名称
+<h1 class="animate__animated animate__bounce">An animated element</h1>
+
+# 导入样式
+import 'animate.css';
+```
+
+
+
+```vue
+<template>
+  <div>
+    <button @click="isShow = !isShow">显示/隐藏</button>
+    <transition-group
+      appear
+      name="animate__animated animate__bounce"
+      enter-active-class="animate__swing"
+      leave-active-class="animate__backOutUp"
+    >
+      <h1 v-show="!isShow" key="1">你好啊</h1>
+      <h1 v-show="isShow" key="2">nullnull</h1>
+    </transition-group>
+  </div>
+</template>
+
+<script>
+import "animate.css";
+export default {
+  name: "Test",
+  data() {
+    return {
+      isShow: true,
+    };
+  },
+};
+</script>
+
+<style scoped>
+h1 {
+  background-color: orange;
+}
+</style>
+```
+
+
+
+![image-20250127125524634](./images\image-20250127125524634.png)
+
+
+
+#### 总结：Vue封装的过度与动画
+
+1. 作用：在插入、更新或移除 DOM元素时，在合适的时候给元素添加样式类名。
+
+2. 图示：
+
+   ![image-20250127130254784](D:\work\nullnull\learn\learn-md\vue\images\image-20250127130254784.png)
+
+3. 写法：
+
+   1. 准备好样式：
+
+      - 元素进入的样式：
+        1. v-enter：进入的起点
+        2. v-enter-active：进入过程中
+        3. v-enter-to：进入的终点
+      - 元素离开的样式：
+        1. v-leave：离开的起点
+        2. v-leave-active：离开过程中
+        3. v-leave-to：离开的终点
+
+   2. 使用```<transition>```包裹要过度的元素，并配置name属性：
+
+      ```vue
+      <transition name="hello">
+      	<h1 v-show="isShow">你好啊！</h1>
+      </transition>
+      ```
+
+   3. 备注：若有多个元素需要过度，则需要使用：```<transition-group>```，且每个元素都要指定```key```值。
 
 
 

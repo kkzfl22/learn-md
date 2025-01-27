@@ -9,6 +9,7 @@ Vue.config.productionTip = false
 new Vue({
 	el:'#app',
 	render: h => h(App),
+	//创建事件总线
 	beforeCreate() {
 		Vue.prototype.$bus = this
 	},
