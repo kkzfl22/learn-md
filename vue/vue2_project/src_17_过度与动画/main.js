@@ -12,5 +12,5 @@ new Vue({
 	//创建事件总线
 	beforeCreate() {
 		Vue.prototype.$bus = this
-	}
+	},
 })

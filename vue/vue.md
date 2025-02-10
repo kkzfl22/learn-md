@@ -9097,7 +9097,7 @@ h1 {
 
 2. 图示：
 
-   ![image-20250127130254784](D:\work\nullnull\learn\learn-md\vue\images\image-20250127130254784.png)
+   ![image-20250127130254784](.\images\image-20250127130254784.png)
 
 3. 写法：
 
@@ -9122,7 +9122,223 @@ h1 {
 
    3. 备注：若有多个元素需要过度，则需要使用：```<transition-group>```，且每个元素都要指定```key```值。
 
+### 2.19 脚手架代理
 
+为什么要配制代理？
+
+简单实验
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	},
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <button @click="getStudents">获取学生信息</button>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+
+export default {
+  name: "App",
+  methods:{
+    getStudents(){
+      axios.get('http://localhost:5000/students').then(
+        response => {
+          console.log('请求成功了:',response);
+        },
+        error=>{
+          console.log('请求失败了:',error.message);
+        }
+      )
+    }
+  }
+};
+</script>
+```
+
+启动服务
+
+![image-20250210214444473](.\images\image-20250210214444473.png)
+
+发现浏览器提示跨域的问题。要解决这个问题，就可以使用VUE的代理
+
+可能参考：
+
+```sh
+https://cli.vuejs.org/zh/config/#devserver-proxy
+```
+
+
+
+#### 1 代理方式1
+
+vue.config.js
+
+```js
+module.exports = {
+  pages: {
+    index: {
+      //入口
+      entry: 'src/main.js',
+    },
+  },
+  //关闭语法检查
+  lintOnSave:false, 
+  //配制代理服务器
+  devServer: {
+    proxy: 'http://localhost:5000'
+  }
+}
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <button @click="getStudents">获取学生信息</button>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+
+export default {
+  name: "App",
+  methods:{
+    getStudents(){
+      //此处代理还是本地的端口
+      axios.get('http://localhost:8080/students').then(
+        response => {
+          console.log('请求成功了:',response);
+        },
+        error=>{
+          console.log('请求失败了:',error.message);
+        }
+      )
+    }
+  }
+};
+</script>
+
+```
+
+此时就能成功的请求到了。
+
+![image-20250210215724843](.\images\image-20250210215724843.png)
+
+
+
+
+
+#### 2 代理方式2
+
+在代理方式1中仅可以进行简单的的一个全局代理，不够灵活，如果接口请求多个服务呢？那这时候，就需要使用更加完整的代理服务了
+
+vue.config.js
+
+```js
+module.exports = {
+  pages: {
+    index: {
+      //入口
+      entry: 'src/main.js',
+    },
+  },
+  //关闭语法检查
+  lintOnSave: false,
+  //配制代理服务器
+  devServer: {
+    proxy: {
+      '/stu': {
+        target: 'http://localhost:5000',
+        //在请求服务器时去掉前缀
+        pathRewrite:{'^/stu':''},
+        ws: true,
+        changeOrigin: true
+      },
+      '/cs': {
+        target: 'http://localhost:5001',
+        //在请求服务器时去掉前缀
+        pathRewrite:{'^/cs':''},
+        ws: true,
+        changeOrigin: true
+      }
+    }
+  }
+}
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+    <button @click="getStudents">获取学生信息</button>
+    <button @click="getCars">获取汽车信息</button>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+
+export default {
+  name: "App",
+  methods:{
+    getStudents(){
+      //此处代理还是本地的端口
+      axios.get('http://localhost:8080/stu/students').then(
+        response => {
+          console.log('请求成功了:',response);
+        },
+        error=>{
+          console.log('请求失败了:',error.message);
+        }
+      )
+    },
+    getCars(){
+      axios.get('http://localhost:8080/cs/cars').then(
+        response => {
+          console.log('请求成功了',response.data);
+        },
+        error=>{
+          console.log('请求失败了:',error.message);
+        }
+      )
+    }
+  }
+};
+</script>
+```
+
+启动服务
+
+![image-20250210221207625](.\images\image-20250210221207625.png)
+
+可以发现两个服务都能正常的进行访问操作。
 
 ## 结束
 
