@@ -1,21 +1,25 @@
 <template>
-  <div id="root">
-    <Test />
-    <hr />
-    <Test2 />
-    <hr />
-    <hr />
-    <Test3 />
+  <div>
+    <button @click="getStudent">获取学生信息</button>
   </div>
 </template>
 
 <script>
-import Test from "./components/Test.vue";
-import Test2 from "./components/Test2.vue";
-import Test3 from "./components/Test3.vue";
-
+import axios from 'axios'
 export default {
-  name: "App",
-  components: { Test, Test2,Test3 },
-};
+    name: 'App',
+    methods:{
+        getStudent(){
+            axios.get('http://localhost:8080/students').then(
+                response => {
+                    console.log("请求成功了",response.data);
+                },
+                error => {
+                    console.log("请求失败了",error.message);
+                }
+
+            )
+        }
+    },
+}
 </script>
