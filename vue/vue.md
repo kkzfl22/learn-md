@@ -40,6 +40,8 @@ Visual Studio Code
 需要安装插件live server
 # 浏览器安装插件
 vue_dev_tools.crx
+
+# 安装VS插件 Vetur (Pine Wu)
 ```
 
 
@@ -9339,6 +9341,203 @@ export default {
 ![image-20250210221207625](.\images\image-20250210221207625.png)
 
 可以发现两个服务都能正常的进行访问操作。
+
+
+
+### 2.20 github搜索
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+      <Search/>
+      <hr/>
+      <List/>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import List from "./components/List";
+import Search from "./components/Search";
+
+export default {
+  name: "App",
+  components: { List, Search },
+};
+</script>
+
+```
+
+src\components\List.vue
+
+```vue
+<template>
+  <div class="row" style="">
+    <!-- 用户列表展示 -->
+    <div
+      class="card"
+      v-show="users.length"
+      v-for="user in users"
+      :key="user.login"
+    >
+      <a :href="user.html_url" target="_blank">
+        <img :src="user.avatar_url" style="width: 100px" />
+      </a>
+      <p class="card-text">{{ user.login }}</p>
+    </div>
+    <div class="loadcss">
+      <!--欢迎词展示-->
+      <h1 v-show="isFirst">欢迎使用</h1>
+      <!--展示加载中-->
+      <h1 v-show="isLoading">加载中</h1>
+      <!--展示错误信息-->
+      <h1 v-show="errorMsg">{{ errorMsg }}</h1>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "List",
+  data() {
+    return {
+      isFirst: true,
+      isLoading: false,
+      errorMsg: "",
+      users: [],
+    };
+  },
+  mounted() {
+    this.$bus.$on("updateListData", (dataObj) => {
+      this.isFirst = dataObj.isFirst;
+      this.isLoading = dataObj.isLoading;
+      this.errorMsg = dataObj.errorMsg;
+      this.users = dataObj.users;
+    });
+  },
+};
+</script>
+
+<style scoped>
+.album {
+  min-height: 50rem; /* Can be removed; just added for demo purposes */
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  background-color: #f7f7f7;
+}
+
+.card {
+  float: left;
+  width: 33.333%;
+  padding: 0.75rem;
+  margin-bottom: 2rem;
+  border: 1px solid #efefef;
+  text-align: center;
+}
+
+.card > img {
+  margin-bottom: 0.75rem;
+  border-radius: 100px;
+}
+
+.card-text {
+  font-size: 85%;
+}
+
+.loadcss {
+  margin-left: 25px;
+}
+</style>
+```
+
+
+
+src\components\Search.vue
+
+```vue
+<template>
+  <section class="jumbotron">
+    <h3 class="jumbotron-heading">Search Github Users</h3>
+    <div>
+      <input
+        type="text"
+        v-model="keyWord"
+        placeholder="enter the name you search"
+      />&nbsp;
+      <button @click="searchUser">Search</button>
+    </div>
+  </section>
+</template>
+
+<script>
+import axios from "axios";
+export default {
+  name: "Search",
+  data() {
+    return {
+      keyWord: "",
+    };
+  },
+  methods: {
+    searchUser() {
+        console.log('request key:',this.keyWord);
+        this.$bus.$emit('updateListData',{isLoading:true,errorMsg:'',users:[],isFirst:false})
+        //进行请求无程数据加载到列表中
+        axios.get(`https://api.github.com/search/users?q=${this.keyWord}`).then(
+            response => {
+                console.log('请求成功了',response.data);
+                this.$bus.$emit('updateListData',{isLoading:false,errorMsg:'',users:response.data.items,isFirst:false});
+            },
+            error=>{
+                console.log('请求失败了',error);
+                this.$bus.$emit('updateListData',{isLoading:false,errorMsg:error.message,users:[],isFirst:false});
+            }
+        )
+    },
+  },
+};
+</script>
+
+<style>
+</style>
+```
+
+启动服务
+
+![image-20250211180503719](.\images\image-20250211180503719.png)
+
+搜索中
+
+![image-20250211180612938](.\images\image-20250211180612938.png)
+
+加载图片
+
+![image-20250211180645090](.\images\image-20250211180645090.png)
+
+
 
 ## 结束
 
