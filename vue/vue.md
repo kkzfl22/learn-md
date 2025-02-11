@@ -9539,5 +9539,666 @@ export default {
 
 
 
+### 2.21 使用Vue-Resource发送Ajax
+
+首先是安装
+
+```sh
+npm i vue-resource
+```
+
+使用插件
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+// 引入插件
+import VueResource from 'vue-resource'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//使用插件 
+Vue.use(VueResource)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div id="root">
+      <Search/>
+      <hr/>
+      <List/>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import List from "./components/List";
+import Search from "./components/Search";
+
+export default {
+  name: "App",
+  components: { List, Search },
+};
+</script>
+```
+
+src\components\Search.vue
+
+```vue
+<template>
+  <section class="jumbotron">
+    <h3 class="jumbotron-heading">Search Github Users</h3>
+    <div>
+      <input
+        type="text"
+        v-model="keyWord"
+        placeholder="enter the name you search"
+      />&nbsp;
+      <button @click="searchUser">Search</button>
+    </div>
+  </section>
+</template>
+
+<script>
+import axios from "axios";
+export default {
+  name: "Search",
+  data() {
+    return {
+      keyWord: "",
+    };
+  },
+  methods: {
+    searchUser() {
+        console.log('this:',this);
+        console.log('request key:',this.keyWord);
+        this.$bus.$emit('updateListData',{isLoading:true,errorMsg:'',users:[],isFirst:false})
+        //使用vue-resource请求无程数据加载到列表中
+        this.$http.get(`https://api.github.com/search/users?q=${this.keyWord}`).then(
+            response => {
+                console.log('请求成功了',response.data);
+                this.$bus.$emit('updateListData',{isLoading:false,errorMsg:'',users:response.data.items,isFirst:false});
+            },
+            error=>{
+                console.log('请求失败了',error);
+                this.$bus.$emit('updateListData',{isLoading:false,errorMsg:error.message,users:[],isFirst:false});
+            }
+        )
+    },
+  },
+};
+</script>
+
+<style>
+</style>
+```
+
+src\components\List.vue
+
+```vue
+<template>
+  <div class="row" style="">
+    <!-- 用户列表展示 -->
+    <div
+      class="card"
+      v-show="users.length"
+      v-for="user in users"
+      :key="user.login"
+    >
+      <a :href="user.html_url" target="_blank">
+        <img :src="user.avatar_url" style="width: 100px" />
+      </a>
+      <p class="card-text">{{ user.login }}</p>
+    </div>
+    <div class="loadcss">
+      <!--欢迎词展示-->
+      <h1 v-show="isFirst">欢迎使用</h1>
+      <!--展示加载中-->
+      <h1 v-show="isLoading">加载中</h1>
+      <!--展示错误信息-->
+      <h1 v-show="errorMsg">{{ errorMsg }}</h1>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "List",
+  data() {
+    return {
+      isFirst: true,
+      isLoading: false,
+      errorMsg: "",
+      users: [],
+    };
+  },
+  mounted() {
+    this.$bus.$on("updateListData", (dataObj) => {
+      this.isFirst = dataObj.isFirst;
+      this.isLoading = dataObj.isLoading;
+      this.errorMsg = dataObj.errorMsg;
+      this.users = dataObj.users;
+    });
+  },
+};
+</script>
+
+<style scoped>
+.album {
+  min-height: 50rem; /* Can be removed; just added for demo purposes */
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  background-color: #f7f7f7;
+}
+
+.card {
+  float: left;
+  width: 33.333%;
+  padding: 0.75rem;
+  margin-bottom: 2rem;
+  border: 1px solid #efefef;
+  text-align: center;
+}
+
+.card > img {
+  margin-bottom: 0.75rem;
+  border-radius: 100px;
+}
+
+.card-text {
+  font-size: 85%;
+}
+
+.loadcss {
+  margin-left: 25px;
+}
+</style>
+```
+
+启动服务
+
+![image-20250211202457052](.\images\image-20250211202457052.png)
+
+通过观察当前可以发现，此vue-resource会绑定一个$http对象。通过此便可以发送Ajax请求。
+
+
+
+### 2.22 插槽
+
+#### 2.22.1 默认插槽
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div  class="container">
+    <Category title="美食">
+      <img src="https://avatars.githubusercontent.com/u/13393021?v=4" />
+    </Category>
+
+    <Category title="游戏">
+      <ul>
+        <li v-for="(g, index) in games" :key="index">{{ g }}</li>
+      </ul>
+    </Category>
+
+    <Category title="电影">
+      <video
+        controls
+        src="https://vdept3.bdstatic.com/mda-rbahmp4f4z4sdxc8/cae_h264/1739278704766346239/mda-rbahmp4f4z4sdxc8.mp4?v_from_s=hkapp-haokan-nanjing&auth_key=1739291096-0-0-63c487c7778033283310fe6c25c0e288&bcevod_channel=searchbox_feed&pd=1&cr=0&cd=0&pt=3&logid=1496735763&vid=6626823136837992546&klogid=1496735763&abtest=132219_1"
+      ></video>
+    </Category>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import Category from "./components/Category";
+
+export default {
+  name: "App",
+  components: { Category },
+  data() {
+    return {
+      foods: ["火锅", "烧烤", "小龙虾", "牛排"],
+      games: ["红色警戒", "穿越火线", "劲舞团", "超级玛丽"],
+      films: ["《变形金钢》", "《拆弹专家》", "《战狼》", "《哪吒》"],
+    };
+  },
+};
+</script>
+
+<style scoped>
+	.container{
+		display: flex;
+		justify-content: space-around;
+	}
+</style>
+
+```
+
+src\components\Category.vue
+
+```vue
+<template>
+<div class="category">
+  <h3>{{title}}</h3>
+  <!-- 定义一个插槽，等着组件的使用进行填充 -->
+  <slot>插槽默认值,没有为插槽指定数据时，此将显示</slot>
+</div>
+</template>
+
+<script>
+export default {
+  name: "Category",
+  props:["title"]
+};
+</script>
+
+<style scoped>
+	.category{
+		background-color: skyblue;
+		width: 200px;
+		height: 300px;
+	}
+	h3{
+		text-align: center;
+		background-color: orange;
+	}
+	video{
+		width: 100%;
+	}
+	img{
+		width: 100%;
+	}
+</style>
+```
+
+启动服务
+
+![image-20250211213104820](.\images\image-20250211213104820.png)
+
+
+
+#### 2.22.2 具名插槽
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div  class="container">
+    <Category title="美食">
+      <img slot="center" src="https://s3.ax1x.com/2021/01/16/srJlq0.jpg" />
+      <a slot="footer" href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">更多美食</a>
+    </Category>
+
+    <Category title="游戏">
+      <ul slot="center">
+        <li v-for="(g, index) in games" :key="index">{{ g }}</li>
+      </ul>
+      <div class="foot" slot="footer">
+          <a href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">单机游戏</a>
+          <a href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">网络游戏</a>
+      </div>
+    </Category>
+
+    <Category title="电影">
+      <video
+        slot="center"
+        controls
+        src="https://vdept3.bdstatic.com/mda-rbahmp4f4z4sdxc8/cae_h264/1739278704766346239/mda-rbahmp4f4z4sdxc8.mp4?v_from_s=hkapp-haokan-nanjing&auth_key=1739291096-0-0-63c487c7778033283310fe6c25c0e288&bcevod_channel=searchbox_feed&pd=1&cr=0&cd=0&pt=3&logid=1496735763&vid=6626823136837992546&klogid=1496735763&abtest=132219_1"
+      ></video>
+    <template v-slot:footer>
+        <div class="foot">
+            <a href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">经典</a>
+            <a href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">动作</a>
+            <a href="https://s3.ax1x.com/2021/01/16/srJlq0.jpg">爱情</a>
+        </div>
+        <h4>欢迎前来观看</h4>
+    </template>
+
+    </Category>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import Category from "./components/Category";
+
+export default {
+  name: "App",
+  components: { Category },
+  data() {
+    return {
+      foods: ["火锅", "烧烤", "小龙虾", "牛排"],
+      games: ["红色警戒", "穿越火线", "劲舞团", "超级玛丽"],
+      films: ["《变形金钢》", "《拆弹专家》", "《战狼》", "《哪吒》"],
+    };
+  },
+};
+</script>
+
+<style scoped>
+	.container,.foot {
+		display: flex;
+		justify-content: space-around;
+	}
+</style>
+```
+
+src\components\Category.vue
+
+```vue
+<template>
+<div class="category">
+  <h3>{{title}}</h3>
+  <!-- 定义一个插槽，等着组件的使用进行填充 -->
+  <slot name="center">插槽默认值,没有为插槽指定数据时，此将显示</slot>
+  <slot name="footer">插槽默认值,没有为插槽指定数据时，此将显示</slot>
+</div>
+</template>
+
+<script>
+export default {
+  name: "Category",
+  props:["title"]
+};
+</script>
+
+<style scoped>
+	.category{
+		background-color: skyblue;
+		width: 200px;
+		height: 300px;
+	}
+	h3{
+		text-align: center;
+		background-color: orange;
+	}
+	video{
+		width: 100%;
+	}
+	img{
+		width: 100%;
+	}
+</style>
+```
+
+启动服务
+
+![image-20250211214409614](.\images\image-20250211214409614.png)
+
+
+
+#### 2.22.3 作用域插槽
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div class="container">
+    <Category title="游戏">
+      <template scope="data">
+        <ul>
+          <li v-for="(g, index) in data.games" :key="index">{{ g }}</li>
+        </ul>
+        <h3>{{ data.msg }}</h3>
+      </template>
+    </Category>
+
+    <Category title="游戏">
+      <template scope="{games}">
+        <ol>
+          <li style="color: red" v-for="(g, index) in games" :key="index">{{ g }}</li>
+        </ol>
+      </template>
+    </Category>
+
+    <Category title="游戏">
+      <template slot-scope="{ games }">
+        <h4 v-for="(g, index) in games" :key="index">{{ g }}</h4>
+      </template>
+    </Category>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import Category from "./components/Category";
+
+export default {
+  name: "App",
+  components: { Category },
+};
+</script>
+
+<style scoped>
+.container,
+.foot {
+  display: flex;
+  justify-content: space-around;
+}
+</style>
+```
+
+src\components\Category.vue
+
+```vue
+<template>
+  <div class="category">
+    <h3>{{ title }}</h3>
+    <!-- 通过子组件向父组件App传递内容 -->
+    <slot :games="games" msg="hello22">插槽默认值,没有为插槽指定数据时，此将显示</slot>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Category",
+  props: ["title"],
+  data() {
+    return {
+      games: ["和平精英", "穿越火线", "魔兽世界", "CS"],
+    };
+  },
+};
+</script>
+
+<style scoped>
+.category {
+  background-color: skyblue;
+  width: 200px;
+  height: 300px;
+}
+h3 {
+  text-align: center;
+  background-color: orange;
+}
+video {
+  width: 100%;
+}
+img {
+  width: 100%;
+}
+</style>
+
+```
+
+启动服务
+
+![image-20250211220020762](.\images\image-20250211220020762.png)
+
+#### 总结
+
+1. 作用：让父组件可以向子组件指定位置插入html结构，也是一种组件间通信的方式，适用于 <strong style="color:red">父组件 ===> 子组件</strong> 。
+
+2. 分类：默认插槽、具名插槽、作用域插槽
+
+3. 使用方式：
+
+   1. 默认插槽：
+
+      ```vue
+      父组件中：
+              <Category>
+                 <div>html结构1</div>
+              </Category>
+      子组件中：
+              <template>
+                  <div>
+                     <!-- 定义插槽 -->
+                     <slot>插槽默认内容...</slot>
+                  </div>
+              </template>
+      ```
+
+   2. 具名插槽：
+
+      ```vue
+      父组件中：
+              <Category>
+                  <template slot="center">
+                    <div>html结构1</div>
+                  </template>
+      
+                  <template v-slot:footer>
+                     <div>html结构2</div>
+                  </template>
+              </Category>
+      子组件中：
+              <template>
+                  <div>
+                     <!-- 定义插槽 -->
+                     <slot name="center">插槽默认内容...</slot>
+                     <slot name="footer">插槽默认内容...</slot>
+                  </div>
+              </template>
+      ```
+
+   3. 作用域插槽：
+
+      1. 理解：<span style="color:red">数据在组件的自身，但根据数据生成的结构需要组件的使用者来决定。</span>（games数据在Category组件中，但使用数据所遍历出来的结构由App组件决定）
+
+      2. 具体编码：
+
+         ```vue
+         父组件中：
+         		<Category>
+         			<template scope="scopeData">
+         				<!-- 生成的是ul列表 -->
+         				<ul>
+         					<li v-for="g in scopeData.games" :key="g">{{g}}</li>
+         				</ul>
+         			</template>
+         		</Category>
+         
+         		<Category>
+         			<template slot-scope="scopeData">
+         				<!-- 生成的是h4标题 -->
+         				<h4 v-for="g in scopeData.games" :key="g">{{g}}</h4>
+         			</template>
+         		</Category>
+         子组件中：
+                 <template>
+                     <div>
+                         <slot :games="games"></slot>
+                     </div>
+                 </template>
+         		
+                 <script>
+                     export default {
+                         name:'Category',
+                         props:['title'],
+                         //数据在子组件自身
+                         data() {
+                             return {
+                                 games:['红色警戒','穿越火线','劲舞团','超级玛丽']
+                             }
+                         },
+                     }
+                 </script>
+         ```
+
+   
+
 ## 结束
 

@@ -23,10 +23,11 @@ export default {
   },
   methods: {
     searchUser() {
+        console.log('this:',this);
         console.log('request key:',this.keyWord);
         this.$bus.$emit('updateListData',{isLoading:true,errorMsg:'',users:[],isFirst:false})
-        //进行请求无程数据加载到列表中
-        axios.get(`https://api.github.com/search/users?q=${this.keyWord}`).then(
+        //使用vue-resource请求无程数据加载到列表中
+        this.$http.get(`https://api.github.com/search/users?q=${this.keyWord}`).then(
             response => {
                 console.log('请求成功了',response.data);
                 this.$bus.$emit('updateListData',{isLoading:false,errorMsg:'',users:response.data.items,isFirst:false});
