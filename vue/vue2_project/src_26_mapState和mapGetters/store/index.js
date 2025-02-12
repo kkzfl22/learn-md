@@ -31,9 +31,6 @@ const mutations = {
     },
     DECREMENT(state, value) {
         state.sum -= value;
-    },
-    ADD_PERSON(state,value){
-        state.personList.unshift(value);
     }
 }
 
@@ -42,10 +39,7 @@ const state = {
     //求和
     sum: 0,
     school: '交大',
-    subject: '计算机',
-    personList:[
-        {id:'001',name:'nullnull'}
-    ]
+    subject: '计算机'
 }
 
 //准备Getters-用于将state中的数据进行加工

@@ -31,34 +31,25 @@ const mutations = {
     },
     DECREMENT(state, value) {
         state.sum -= value;
-    },
-    ADD_PERSON(state,value){
-        state.personList.unshift(value);
     }
 }
 
 //准备State--用于存储数据
 const state = {
-    //求和
-    sum: 0,
-    school: '交大',
-    subject: '计算机',
-    personList:[
-        {id:'001',name:'nullnull'}
-    ]
+    sum: 0
 }
 
 //准备Getters-用于将state中的数据进行加工
 const getters = {
-    bigSum(state) {
+    bigSum(state){
         return state.sum * 10
     }
 }
 
 //创建并暴露store
 export default new Vuex.Store({
-    actions: actions,
-    mutations: mutations,
+    actions:actions,
+    mutations:mutations,
     state,
     getters
 })
