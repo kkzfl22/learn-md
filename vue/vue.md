@@ -11345,5 +11345,371 @@ export default {
 
 
 
+### 3.7 vuex模块化
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入store,src/store/index.js,默认文件是这个，名称相同时，便可不写
+import store from './store'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	store:store,
+	//创建事件总线
+	beforeCreate() {
+		Vue.prototype.$bus = this
+	}
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <Count />
+    <hr/>
+    <Person/>
+  </div>
+</template>
+
+<script>
+import Count from "./components/Count";
+import Person from "./components/Person";
+
+export default {
+  name: "App",
+  components: { Count,Person },
+};
+</script>
+
+```
+
+src\store\count.js
+
+```js
+export default {
+    namespaced:true,
+    actions: {
+        increment(context, value) {
+            console.log('actions中的increment被调用了')
+            context.commit('INCREMENT', value);
+        },
+        incrementOdd(context, value) {
+            if (context.state.sum % 2 !== 0) {
+                context.commit('INCREMENT', value);
+            }
+        },
+        incrementWait(context, value) {
+            setTimeout(() => {
+                context.commit('INCREMENT', value);
+            }, 500);
+        }
+    },
+    mutations: {
+        INCREMENT(state, value) {
+            console.log('mutations中的INCREMENT被调用了')
+            state.sum += value;
+        },
+        DECREMENT(state, value) {
+            state.sum -= value;
+        },
+    },
+    state: {
+        sum: 0,
+        school: '交大',
+        subject: '计算机',
+    },
+    getters: {
+        bigSum(state) {
+            return state.sum * 10
+        }
+    }
+}
+```
+
+src\store\person.js
+
+```js
+import axios from 'axios'
+import { nanoid } from 'nanoid'
+
+export default {
+    //此为必须
+    namespaced: true,
+    actions: {
+        addPersonWang(context, value) {
+            if (value.name.indexOf('刘') === 0) {
+                context.commit('ADD_PERSON', value);
+            }
+            else {
+                alert('添加的人须姓刘');
+            }
+        },
+        addPersionServer(context) {
+            axios.get('https://luckycola.com.cn/tools/randomStr?ColaKey=yKZpIa0Eu5nZp01739458376604gCoBaEkvfo').then(
+                response => {
+                    console.log(response)
+                    context.commit('ADD_PERSON', { id: nanoid(), name: response.data.data.str })
+                }, error => {
+                    alert(error.message);
+                }
+            )
+        }
+    },
+    mutations: {
+        ADD_PERSON(state, value) {
+            state.personList.unshift(value);
+        }
+    },
+    state: {
+        personList: [
+            { id: '001', name: 'nullnull' }
+        ]
+    },
+    getters: {
+        firstPersonName(state) {
+            return state.personList[0].name;
+        }
+    }
+}
+```
+
+src\store\index.js
+
+```js
+//该文件创建Vuex中最核心的Store
+import Vue from 'vue'
+//引入vuex
+import Vuex from 'vuex'
+
+import countOptions from './count'
+import personOption from './person'
+
+//应用Vuex插件
+Vue.use(Vuex)
+
+//创建并暴露store
+export default new Vuex.Store({
+    modules:{
+        countAbout: countOptions,
+        personAbout: personOption
+    }
+})
+
+```
+
+src\components\Count.vue
+
+```vue
+<template>
+  <div>
+    <h1>当前的数据求和为：{{ sum }}</h1>
+    <h1>当前求和放大10倍为:{{ bigSum }}</h1>
+    <h3>我在{{ school }},学习{{ subject }}</h3>
+    <h3 style="color: red">Person组件的总人数是:{{ personList.length }}</h3>
+    <select v-model.number="n">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <button @click="increment(n)">+</button>
+    <button @click="decrement(n)">-</button>
+    <button @click="incrementOdd(n)">当前求和为奇数再加</button>
+    <button @click="incrementWait(n)">等一等再加</button>
+  </div>
+</template>
+
+<script>
+import { mapState, mapGetters, mapMutations, mapActions } from "vuex";
+export default {
+  name: "Count",
+  data() {
+    return {
+      //用户选择的数字
+      n: 1,
+    };
+  },
+  //使用计算属性来展示
+  computed: {
+    //借助mapState生成计算属性，从state中读取数据（数组写法）
+    ...mapState('countAbout',["sum", "school", "subject"]),
+    ...mapState('personAbout',["personList"]),
+    //借助mapGetters生成计算属性,从getters中读取数据。（数组写法）
+    ...mapGetters('countAbout',["bigSum"]),
+  },
+  methods: {
+    //借助mapMutaions生成对应的方法，方法中会调用commit去联系mutaions(对象写法),注意参数需要传递
+    ...mapMutations('countAbout',{ increment: "INCREMENT", decrement: "DECREMENT" }),
+
+    //借助mapActions生成对应的方法，方法中会调用dispatch去联系actions(对象写法)
+    ...mapActions('countAbout',{ incrementOdd: "incrementOdd", incrementWait: "incrementWait" }),
+  },
+};
+</script>
+
+<style lang="css">
+button {
+  margin-left: 5px;
+}
+</style>
+```
+
+src\components\Person.vue
+
+```vue
+<template>
+  <div>
+        <h1>人员列表</h1>
+        <h3 style="color:red">组件的求和为:{{sum}}</h3>
+        <h3>列表中第一个人的名字是：{{firstPersonName}}</h3>
+        <input type="text" placeholder="请输入名称" v-model="name" />
+        <button @click="add">添加</button>
+        <button @click="addWang">添加一个姓刘的人</button>
+        <button @click="addPersonServer">添加一个远程的空空</button>
+        <ul>
+            <li v-for="p in personList" :key="p.id">{{p.name}}</li>
+        </ul>
+  </div>
+</template>
+
+<script>
+import {nanoid} from 'nanoid'
+export default {
+    name: 'Person',
+    data(){
+        return {
+            name:''
+        }
+    },
+    computed:{
+        personList(){
+            return this.$store.state.personAbout.personList;
+        },
+        sum(){
+            return this.$store.state.countAbout.sum;
+        },
+        firstPersonName(){
+            return this.$store.getters['personAbout/firstPersonName']
+        }
+    },
+    methods:{
+        add(){
+            const personObj = {id:nanoid(),name:this.name}
+            console.log('user',personObj);
+            this.$store.commit('personAbout/ADD_PERSON',personObj);
+            this.name = ''
+        },
+        addWang()
+        {
+            const personObj = {id:nanoid(),name:this.name}
+            console.log('user',personObj);
+            this.$store.dispatch('personAbout/addPersonWang',personObj);
+            this.name = ''
+        },
+        addPersonServer(){
+            this.$store.dispatch('personAbout/addPersionServer')
+        }
+    }
+}
+</script>
+
+<style>
+
+</style>
+```
+
+启动服务
+
+![image-20250213232247314](.\images\image-20250213232247314.png)
+
+
+
+#### 总结 ： 模块化+命名空间
+
+1. 目的：让代码更好维护，让多种数据分类更加明确。
+
+2. 修改```store.js```
+
+   ```javascript
+   const countAbout = {
+     namespaced:true,//开启命名空间
+     state:{x:1},
+     mutations: { ... },
+     actions: { ... },
+     getters: {
+       bigSum(state){
+          return state.sum * 10
+       }
+     }
+   }
+   
+   const personAbout = {
+     namespaced:true,//开启命名空间
+     state:{ ... },
+     mutations: { ... },
+     actions: { ... }
+   }
+   
+   const store = new Vuex.Store({
+     modules: {
+       countAbout,
+       personAbout
+     }
+   })
+   ```
+
+3. 开启命名空间后，组件中读取state数据：
+
+   ```js
+   //方式一：自己直接读取
+   this.$store.state.personAbout.list
+   //方式二：借助mapState读取：
+   ...mapState('countAbout',['sum','school','subject']),
+   ```
+
+4. 开启命名空间后，组件中读取getters数据：
+
+   ```js
+   //方式一：自己直接读取
+   this.$store.getters['personAbout/firstPersonName']
+   //方式二：借助mapGetters读取：
+   ...mapGetters('countAbout',['bigSum'])
+   ```
+
+5. 开启命名空间后，组件中调用dispatch
+
+   ```js
+   //方式一：自己直接dispatch
+   this.$store.dispatch('personAbout/addPersonWang',person)
+   //方式二：借助mapActions：
+   ...mapActions('countAbout',{incrementOdd:'jiaOdd',incrementWait:'jiaWait'})
+   ```
+
+6. 开启命名空间后，组件中调用commit
+
+   ```js
+   //方式一：自己直接commit
+   this.$store.commit('personAbout/ADD_PERSON',person)
+   //方式二：借助mapMutations：
+   ...mapMutations('countAbout',{increment:'JIA',decrement:'JIAN'}),
+   ```
+
+ ## 
+
+
+
+
+
 ## 结束
 
