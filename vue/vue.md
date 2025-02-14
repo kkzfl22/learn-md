@@ -11705,7 +11705,185 @@ export default {
    ...mapMutations('countAbout',{increment:'JIA',decrement:'JIAN'}),
    ```
 
- ## 
+ 
+
+## 4. 路由
+
+### 4.1 基本使用
+
+```sh
+npm i vue-router@3
+```
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入VueRouter
+import VueRouter from 'vue-router'
+//引入路由器
+import router from './router'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//应用插件
+Vue.use(VueRouter)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	router: router
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <div class="row">
+      <div class="col-xs-offset-2 col-xs-8">
+        <div class="page-header"><h2>Vue Router Demo</h2></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-xs-2 col-xs-offset-2">
+        <div class="list-group">
+          <!-- 原始HTML使用a标签实现页面的跳转 -->
+          <!-- <a class="list-group-item" href="./about.html">About</a>
+          <a class="list-group-item active" href="./home.html">Home</a> -->
+          <!-- Vue中借助router-link标签实现路由的切换  -->
+          <router-link class="list-group-item" active-class="active" to="/about">About</router-link>
+          <router-link class="list-group-item" active-class="active" to="/home">Home</router-link>
+        </div>
+      </div>
+      <div class="col-xs-6">
+        <div class="panel">
+          <div class="panel-body">
+            <!-- 指定组件呈现的位置 -->
+            <router-view></router-view>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "App"
+};
+</script>
+```
+
+src\router\index.js
+
+```js
+//该文件专门用于创建整个应用的路由器
+import VueRouter from 'vue-router'
+//引入组件
+import About from '../components/About'
+import Home from '../components/Home'
+
+//创建并暴露一个路由器
+export default new VueRouter({
+    routes:[
+    {
+        path:'/about',
+        component:About
+    },
+    {
+        path:'/home',
+        component:Home
+    }
+   ] 
+})
+
+```
+
+src\components\About.vue
+
+```vue
+<template>
+  <h2>我是About的内容</h2>
+</template>
+
+<script>
+export default {
+    name: 'About'
+}
+</script>
+```
+
+src\components\Home.vue
+
+```vue
+<template>
+    <h2>我是Home的内容</h2>
+</template>
+
+<script>
+export default {
+    name: 'Home'
+}
+</script>
+```
+
+![image-20250214233720875](.\images\image-20250214233720875.png)
+
+
+
+总结：
+
+1. 安装vue-router，命令：```npm i vue-router```
+
+2. 应用插件：```Vue.use(VueRouter)```
+
+3. 编写router配置项:
+
+   ```js
+   //引入VueRouter
+   import VueRouter from 'vue-router'
+   //引入Luyou 组件
+   import About from '../components/About'
+   import Home from '../components/Home'
+   
+   //创建router实例对象，去管理一组一组的路由规则
+   const router = new VueRouter({
+   	routes:[
+   		{
+   			path:'/about',
+   			component:About
+   		},
+   		{
+   			path:'/home',
+   			component:Home
+   		}
+   	]
+   })
+   
+   //暴露router
+   export default router
+   ```
+
+4. 实现切换（active-class可配置高亮样式）
+
+   ```vue
+   <router-link active-class="active" to="/about">About</router-link>
+   ```
+
+5. 指定展示位置
+
+   ```vue
+   <router-view></router-view>
+   ```
+
+
 
 
 
