@@ -16064,5 +16064,93 @@ export default {
 
 
 
+
+
+### 4.14 构建
+
+```sh
+# 构建
+npm run build
+```
+
+新项目构建
+
+```sh
+ npm init
+ npm i express
+ 
+ #当history需要解决路径匹配的问题时。可使用以下插件
+npm i connect-history-api-fallback
+ 
+ node server
+```
+
+添加新的路径
+
+```js
+const express = require('express')
+
+const app = express()
+
+app.use(express.static(__dirname+'/static'))
+
+app.get('/person',(req,rsp)=>{
+    rsp.send({
+        name: 'tom',
+        age: 18
+    })
+})
+app.listen(5005,(err)=>{
+    if(!err){
+        console.log('服务器启动成功了')
+    }
+})
+```
+
+
+
+![image-20250216235827010](.\images\image-20250216235827010.png)
+
+可以使用一个后端插件解决，或者让后端工程师进行解决
+
+```js
+const express = require('express')
+
+const history = require('connect-history-api-fallback');
+
+const app = express()
+app.use(history())
+app.use(express.static(__dirname+'/static'))
+
+app.get('/person',(req,rsp)=>{
+    rsp.send({
+        name: 'tom',
+        age: 18
+    })
+})
+app.listen(5005,(err)=>{
+    if(!err){
+        console.log('服务器启动成功了')
+    }
+})
+```
+
+此时便可直接访问
+
+![image-20250216235732566](.\images\image-20250216235732566.png)
+
+总结：
+
+1. 对于一个url来说，什么是hash值？—— #及其后面的内容就是hash值。
+2. hash值不会包含在 HTTP 请求中，即：hash值不会带给服务器。
+3. hash模式：
+   1. 地址中永远带着#号，不美观 。
+   2. 若以后将地址通过第三方手机app分享，若app校验严格，则地址会被标记为不合法。
+   3. 兼容性较好。
+4. history模式：
+   1. 地址干净，美观 。
+   2. 兼容性和hash模式相比略差。
+   3. 应用部署上线时需要后端人员支持，解决刷新页面服务端404的问题。
+
 ## 结束
 
