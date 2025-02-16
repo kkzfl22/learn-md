@@ -14641,6 +14641,1427 @@ export default {
 
 
 
+### 4.11 全局路由守卫
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入VueRouter
+import VueRouter from 'vue-router'
+//引入路由器
+import router from './router'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//应用插件
+Vue.use(VueRouter)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	router: router
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <div class="row">
+        <Banner />
+    </div>
+    <div class="row">
+      <div class="col-xs-2 col-xs-offset-2">
+        <div class="list-group">
+          <!-- Vue中借助router-link标签实现路由的切换  -->
+          <router-link class="list-group-item" active-class="active" :to="{
+            name: 'guanyu'
+          }">About</router-link>
+          <router-link class="list-group-item" active-class="active" to="/home">Home</router-link>
+        </div>
+      </div>
+      <div class="col-xs-6">
+        <div class="panel">
+          <div class="panel-body">
+            <!-- 指定组件呈现的位置 -->
+            <router-view></router-view>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Banner from './components/Banner'
+
+export default {
+  name: "App",
+  components: {Banner}
+};
+</script>
+```
+
+src\router\index.js
+
+```js
+//该文件专门用于创建整个应用的路由器
+import VueRouter from 'vue-router'
+//引入组件
+import About from '../pages/About'
+import Home from '../pages/Home'
+import News from '../pages/News'
+import Message from '../pages/Message'
+import Detail from '../pages/Detail'
+
+//创建并暴露一个路由器
+const router =  new VueRouter({
+    routes: [
+        {
+            name: 'guanyu',
+            path: '/about',
+            component: About,
+            meta: { title: '关于' }
+        },
+        {
+            path: '/home',
+            component: Home,
+            meta: { title: '主页' },
+            children: [
+                {
+                    path: 'news',
+                    component: News,
+                    meta: { title: '主页' },
+                },
+                {
+                    path: 'message',
+                    component: Message,
+                    meta: { isAuth: true, title: '新闻' },
+                    children: [
+                        {
+                            name: 'xiangqing',
+                            path: 'detail',
+                            component: Detail,
+                            meta: { isAuth: true, title: '详情' },
+                            // props的第一种写法，值为对象，该对象中所有key-value都会以props的形式传递给Detail组件
+                            // props: {a:1,b:'hello'}
+                            //props的第二种写法，值为布尔值，就会把该路由组件收到的所有params参数，以porps的形式传递给Details组件
+                            // props: true
+                            //第三种写法，值为函数
+                            props($route) {
+                                return {
+                                    id: $route.query.id,
+                                    title: $route.query.title,
+                                    a: 1,
+                                    b: 'hello'
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+})
+
+//全局前轩路由守卫——初始化的时候被调用、每次路由切换之前被调用。
+router.beforeEach((to, from, next) => {
+    console.log('前置路由守卫', to, from);
+    //判断是否需要鉴权
+    if(to.meta.isAuth){
+        console.log('学校名称',localStorage.getItem('school'))
+        if(localStorage.getItem('school') === 'test' )
+        {
+            next();
+        }
+        else{
+            alert('学校名称不对，无权查看')
+        }
+    }
+    else{
+        next();
+    }
+})
+
+
+//全局后置路由守卫——初始化的时候调用、每次路由切换完成后调用。
+router.afterEach((to,from)=>{
+    console.log('后置路由守卫',to,from);
+    document.title = to.meta.title || '系统'
+})
+
+
+export default router
+```
+
+src\components\Banner.vue
+
+```vue
+<template>
+  <div class="col-xs-offset-2 col-xs-8">
+    <div class="page-header">
+      <h2>Vue Router Demo</h2>
+      <button @click="back">后退</button>
+      <button @click="forward">前进</button>
+      <button @click="go">测试一下go</button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Banner",
+  methods:{
+    back(){
+      this.$router.back();
+    },
+    forward(){
+      this.$router.forward();
+    },
+    go(){
+      this.$router.go(2);
+    }
+  }
+};
+</script>
+```
+
+src\pages\About.vue
+
+```vue
+<template>
+  <h2>我是About的内容</h2>
+</template>
+
+<script>
+export default {
+  name: "About",
+  beforeDestroy() {
+    console.log('About组件即将被销毁了');
+  },
+  mounted(){
+    console.log('Abount组件挂载完毕了',this);
+    window.abountRoute = this.$route;
+    window.abountRouter = this.$router;
+  }
+};
+</script>
+
+```
+
+src\pages\Home.vue
+
+```vue
+<template>
+  <div>
+    <h2>我是Home的内容</h2>
+    <div>
+      <ul class="nav nav-tabs">
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/news"
+            >News</router-link
+          >
+        </li>
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/message"
+            >Message</router-link
+          >
+        </li>
+      </ul>
+      <!-- 缓存多个路由组件 -->
+			<!-- <keep-alive :include="['News','Message']"> -->
+      <!-- 缓存一个路由组件 -->
+      <keep-alive include="News">
+      <router-view></router-view>
+      </keep-alive>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Home",
+  beforeDestroy() {
+    console.log("home组件即将被销毁了");
+  },
+  mounted() {
+    console.log("Home组件挂载完毕了", this);
+    window.homeRouter = this.$route;
+    window.HomeRouter = this.$router;
+  },
+};
+</script>
+
+```
+
+src\pages\Message.vue
+
+```vue
+<template>
+  <div>
+    <ul>
+      <li v-for="m in messageList" :key="m.id">
+        <!-- 跳转路由并携带param参数，to的字符串写法 -->
+        <!-- <router-link :to="`/home/message/detail/${m.id}/${m.title}`">{{m.title}}-1</router-link> &nbsp; &nbsp; -->
+        <!-- 跳转并携带query参数，to的对象写法 -->
+        <router-link
+          :to="{
+            //path: '/home/message/detail',
+            name: 'xiangqing',
+            query: {
+              id: m.id,
+              title: m.title,
+            },
+          }"
+          >{{ m.title }}</router-link
+        >
+        <button @click="pushShow(m)">push查看</button>
+        <button @click="replaceShow(m)">replace查看</button>
+      </li>
+    </ul>
+    <hr />
+    <router-view></router-view>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Message",
+  data() {
+    return {
+      messageList: [
+        { id: "001", title: "消息001" },
+        { id: "002", title: "消息002" },
+        { id: "003", title: "消息003" },
+      ],
+    };
+  },
+  methods: {
+    pushShow(m) {
+      this.$router
+        .push({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+    replaceShow(m) {
+      this.$router
+        .replace({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+  },
+};
+</script>
+```
+
+src\pages\Detail.vue
+
+```vue
+<template>
+  <ul>
+    <!-- <li>消息编号： {{$route.params.id}}</li> -->
+    <!-- <li>消息标题： {{$route.params.title}}</li> -->
+    <li>消息编号： {{ id }}</li>
+    <li>消息标题： {{ title }}</li>
+    <li>其他参数： {{ a }},{{ b }}</li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "Detail",
+  props: ["id", "title", "a", "b"],
+  computed: {
+    // id(){
+    // 	return this.$route.query.id
+    // },
+    // title(){
+    // 	return this.$route.query.title
+    // },
+  },
+  mounted() {
+     console.log('detail组件完毕',this.$route)
+  },
+};
+</script>
+```
+
+src\pages\News.vue
+
+```vue
+<template>
+  <ul>
+    <li :style="{ opacity }">欢迎学习Vue</li>
+    <li>news001 <input type="text" /></li>
+    <li>news002 <input type="text" /></li>
+    <li>news003 <input type="text" /></li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "News",
+  data() {
+    return {
+      opacity: 1,
+    };
+  },
+  /* beforeDestroy(){
+    //由于存在组件缓存的关系，导致此在组件被切换时，不能被停止，定时器一直在执行，造成浪费。
+    console.log('News组件即将被销毁了');
+    clearInterval(this.timer);
+  },
+  mounted(){
+    this.timer = setInterval(()=>{
+      console.log('@');
+      this.opacity -= 0.01;
+      if(this.opacity <= 0){
+        this.opacity = 1;
+      }
+    });
+  } */
+
+  //组件被激活时
+  activated() {
+    this.timer = setInterval(() => {
+      console.log("@");
+      this.opacity -= 0.01;
+      if (this.opacity <= 0) {
+        this.opacity = 1;
+      }
+    });
+  },
+  //组件被切换时，或者失活时
+  deactivated() {
+    console.log("News组件失活了");
+    clearInterval(this.timer);
+  },
+};
+</script>
+
+```
+
+运行
+
+![image-20250216150722949](.\images\image-20250216150722949.png)
+
+![image-20250216150842225](.\images\image-20250216150842225.png)
+
+总结：
+
+1. 作用：对路由进行权限控制
+
+2. 分类：全局守卫、独享守卫、组件内守卫
+
+3. 全局守卫:
+
+   ```js
+   //全局前置守卫：初始化时执行、每次路由切换前执行
+   router.beforeEach((to,from,next)=>{
+   	consolwte.log('beforeEach',to,from)
+   	if(to.meta.isAuth){ //判断当前路由是否需要进行权限控制
+   		if(localStorage.getItem('school') === 'atguigu'){ //权限控制的具体规则
+   			next() //放行
+   		}else{
+   			alert('暂无权限查看')
+   			// next({name:'guanyu'})
+   		}
+   	}else{
+   		next() //放行
+   	}
+   })
+   
+   //全局后置守卫：初始化时执行、每次路由切换后执行
+   router.afterEach((to,from)=>{
+   	console.log('afterEach',to,from)
+   	if(to.meta.title){ 
+   		document.title = to.meta.title //修改网页的title
+   	}else{
+   		document.title = 'vue_test'
+   	}
+   })
+   ```
+
+
+
+### 4.12 独享路由守卫
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入VueRouter
+import VueRouter from 'vue-router'
+//引入路由器
+import router from './router'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//应用插件
+Vue.use(VueRouter)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	router: router
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <div class="row">
+        <Banner />
+    </div>
+    <div class="row">
+      <div class="col-xs-2 col-xs-offset-2">
+        <div class="list-group">
+          <!-- Vue中借助router-link标签实现路由的切换  -->
+          <router-link class="list-group-item" active-class="active" :to="{
+            name: 'guanyu'
+          }">About</router-link>
+          <router-link class="list-group-item" active-class="active" to="/home">Home</router-link>
+        </div>
+      </div>
+      <div class="col-xs-6">
+        <div class="panel">
+          <div class="panel-body">
+            <!-- 指定组件呈现的位置 -->
+            <router-view></router-view>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Banner from './components/Banner'
+
+export default {
+  name: "App",
+  components: {Banner}
+};
+</script>
+```
+
+src\router\index.js
+
+```js
+//该文件专门用于创建整个应用的路由器
+import VueRouter from 'vue-router'
+//引入组件
+import About from '../pages/About'
+import Home from '../pages/Home'
+import News from '../pages/News'
+import Message from '../pages/Message'
+import Detail from '../pages/Detail'
+
+//创建并暴露一个路由器
+const router =  new VueRouter({
+    routes: [
+        {
+            name: 'guanyu',
+            path: '/about',
+            component: About,
+            meta: { title: '关于' }
+        },
+        {
+            path: '/home',
+            component: Home,
+            meta: { title: '主页' },
+            children: [
+                {
+                    path: 'news',
+                    component: News,
+                    meta: { isAuth: true,title: '新闻' },
+                    beforeEnter: (to,from,next) =>{
+                        console.log('独享路由宝卫',to,from)
+                        //仅对新闻判断是否需要鉴权
+                        if(to.meta.isAuth){
+                            if(localStorage.getItem('school') === 'test')
+                            {
+                                next();
+                            }
+                            else{
+                                alert('学校名称不对，无权查看');
+                            }
+                        }
+                        else{
+                            next();
+                        }
+                    }
+                },
+                {
+                    path: 'message',
+                    component: Message,
+                    meta: { isAuth: true, title: '消息' },
+                    children: [
+                        {
+                            name: 'xiangqing',
+                            path: 'detail',
+                            component: Detail,
+                            meta: { isAuth: true, title: '详情' },
+                            // props的第一种写法，值为对象，该对象中所有key-value都会以props的形式传递给Detail组件
+                            // props: {a:1,b:'hello'}
+                            //props的第二种写法，值为布尔值，就会把该路由组件收到的所有params参数，以porps的形式传递给Details组件
+                            // props: true
+                            //第三种写法，值为函数
+                            props($route) {
+                                return {
+                                    id: $route.query.id,
+                                    title: $route.query.title,
+                                    a: 1,
+                                    b: 'hello'
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+})
+
+// //全局前轩路由守卫——初始化的时候被调用、每次路由切换之前被调用。
+// router.beforeEach((to, from, next) => {
+//     console.log('前置路由守卫', to, from);
+//     //判断是否需要鉴权
+//     if(to.meta.isAuth){
+//         console.log('学校名称',localStorage.getItem('school'))
+//         if(localStorage.getItem('school') === 'test' )
+//         {
+//             next();
+//         }
+//         else{
+//             alert('学校名称不对，无权查看')
+//         }
+//     }
+//     else{
+//         next();
+//     }
+// })
+
+
+//全局后置路由守卫——初始化的时候调用、每次路由切换完成后调用。
+router.afterEach((to,from)=>{
+    console.log('后置路由守卫',to,from);
+    document.title = to.meta.title || '系统'
+})
+
+
+export default router
+```
+
+src\components\Banner.vue
+
+```vue
+<template>
+  <div class="col-xs-offset-2 col-xs-8">
+    <div class="page-header">
+      <h2>Vue Router Demo</h2>
+      <button @click="back">后退</button>
+      <button @click="forward">前进</button>
+      <button @click="go">测试一下go</button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Banner",
+  methods:{
+    back(){
+      this.$router.back();
+    },
+    forward(){
+      this.$router.forward();
+    },
+    go(){
+      this.$router.go(2);
+    }
+  }
+};
+</script>
+```
+
+src\pages\About.vue
+
+```vue
+<template>
+  <h2>我是About的内容</h2>
+</template>
+
+<script>
+export default {
+  name: "About",
+  beforeDestroy() {
+    console.log('About组件即将被销毁了');
+  },
+  mounted(){
+    console.log('Abount组件挂载完毕了',this);
+    window.abountRoute = this.$route;
+    window.abountRouter = this.$router;
+  }
+};
+</script>
+
+```
+
+src\pages\Home.vue
+
+```vue
+<template>
+  <div>
+    <h2>我是Home的内容</h2>
+    <div>
+      <ul class="nav nav-tabs">
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/news"
+            >News</router-link
+          >
+        </li>
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/message"
+            >Message</router-link
+          >
+        </li>
+      </ul>
+      <!-- 缓存多个路由组件 -->
+			<!-- <keep-alive :include="['News','Message']"> -->
+      <!-- 缓存一个路由组件 -->
+      <keep-alive include="News">
+      <router-view></router-view>
+      </keep-alive>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Home",
+  beforeDestroy() {
+    console.log("home组件即将被销毁了");
+  },
+  mounted() {
+    console.log("Home组件挂载完毕了", this);
+    window.homeRouter = this.$route;
+    window.HomeRouter = this.$router;
+  },
+};
+</script>
+
+```
+
+src\pages\Message.vue
+
+```vue
+<template>
+  <div>
+    <ul>
+      <li v-for="m in messageList" :key="m.id">
+        <!-- 跳转路由并携带param参数，to的字符串写法 -->
+        <!-- <router-link :to="`/home/message/detail/${m.id}/${m.title}`">{{m.title}}-1</router-link> &nbsp; &nbsp; -->
+        <!-- 跳转并携带query参数，to的对象写法 -->
+        <router-link
+          :to="{
+            //path: '/home/message/detail',
+            name: 'xiangqing',
+            query: {
+              id: m.id,
+              title: m.title,
+            },
+          }"
+          >{{ m.title }}</router-link
+        >
+        <button @click="pushShow(m)">push查看</button>
+        <button @click="replaceShow(m)">replace查看</button>
+      </li>
+    </ul>
+    <hr />
+    <router-view></router-view>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Message",
+  data() {
+    return {
+      messageList: [
+        { id: "001", title: "消息001" },
+        { id: "002", title: "消息002" },
+        { id: "003", title: "消息003" },
+      ],
+    };
+  },
+  methods: {
+    pushShow(m) {
+      this.$router
+        .push({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+    replaceShow(m) {
+      this.$router
+        .replace({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+  },
+};
+</script>
+```
+
+src\pages\Detail.vue
+
+```vue
+<template>
+  <ul>
+    <!-- <li>消息编号： {{$route.params.id}}</li> -->
+    <!-- <li>消息标题： {{$route.params.title}}</li> -->
+    <li>消息编号： {{ id }}</li>
+    <li>消息标题： {{ title }}</li>
+    <li>其他参数： {{ a }},{{ b }}</li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "Detail",
+  props: ["id", "title", "a", "b"],
+  computed: {
+    // id(){
+    // 	return this.$route.query.id
+    // },
+    // title(){
+    // 	return this.$route.query.title
+    // },
+  },
+  mounted() {
+     console.log('detail组件完毕',this.$route)
+  },
+};
+</script>
+```
+
+src\pages\News.vue
+
+```vue
+<template>
+  <ul>
+    <li :style="{ opacity }">欢迎学习Vue</li>
+    <li>news001 <input type="text" /></li>
+    <li>news002 <input type="text" /></li>
+    <li>news003 <input type="text" /></li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "News",
+  data() {
+    return {
+      opacity: 1,
+    };
+  },
+  /* beforeDestroy(){
+    //由于存在组件缓存的关系，导致此在组件被切换时，不能被停止，定时器一直在执行，造成浪费。
+    console.log('News组件即将被销毁了');
+    clearInterval(this.timer);
+  },
+  mounted(){
+    this.timer = setInterval(()=>{
+      console.log('@');
+      this.opacity -= 0.01;
+      if(this.opacity <= 0){
+        this.opacity = 1;
+      }
+    });
+  } */
+
+  //组件被激活时
+  activated() {
+    this.timer = setInterval(() => {
+      console.log("@");
+      this.opacity -= 0.01;
+      if (this.opacity <= 0) {
+        this.opacity = 1;
+      }
+    });
+  },
+  //组件被切换时，或者失活时
+  deactivated() {
+    console.log("News组件失活了");
+    clearInterval(this.timer);
+  },
+};
+</script>
+
+```
+
+运行
+
+![image-20250216151811734](.\images\image-20250216151811734.png)
+
+![image-20250216151855153](.\images\image-20250216151855153.png)
+
+总结：独享守卫
+
+```js
+beforeEnter(to,from,next){
+	console.log('beforeEnter',to,from)
+	if(to.meta.isAuth){ //判断当前路由是否需要进行权限控制
+		if(localStorage.getItem('school') === 'atguigu'){
+			next()
+		}else{
+			alert('暂无权限查看')
+			// next({name:'guanyu'})
+		}
+	}else{
+		next()
+	}
+}
+```
+
+### 4.13 组件内路由守卫
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+//引入VueRouter
+import VueRouter from 'vue-router'
+//引入路由器
+import router from './router'
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//应用插件
+Vue.use(VueRouter)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App),
+	router: router
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <div class="row">
+        <Banner />
+    </div>
+    <div class="row">
+      <div class="col-xs-2 col-xs-offset-2">
+        <div class="list-group">
+          <!-- Vue中借助router-link标签实现路由的切换  -->
+          <router-link class="list-group-item" active-class="active" :to="{
+            name: 'guanyu'
+          }">About</router-link>
+          <router-link class="list-group-item" active-class="active" to="/home">Home</router-link>
+        </div>
+      </div>
+      <div class="col-xs-6">
+        <div class="panel">
+          <div class="panel-body">
+            <!-- 指定组件呈现的位置 -->
+            <router-view></router-view>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Banner from './components/Banner'
+
+export default {
+  name: "App",
+  components: {Banner}
+};
+</script>
+```
+
+src\router\index.js
+
+```js
+//该文件专门用于创建整个应用的路由器
+import VueRouter from 'vue-router'
+//引入组件
+import About from '../pages/About'
+import Home from '../pages/Home'
+import News from '../pages/News'
+import Message from '../pages/Message'
+import Detail from '../pages/Detail'
+
+//创建并暴露一个路由器
+const router =  new VueRouter({
+    routes: [
+        {
+            name: 'guanyu',
+            path: '/about',
+            component: About,
+            meta: { isAuth:true,title: '关于' }
+        },
+        {
+            path: '/home',
+            component: Home,
+            meta: { title: '主页' },
+            children: [
+                {
+                    path: 'news',
+                    component: News,
+                    meta: { isAuth: true,title: '新闻' },
+                    beforeEnter: (to,from,next) =>{
+                        console.log('独享路由宝卫',to,from)
+                        //仅对新闻判断是否需要鉴权
+                        if(to.meta.isAuth){
+                            if(localStorage.getItem('school') === 'test')
+                            {
+                                next();
+                            }
+                            else{
+                                alert('学校名称不对，无权查看');
+                            }
+                        }
+                        else{
+                            next();
+                        }
+                    }
+                },
+                {
+                    path: 'message',
+                    component: Message,
+                    meta: { isAuth: true, title: '消息' },
+                    children: [
+                        {
+                            name: 'xiangqing',
+                            path: 'detail',
+                            component: Detail,
+                            meta: { isAuth: true, title: '详情' },
+                            // props的第一种写法，值为对象，该对象中所有key-value都会以props的形式传递给Detail组件
+                            // props: {a:1,b:'hello'}
+                            //props的第二种写法，值为布尔值，就会把该路由组件收到的所有params参数，以porps的形式传递给Details组件
+                            // props: true
+                            //第三种写法，值为函数
+                            props($route) {
+                                return {
+                                    id: $route.query.id,
+                                    title: $route.query.title,
+                                    a: 1,
+                                    b: 'hello'
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+})
+
+// //全局前轩路由守卫——初始化的时候被调用、每次路由切换之前被调用。
+// router.beforeEach((to, from, next) => {
+//     console.log('前置路由守卫', to, from);
+//     //判断是否需要鉴权
+//     if(to.meta.isAuth){
+//         console.log('学校名称',localStorage.getItem('school'))
+//         if(localStorage.getItem('school') === 'test' )
+//         {
+//             next();
+//         }
+//         else{
+//             alert('学校名称不对，无权查看')
+//         }
+//     }
+//     else{
+//         next();
+//     }
+// })
+
+
+//全局后置路由守卫——初始化的时候调用、每次路由切换完成后调用。
+router.afterEach((to,from)=>{
+    console.log('后置路由守卫',to,from);
+    document.title = to.meta.title || '系统'
+})
+
+
+export default router
+```
+
+src\components\Banner.vue
+
+```vue
+<template>
+  <div class="col-xs-offset-2 col-xs-8">
+    <div class="page-header">
+      <h2>Vue Router Demo</h2>
+      <button @click="back">后退</button>
+      <button @click="forward">前进</button>
+      <button @click="go">测试一下go</button>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Banner",
+  methods:{
+    back(){
+      this.$router.back();
+    },
+    forward(){
+      this.$router.forward();
+    },
+    go(){
+      this.$router.go(2);
+    }
+  }
+};
+</script>
+```
+
+src\pages\About.vue
+
+```vue
+<template>
+  <h2>我是About的内容</h2>
+</template>
+
+<script>
+export default {
+  name: "About",
+  beforeDestroy() {
+    console.log('About组件即将被销毁了');
+  },
+  mounted(){
+    console.log('Abount组件挂载完毕了',this);
+    window.abountRoute = this.$route;
+    window.abountRouter = this.$router;
+  },
+  //通过路由规则，进入该组件时被调用
+  beforeRouteEnter(to,from,next){
+    console.log('About--beforeRouteEnter',to,from);
+    if(to.meta.isAuth)
+    {
+      if(localStorage.getItem('school') === 'test')
+      {
+        next();
+      }
+      else{
+        alert('学校名称不对，无权限查看');
+      }
+    }
+    else{
+      next();
+    }
+  },
+  //通过路由规则，离开该组件时被调用
+  beforeRouteLeave(to,from,next){
+    console.log('About-beforeRouteLeave',to,from)
+    next();
+  }
+};
+</script>
+
+```
+
+src\pages\Home.vue
+
+```vue
+<template>
+  <div>
+    <h2>我是Home的内容</h2>
+    <div>
+      <ul class="nav nav-tabs">
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/news"
+            >News</router-link
+          >
+        </li>
+        <li>
+          <router-link class="list-group-item" active-class="active" to="/home/message"
+            >Message</router-link
+          >
+        </li>
+      </ul>
+      <!-- 缓存多个路由组件 -->
+			<!-- <keep-alive :include="['News','Message']"> -->
+      <!-- 缓存一个路由组件 -->
+      <keep-alive include="News">
+      <router-view></router-view>
+      </keep-alive>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Home",
+  beforeDestroy() {
+    console.log("home组件即将被销毁了");
+  },
+  mounted() {
+    console.log("Home组件挂载完毕了", this);
+    window.homeRouter = this.$route;
+    window.HomeRouter = this.$router;
+  },
+};
+</script>
+
+```
+
+src\pages\Message.vue
+
+```vue
+<template>
+  <div>
+    <ul>
+      <li v-for="m in messageList" :key="m.id">
+        <!-- 跳转路由并携带param参数，to的字符串写法 -->
+        <!-- <router-link :to="`/home/message/detail/${m.id}/${m.title}`">{{m.title}}-1</router-link> &nbsp; &nbsp; -->
+        <!-- 跳转并携带query参数，to的对象写法 -->
+        <router-link
+          :to="{
+            //path: '/home/message/detail',
+            name: 'xiangqing',
+            query: {
+              id: m.id,
+              title: m.title,
+            },
+          }"
+          >{{ m.title }}</router-link
+        >
+        <button @click="pushShow(m)">push查看</button>
+        <button @click="replaceShow(m)">replace查看</button>
+      </li>
+    </ul>
+    <hr />
+    <router-view></router-view>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Message",
+  data() {
+    return {
+      messageList: [
+        { id: "001", title: "消息001" },
+        { id: "002", title: "消息002" },
+        { id: "003", title: "消息003" },
+      ],
+    };
+  },
+  methods: {
+    pushShow(m) {
+      this.$router
+        .push({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+    replaceShow(m) {
+      this.$router
+        .replace({
+          name: "xiangqing",
+          query: {
+            id: m.id,
+            title: m.title,
+          },
+        })
+        .catch((err) => {
+          if (err.name !== "NavigationDuplicated") {
+            throw err;
+          }
+          // 对于重复导航，可以选择忽略错误
+        });
+    },
+  },
+};
+</script>
+```
+
+src\pages\Detail.vue
+
+```vue
+<template>
+  <ul>
+    <!-- <li>消息编号： {{$route.params.id}}</li> -->
+    <!-- <li>消息标题： {{$route.params.title}}</li> -->
+    <li>消息编号： {{ id }}</li>
+    <li>消息标题： {{ title }}</li>
+    <li>其他参数： {{ a }},{{ b }}</li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "Detail",
+  props: ["id", "title", "a", "b"],
+  computed: {
+    // id(){
+    // 	return this.$route.query.id
+    // },
+    // title(){
+    // 	return this.$route.query.title
+    // },
+  },
+  mounted() {
+     console.log('detail组件完毕',this.$route)
+  },
+};
+</script>
+```
+
+src\pages\News.vue
+
+```vue
+<template>
+  <ul>
+    <li :style="{ opacity }">欢迎学习Vue</li>
+    <li>news001 <input type="text" /></li>
+    <li>news002 <input type="text" /></li>
+    <li>news003 <input type="text" /></li>
+  </ul>
+</template>
+
+<script>
+export default {
+  name: "News",
+  data() {
+    return {
+      opacity: 1,
+    };
+  },
+  /* beforeDestroy(){
+    //由于存在组件缓存的关系，导致此在组件被切换时，不能被停止，定时器一直在执行，造成浪费。
+    console.log('News组件即将被销毁了');
+    clearInterval(this.timer);
+  },
+  mounted(){
+    this.timer = setInterval(()=>{
+      console.log('@');
+      this.opacity -= 0.01;
+      if(this.opacity <= 0){
+        this.opacity = 1;
+      }
+    });
+  } */
+
+  //组件被激活时
+  activated() {
+    this.timer = setInterval(() => {
+      console.log("@");
+      this.opacity -= 0.01;
+      if (this.opacity <= 0) {
+        this.opacity = 1;
+      }
+    });
+  },
+  //组件被切换时，或者失活时
+  deactivated() {
+    console.log("News组件失活了");
+    clearInterval(this.timer);
+  },
+};
+</script>
+
+```
+
+运行
+
+![image-20250216153950050](.\images\image-20250216153950050.png)
+
+![image-20250216154015740](.\images\image-20250216154015740.png)
+
+总结：
+
+1. 组件内守卫：
+
+   ```js
+   //进入守卫：通过路由规则，进入该组件时被调用
+   beforeRouteEnter (to, from, next) {
+   },
+   //离开守卫：通过路由规则，离开该组件时被调用
+   beforeRouteLeave (to, from, next) {
+   }
+   ```
+
 
 
 ## 结束

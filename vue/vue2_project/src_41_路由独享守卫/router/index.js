@@ -14,7 +14,7 @@ const router =  new VueRouter({
             name: 'guanyu',
             path: '/about',
             component: About,
-            meta: { isAuth:true,title: '关于' }
+            meta: { title: '关于' }
         },
         {
             path: '/home',

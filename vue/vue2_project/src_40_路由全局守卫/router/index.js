@@ -14,7 +14,7 @@ const router =  new VueRouter({
             name: 'guanyu',
             path: '/about',
             component: About,
-            meta: { isAuth:true,title: '关于' }
+            meta: { title: '关于' }
         },
         {
             path: '/home',
@@ -24,28 +24,12 @@ const router =  new VueRouter({
                 {
                     path: 'news',
                     component: News,
-                    meta: { isAuth: true,title: '新闻' },
-                    beforeEnter: (to,from,next) =>{
-                        console.log('独享路由宝卫',to,from)
-                        //仅对新闻判断是否需要鉴权
-                        if(to.meta.isAuth){
-                            if(localStorage.getItem('school') === 'test')
-                            {
-                                next();
-                            }
-                            else{
-                                alert('学校名称不对，无权查看');
-                            }
-                        }
-                        else{
-                            next();
-                        }
-                    }
+                    meta: { title: '主页' },
                 },
                 {
                     path: 'message',
                     component: Message,
-                    meta: { isAuth: true, title: '消息' },
+                    meta: { isAuth: true, title: '新闻' },
                     children: [
                         {
                             name: 'xiangqing',
@@ -73,24 +57,24 @@ const router =  new VueRouter({
     ]
 })
 
-// //全局前轩路由守卫——初始化的时候被调用、每次路由切换之前被调用。
-// router.beforeEach((to, from, next) => {
-//     console.log('前置路由守卫', to, from);
-//     //判断是否需要鉴权
-//     if(to.meta.isAuth){
-//         console.log('学校名称',localStorage.getItem('school'))
-//         if(localStorage.getItem('school') === 'test' )
-//         {
-//             next();
-//         }
-//         else{
-//             alert('学校名称不对，无权查看')
-//         }
-//     }
-//     else{
-//         next();
-//     }
-// })
+//全局前轩路由守卫——初始化的时候被调用、每次路由切换之前被调用。
+router.beforeEach((to, from, next) => {
+    console.log('前置路由守卫', to, from);
+    //判断是否需要鉴权
+    if(to.meta.isAuth){
+        console.log('学校名称',localStorage.getItem('school'))
+        if(localStorage.getItem('school') === 'test' )
+        {
+            next();
+        }
+        else{
+            alert('学校名称不对，无权查看')
+        }
+    }
+    else{
+        next();
+    }
+})
 
 
 //全局后置路由守卫——初始化的时候调用、每次路由切换完成后调用。
