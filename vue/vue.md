@@ -16152,9 +16152,7 @@ app.listen(5005,(err)=>{
    2. 兼容性和hash模式相比略差。
    3. 应用部署上线时需要后端人员支持，解决刷新页面服务端404的问题。
 
-
-
-#### element-ui
+## 5. element-ui
 
 官网：
 
@@ -16269,7 +16267,7 @@ export default {
 
 <img src=".\images\93624428-53932780-f9ae-11ea-8d16-af949e16a09f.png" style="width:200px" />
 
-## Vue3简介
+## 1. Vue3简介
 
 - 2020年9月18日，Vue.js发布3.0版本，代号：One Piece（海贼王）
 - 耗时2年多、[2600+次提交](https://github.com/vuejs/vue-next/graphs/commit-activity)、[30+个RFC](https://github.com/vuejs/rfcs/tree/master/active-rfcs)、[600+次PR](https://github.com/vuejs/vue-next/pulls?q=is%3Apr+is%3Amerged+-author%3Aapp%2Fdependabot-preview+)、[99位贡献者](https://github.com/vuejs/vue-next/graphs/contributors) 
@@ -16323,9 +16321,9 @@ export default {
 
 
 
-## 一、创建Vue3.0工程
+## 3. 建Vue3.0工程
 
-## 1. 使用 vue-cli 创建
+#### 1. 使用 vue-cli 创建
 
 官方文档：https://cli.vuejs.org/zh/guide/creating-a-project.html#vue-create
 
@@ -16341,7 +16339,7 @@ cd vue_test
 npm run serve
 ```
 
-## .使用 vite 创建
+#### .使用 vite 创建
 
 官方文档：https://v3.cn.vuejs.org/guide/installation.html#vite
 
@@ -16367,7 +16365,9 @@ npm install
 npm run dev
 ```
 
-# 
+## 4. 常用CompositionAPI
+
+官方文档: https://v3.cn.vuejs.org/guide/composition-api-introduction.html
 
 
 
