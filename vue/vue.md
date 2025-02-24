@@ -16154,15 +16154,122 @@ app.listen(5005,(err)=>{
 
 
 
+#### element-ui
+
+官网：
+
+```sh
+https://element.eleme.cn/#/zh-CN/
+```
+
+src\main.js
+
+```js
+//引入Vue
+import Vue from 'vue'
+//引入App
+import App from './App.vue'
+// //引入VueRouter
+// import VueRouter from 'vue-router'
+// //引入路由器
+// import router from './router'
+
+//完整引入
+// //引入ElementUI组件库
+// import ElementUI from 'element-ui';
+// //引入ElementUI全部样式
+import 'element-ui/lib/theme-chalk/index.css';
+// Vue.use(ElementUI);
+
+
+//按需引入
+import { Button,Row,DatePicker } from 'element-ui';
+
+
+//应用ElementUI
+Vue.component('el-button', Button);
+Vue.component('el-row', Row);
+Vue.component('el-date-picker', DatePicker);
+
+
+//关闭Vue的生产提示
+Vue.config.productionTip = false
+
+//应用插件
+// Vue.use(VueRouter)
+
+//创建vm
+new Vue({
+	el:'#app',
+	render: h => h(App)
+	// router: router
+})
+```
+
+src\App.vue
+
+```vue
+<template>
+  <div>
+    <button>原生的按钮</button>
+    <input type="text" />
+
+    <br/>
+    
+    <el-row>
+      <el-button>默认按钮</el-button>
+      <el-button type="primary">主要按钮</el-button>
+      <el-button type="success">成功按钮</el-button>
+      <el-button type="info">信息按钮</el-button>
+      <el-button type="warning">警告按钮</el-button>
+      <el-button type="danger">危险按钮</el-button>
+    </el-row>
+
+    <br />
+    <el-date-picker v-model="value1" type="date" placeholder="选择日期">
+    </el-date-picker>
+
+    <br />
+    <!-- 
+    <atguigu-row>
+      <el-button icon="el-icon-search" circle></el-button>
+      <el-button type="primary" icon="el-icon-s-check" circle></el-button>
+      <el-button type="success" icon="el-icon-check" circle></el-button>
+      <el-button type="info" icon="el-icon-message" circle></el-button>
+      <el-button type="warning" icon="el-icon-star-off" circle></el-button>
+      <el-button type="danger" icon="el-icon-delete" circle></el-button>
+    </atguigu-row> -->
+
+    <atguigu-date-picker type="date" placeholder="选择日期">
+    </atguigu-date-picker>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "App",
+};
+</script>
+
+<style>
+</style>
+```
+
+
+
+
+
+
+
+
+
 # VUE3
 
 
 
 <img src=".\images\93624428-53932780-f9ae-11ea-8d16-af949e16a09f.png" style="width:200px" />
 
-
-
-# Vue3简介
+## Vue3简介
 
 - 2020年9月18日，Vue.js发布3.0版本，代号：One Piece（海贼王）
 - 耗时2年多、[2600+次提交](https://github.com/vuejs/vue-next/graphs/commit-activity)、[30+个RFC](https://github.com/vuejs/rfcs/tree/master/active-rfcs)、[600+次PR](https://github.com/vuejs/vue-next/pulls?q=is%3Apr+is%3Amerged+-author%3Aapp%2Fdependabot-preview+)、[99位贡献者](https://github.com/vuejs/vue-next/graphs/contributors) 
