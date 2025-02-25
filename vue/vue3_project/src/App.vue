@@ -10,10 +10,10 @@
   <button @click="sayWelcome">说话2(Vue2所配制的-sayWelcome)</button>
   <br />
   <br />
-  <button>测试一下在Vue2的配制中去读取VUE3中的数据、方法</button>
+  <button @click="test1">测试一下在Vue2的配制中去读取VUE3中的数据、方法</button>
   <br />
   <br />
-  <button>测试一下在Vue3的setup配置中去读取Vue2中的数据、方法</button>
+  <button @click="test2">测试一下在Vue3的setup配置中去读取Vue2中的数据、方法</button>
 </template>
 
 <script>
@@ -34,10 +34,12 @@ export default {
       console.log(this.name);
       console.log(this.age);
       console.log(this.sayHello);
+
+      console.log('test1----------------------')
     },
   },
   //此处仅测试不考滤响应式的问题
-  async setup() {
+  setup() {
     let name = "张三"
     let age = 18
     let a2 = 200
@@ -51,8 +53,11 @@ export default {
       console.log(name);
       console.log(age);
       console.log(sayHello);
+      //获取不到
       console.log(this.sex);
       console.log(this.sayWelcome);
+
+      console.log('test2----------------------')
     }
 
     //返回一个对象
@@ -63,7 +68,7 @@ export default {
       test2,
       a2
     };
-  },
+  }
 };
 </script>
 
