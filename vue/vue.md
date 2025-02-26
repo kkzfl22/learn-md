@@ -16971,9 +16971,147 @@ vue3的原理
       proxy.name = 'tom'   
       ```
 
+#### reactive对比ref
+
+-  从定义数据角度对比：
+   -  ref用来定义：<strong style="color:#DD5145">基本类型数据</strong>。
+   -  reactive用来定义：<strong style="color:#DD5145">对象（或数组）类型数据</strong>。
+   -  备注：ref也可以用来定义<strong style="color:#DD5145">对象（或数组）类型数据</strong>, 它内部会自动通过```reactive```转为<strong style="color:#DD5145">代理对象</strong>。
+-  从原理角度对比：
+   -  ref通过``Object.defineProperty()``的```get```与```set```来实现响应式（数据劫持）。
+   -  reactive通过使用<strong style="color:#DD5145">Proxy</strong>来实现响应式（数据劫持）, 并通过<strong style="color:#DD5145">Reflect</strong>操作<strong style="color:orange">源对象</strong>内部的数据。
+-  从使用角度对比：
+   -  ref定义的数据：操作数据<strong style="color:#DD5145">需要</strong>```.value```，读取数据时模板中直接读取<strong style="color:#DD5145">不需要</strong>```.value```。
+   -  reactive定义的数据：操作数据与读取数据：<strong style="color:#DD5145">均不需要</strong>```.value```。
 
 
 
+
+
+### 4.5 setup的注意点（两个）
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoComp @hello="showHelloMsg" msg="你好啊" school="交大">
+        <!-- 在Vue3中，建议使用v-slot:qwe的方式指定名称，否则会报错 -->
+        <template v-slot:qwe>
+            <span>上海</span>
+        </template>
+        <template v-slot:asd>
+            <span>闵行</span>
+        </template>
+    </DemoComp>
+</template>
+
+<script>
+import DemoComp from './components/Demo'
+export default {
+  name: 'App',
+  components: {DemoComp},
+  beforeCreate(){
+    console.log('---beforeCreate---执行了')
+  },
+  setup(){
+      console.log('---setup初始化了...',this)
+
+    function showHelloMsg(value){
+      alert(`你好啊,你触发了hello事件，我收到的参数是${value}`)
+    }
+    
+    return {
+      showHelloMsg
+    }
+  }
+}
+</script>
+
+```
+
+src\components\Demo.vue
+
+```vue
+<template>
+  <h1>一个人的信息</h1>
+  <h2>姓名：{{ person.name }}</h2>
+  <h2>年龄: {{ person.age }}</h2>
+  <button @click="test">测试触发一个Demo组件的Hello事件</button>
+</template>
+
+<script>
+import { reactive } from "vue";
+export default {
+  name: 'DemoComp',
+  props: ["msg", "school"],
+  //需要声明一下自定义事件
+  emits: ["hello"],
+  //执行时机，在beforeCreate之前执行一次，this是underfined
+  setup(props, context) {
+    // 将传递的props变为一个Proxy对象Proxy(Object)格式如：{msg: 你好啊, school: 交大}
+    console.log("--setup--props:", props);
+    console.log("--setup--context:", context);
+    //$attrs用于在props未接收的数据存放位置，捡漏
+    console.log("--setup---context.attrs", context.attrs); //相关于vue2中的$attrs
+    console.log("--setup---context.emit", context.emit); //相当于自定义事件
+    console.log("--setup---context.slots", context.slots); //插槽
+
+    //数据
+    let person = reactive({
+      name: "张三",
+      age: 18,
+    });
+
+    //方法
+    function test() {
+      context.emit("hello", 666);
+    }
+
+    //返回一个对象
+    return {
+      person,
+      test,
+    };
+  },
+  mounted(){
+    console.log('Demo',this)
+  }
+};
+</script>
+
+<style></style>
+```
+
+
+
+![image-20250226225726180](.\images\image-20250226225726180.png)
+
+总结：setup的两个注意点
+
+- setup执行的时机
+  - 在beforeCreate之前执行一次，this是undefined。
+
+- setup的参数
+  - props：值为对象，包含：组件外部传递过来，且组件内部声明接收了的属性。
+  - context：上下文对象
+    - attrs: 值为对象，包含：组件外部传递过来，但没有在props配置中声明的属性, 相当于 ```this.$attrs```。
+    - slots: 收到的插槽内容, 相当于 ```this.$slots```。
+    - emit: 分发自定义事件的函数, 相当于 ```this.$emit```。
 
 # 结束
 
