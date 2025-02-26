@@ -16663,6 +16663,316 @@ export default {
 
 
 
+### 4.4 VUE3的原理
+
+vue2的原理回顾
+
+```html
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE中的响应式原理</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        //模拟VUE2中的响应式
+        //#region 
+        let p = {}
+        Object.defineProperty(p, 'name', {
+            //可以配制，加此后，属性就可以删除了,删除delete p.name
+            configurable: true,
+            get() {
+                console.log('name属性被读取了');
+                return person.name
+            },
+            set(value) {
+                console.log('name属性被修改了', value);
+                person.name = value
+            }
+        })
+        Object.defineProperty(p, 'age', {
+            get() {
+                console.log('age属性被读取了');
+                return person.age
+            },
+            set(value) {
+                console.log('age属性被修改了', value);
+                person.age = value
+            }
+        })
+        //#endregion
+
+    </script>
+</body>
+
+</html>
+```
+
+![image-20250226122059979](.\images\image-20250226122059979.png)
+
+vue3的原理
+
+```vue
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE3中的响应式原理</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        //模拟Vue3中和响应式
+        const p = new Proxy(person, {
+            //有读取P的某个属性时调用
+            get(target, propName) {
+                console.log(`有人读取了P身上的${propName}属性`)
+                //使用语法进行值的读取
+                return target[propName]
+            },
+            //有人修改P的属性或者给P追加某个属性时调用
+            set(target, propName, value) {
+                console.log(`有人设置了P身上的${propName}属性`)
+                //值的修改
+                target[propName] = value
+            },
+            deleteProperty(target, propName) {
+                console.log(`有人删除了P身上的${propName}属性`)
+                return delete target[propName];
+            }
+        })
+
+
+    </script>
+</body>
+
+</html>
+```
+
+![image-20250226122957271](.\images\image-20250226122957271.png)
+
+实现原理:
+
+```vue
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE3中的响应式原理-实现</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        //模拟Vue3中和响应式
+        const p = new Proxy(person, {
+            //有读取P的某个属性时调用
+            get(target, propName) {
+                console.log(`有人读取了P身上的${propName}属性`)
+                return Reflect.get(target,propName);
+            },
+            //有人修改P的属性或者给P追加某个属性时调用
+            set(target, propName, value) {
+                console.log(`有人设置了P身上的${propName}属性`)
+                Reflect.set(target,propName,value)
+            },
+            deleteProperty(target, propName) {
+                console.log(`有人删除了P身上的${propName}属性`)
+                return Reflect.deleteProperty(target,propName)
+            }
+        })
+
+
+    </script>
+</body>
+
+</html>
+```
+
+
+
+![image-20250226123558169](.\images\image-20250226123558169.png)
+
+
+
+问题：
+
+```html
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE3中的响应式原理-实现</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        let obj = { a: 1, b: 2 }
+
+        Object.defineProperty(obj, 'c', {
+            get() {
+                return 3
+            }
+        })
+
+        Object.defineProperty(obj, 'c', {
+            get() {
+                return 4
+            }
+        })
+
+
+    </script>
+</body>
+
+</html>
+```
+
+
+
+出现编译错误：
+
+![image-20250226123956733](.\images\image-20250226123956733.png)
+
+
+
+通过反射定义
+
+```html
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE3中的响应式原理-实现</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        let obj = { a: 1, b: 2 }
+
+        //#region 
+        //只能通过tr-catch解决。
+        // try {
+        //     Object.defineProperty(obj, 'c', {
+        //         get() {
+        //             return 3
+        //         }
+        //     })
+
+        //     Object.defineProperty(obj, 'c', {
+        //         get() {
+        //             return 4
+        //         }
+        //     })
+        // } catch (error) {
+        //     console.log(error)
+        // }
+        //#endregion 
+
+        //通过Reflect.defineProperty去操作
+        const x1 = Reflect.defineProperty(obj, 'c', {
+            get() {
+                return 3
+            }
+        })
+        console.log('定义操作结果成功1:', x1)
+
+        const x2 = Reflect.defineProperty(obj, 'c', {
+            get() {
+                return 4
+            }
+        })
+        console.log('定义操作结果成功2:', x2)
+
+
+    </script>
+</body>
+
+</html>
+```
+
+结果：
+
+![image-20250226124330405](.\images\image-20250226124330405.png)
+
+
+
+总结：Vue3.0的响应式
+
+- 实现原理: 
+
+  - 通过Proxy（代理）:  拦截对象中任意属性的变化, 包括：属性值的读写、属性的添加、属性的删除等。
+
+  - 通过Reflect（反射）:  对源对象的属性进行操作。
+
+  - MDN文档中描述的Proxy与Reflect：
+
+    - Proxy：https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Proxy
+
+    - Reflect：https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Reflect
+
+      ```js
+      new Proxy(data, {
+      	// 拦截读取属性值
+          get (target, prop) {
+          	return Reflect.get(target, prop)
+          },
+          // 拦截设置属性值或添加新属性
+          set (target, prop, value) {
+          	return Reflect.set(target, prop, value)
+          },
+          // 拦截删除属性
+          deleteProperty (target, prop) {
+          	return Reflect.deleteProperty(target, prop)
+          }
+      })
+      
+      proxy.name = 'tom'   
+      ```
+
+
+
 
 
 # 结束

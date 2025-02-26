@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>VUE3中的响应式原理-实现</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+
+        //数据源
+        let person = {
+            name: '张三',
+            age: 18
+        }
+
+        //模拟Vue3中和响应式
+        const p = new Proxy(person, {
+            //有读取P的某个属性时调用
+            get(target, propName) {
+                console.log(`有人读取了P身上的${propName}属性`)
+                return Reflect.get(target,propName);
+            },
+            //有人修改P的属性或者给P追加某个属性时调用
+            set(target, propName, value) {
+                console.log(`有人设置了P身上的${propName}属性`)
+                Reflect.set(target,propName,value)
+            },
+            deleteProperty(target, propName) {
+                console.log(`有人删除了P身上的${propName}属性`)
+                return Reflect.deleteProperty(target,propName)
+            }
+        })
+
+
+    </script>
+</body>
+
+</html>
