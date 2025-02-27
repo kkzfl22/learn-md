@@ -17105,13 +17105,295 @@ export default {
 
 - setup执行的时机
   - 在beforeCreate之前执行一次，this是undefined。
-
 - setup的参数
   - props：值为对象，包含：组件外部传递过来，且组件内部声明接收了的属性。
   - context：上下文对象
     - attrs: 值为对象，包含：组件外部传递过来，但没有在props配置中声明的属性, 相当于 ```this.$attrs```。
     - slots: 收到的插槽内容, 相当于 ```this.$slots```。
     - emit: 分发自定义事件的函数, 相当于 ```this.$emit```。
+
+### 4.6 computed-计算属性
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <Demo/>
+</template>
+
+<script>
+import Demo from './components/Demo.vue'
+export default {
+    name: 'App',
+    components: {Demo}
+}
+</script>
+```
+
+src\components\Demo.vue
+
+```vue
+<template>
+  <h1>一个人的信息</h1>
+  姓: <input type="text" v-model="person.firstName" />
+  <br/>
+  名: <input type="text" v-model="person.lastName" />
+  <br/>
+  <span>全名: {{person.fullName}}</span>
+  <br/>
+  全名: <input type="text" v-model="person.fullName" />
+</template>
+
+<script>
+import {reactive,computed} from 'vue'
+export default {
+  name: 'DemoComputed',
+  setup(){
+    let person = reactive({
+      firstName: '张',
+      lastName: '三'
+    });
+
+    //计算属性-简写（如果没有值被修改的情况）
+    // person.fullName = computed(()=>{
+    //   return person.firstName + '-' + person.lastName;
+    // })
+
+    //计算属性的完整写法,可以读写
+    person.fullName = computed({
+      get(){
+        return person.firstName + '-' + person.lastName
+      },
+      set(value){
+        const nameArr = value.split('-');
+        person.firstName = nameArr[0];
+        person.lastName = nameArr[1];
+      }
+    });
+
+    return {
+      person
+    }
+  }
+}
+</script>
+```
+
+总结：computed函数
+
+- 与Vue2.x中computed配置功能一致
+
+- 写法
+
+  ```js
+  import {computed} from 'vue'
+  
+  setup(){
+      ...
+  	//计算属性——简写
+      let fullName = computed(()=>{
+          return person.firstName + '-' + person.lastName
+      })
+      //计算属性——完整
+      let fullName = computed({
+          get(){
+              return person.firstName + '-' + person.lastName
+          },
+          set(value){
+              const nameArr = value.split('-')
+              person.firstName = nameArr[0]
+              person.lastName = nameArr[1]
+          }
+      })
+  }
+  ```
+
+
+
+### 4.7 watch函数
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoWatch/>
+</template>
+
+<script>
+import DemoWatch from './components/Demo.vue'
+export default {
+    name: 'App',
+    components: {DemoWatch}
+}
+</script>
+```
+
+src\components\Demo.vue
+
+```vue
+<template>
+  <h2>当前的求和信息为: {{ sum }}</h2>
+  <button @click="sum++">点我加1</button>
+  <hr />
+
+  <h2>当前的信息为: {{ msg }}</h2>
+  <button @click="msg += '!'">修改信息</button>
+  <hr />
+
+  <h2>姓名： {{ person.name }}</h2>
+  <h2>年龄: {{ person.age }}</h2>
+  <h2>薪资: {{ person.job.j1.salary }}K</h2>
+  <button @click="person.name += '~'">修改姓名</button>
+  <button @click="person.age++">增长年龄</button>
+  <button @click="person.job.j1.salary++">涨薪</button>
+</template>
+
+<script>
+import { ref, reactive, watch } from "vue";
+export default {
+  name: "DemoWatch",
+  setup() {
+    //数据
+    let sum = ref(0);
+    let msg = ref("你好啊");
+    let person = reactive({
+      name: "张三",
+      age: 18,
+      job: {
+        j1: {
+          salary: 20,
+        },
+      },
+    });
+
+    //情况1：监视ref所定义的一个响应式数据,imediate用于控制初始化是否调用
+    //将收到：sum变了 1 0
+    // watch(sum,(newValue,oldValue)=>{
+    //   console.log('sum变了',newValue,oldValue)
+    // },{imediate:true})
+
+    //情况2：监视ref所定义的多个响应式数据
+    //收到 sum变了(2)[1, '你好啊'](2)[0, '你好啊']
+    // watch([sum,msg],(newValue,oldValue)=>{
+    //   console.log('sum变了',newValue,oldValue)
+    // },{immediate:true})
+
+    //情况3：监视reactive所定义的一个响应式数据的全部属性
+    // 1, 注意：无法正确的获取old的数据
+    // 2, 注意：强制开启深度监视(deep配制无效)
+    // watch(person,(newValue,oldValue)=>{
+    //   console.log('sum变了',newValue,'-1111-',oldValue)
+    // })
+
+    //情况4：监视reactive所定义的一个响应式数据中的某个属性
+    //得到: person.name 张三~ 张三
+    // watch(()=>person.name, (newValue, oldValue) => {
+    //   console.log("person.name", newValue, oldValue);
+    // });
+
+    //情况5：监视reactive所定义的一个响应式数据中的某些属性
+    //得到如下两种
+    // person.name和age (2)['张三~', 18] (2)['张三', 18]
+    // person.name和age (2)['张三~', 19] (2)['张三~', 18]
+    // watch([()=>person.name,()=>person.age], (newValue, oldValue) => {
+    //   console.log("person.name和age", newValue, oldValue);
+    // });
+    
+    //特殊情况
+    //由于此处监视的reactive定义的对象中的某个属性，deep配制有效
+    watch(()=>person.job, (newValue, oldValue) => {
+      console.log("person.job", newValue, oldValue);
+    },{deep:true});
+
+    return {
+      sum,
+      msg,
+      person,
+    };
+  },
+};
+</script>
+
+
+```
+
+
+
+总结：watch函数
+
+- 与Vue2.x中watch配置功能一致
+
+- 两个小“坑”：
+
+  - 监视reactive定义的响应式数据时：oldValue无法正确获取、强制开启了深度监视（deep配置失效）。
+  - 监视reactive定义的响应式数据中某个属性时：deep配置有效。
+
+  ```js
+  //情况一：监视ref定义的响应式数据
+  watch(sum,(newValue,oldValue)=>{
+  	console.log('sum变化了',newValue,oldValue)
+  },{immediate:true})
+  
+  //情况二：监视多个ref定义的响应式数据
+  watch([sum,msg],(newValue,oldValue)=>{
+  	console.log('sum或msg变化了',newValue,oldValue)
+  }) 
+  
+  /* 情况三：监视reactive定义的响应式数据
+  			若watch监视的是reactive定义的响应式数据，则无法正确获得oldValue！！
+  			若watch监视的是reactive定义的响应式数据，则强制开启了深度监视 
+  */
+  watch(person,(newValue,oldValue)=>{
+  	console.log('person变化了',newValue,oldValue)
+  },{immediate:true,deep:false}) //此处的deep配置不再奏效
+  
+  //情况四：监视reactive定义的响应式数据中的某个属性
+  watch(()=>person.job,(newValue,oldValue)=>{
+  	console.log('person的job变化了',newValue,oldValue)
+  },{immediate:true,deep:true}) 
+  
+  //情况五：监视reactive定义的响应式数据中的某些属性
+  watch([()=>person.job,()=>person.name],(newValue,oldValue)=>{
+  	console.log('person的job变化了',newValue,oldValue)
+  },{immediate:true,deep:true})
+  
+  //特殊情况
+  watch(()=>person.job,(newValue,oldValue)=>{
+      console.log('person的job变化了',newValue,oldValue)
+  },{deep:true}) //此处由于监视的是reactive素定义的对象中的某个属性，所以deep配置有效
+  ```
+
+
 
 # 结束
 
