@@ -16,14 +16,14 @@
 </template>
 
 <script>
-import { ref, watch } from "vue";
+import { reactive, ref, watchEffect } from "vue";
 export default {
   name: "DemoWatch",
   setup() {
     //数据
     let sum = ref(0);
     let msg = ref("你好啊");
-    let person = ref({
+    let person = reactive({
       name: "张三",
       age: 18,
       job: {
@@ -33,18 +33,17 @@ export default {
       },
     });
 
+    // //将收到：sum变了 1 0
+    // watch(sum,(newValue,oldValue)=>{
+    //   console.log('sum变了',newValue,oldValue)
+    // })
 
-    //将收到：sum变了 1 0
-    watch(sum,(newValue,oldValue)=>{
-      console.log('sum变了',newValue,oldValue)
-    })
-
-    watch(person,(newValue,oldValue)=>{
-      console.log('person变了',newValue,oldValue)
-    },{deep:true})
-
-
-
+    //自动监视使用到的属性，如果被修改了，则收到watch
+    watchEffect(() => {
+      const x1 = sum.value;
+      const x2 = person.job.j1.salary;
+      console.log("watchEffect所指定的回调执行了x1:", x1, ",x2:", x2);
+    });
 
     return {
       sum,

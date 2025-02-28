@@ -17490,7 +17490,430 @@ export default {
 
 ```
 
+#### 4.7.3 watchEffect函数
 
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoWatch/>
+</template>
+
+<script>
+import DemoWatch from './components/Demo.vue'
+export default {
+    name: 'App',
+    components: {DemoWatch}
+}
+</script>
+```
+
+src\components\Demo.vue
+
+```vue
+<template>
+  <h2>当前的求和信息为: {{ sum }}</h2>
+  <button @click="sum++">点我加1</button>
+  <hr />
+
+  <h2>当前的信息为: {{ msg }}</h2>
+  <button @click="msg += '!'">修改信息</button>
+  <hr />
+
+  <h2>姓名： {{ person.name }}</h2>
+  <h2>年龄: {{ person.age }}</h2>
+  <h2>薪资: {{ person.job.j1.salary }}K</h2>
+  <button @click="person.name += '~'">修改姓名</button>
+  <button @click="person.age++">增长年龄</button>
+  <button @click="person.job.j1.salary++">涨薪</button>
+</template>
+
+<script>
+import { reactive, ref, watchEffect } from "vue";
+export default {
+  name: "DemoWatch",
+  setup() {
+    //数据
+    let sum = ref(0);
+    let msg = ref("你好啊");
+    let person = reactive({
+      name: "张三",
+      age: 18,
+      job: {
+        j1: {
+          salary: 20,
+        },
+      },
+    });
+
+    // //将收到：sum变了 1 0
+    // watch(sum,(newValue,oldValue)=>{
+    //   console.log('sum变了',newValue,oldValue)
+    // })
+
+    //自动监视使用到的属性，如果被修改了，则收到watch
+    watchEffect(() => {
+      const x1 = sum.value;
+      const x2 = person.job.j1.salary;
+      console.log("watchEffect所指定的回调执行了x1:", x1, ",x2:", x2);
+    });
+
+    return {
+      sum,
+      msg,
+      person,
+    };
+  },
+};
+</script>
+
+<style></style>
+
+```
+
+总结：watchEffect函数
+
+- watch的套路是：既要指明监视的属性，也要指明监视的回调。
+
+- watchEffect的套路是：不用指明监视哪个属性，监视的回调中用到哪个属性，那就监视哪个属性。
+
+- watchEffect有点像computed：
+
+  - 但computed注重的计算出来的值（回调函数的返回值），所以必须要写返回值。
+  - 而watchEffect更注重的是过程（回调函数的函数体），所以不用写返回值。
+
+  ```js
+  //watchEffect所指定的回调中用到的数据只要发生变化，则直接重新执行回调。
+  watchEffect(()=>{
+      const x1 = sum.value
+      const x2 = person.age
+      console.log('watchEffect配置的回调执行了')
+  })
+  ```
+
+
+
+### 4.8 生命周期
+
+<div style="border:1px solid black;width:380px;float:left;margin-right:20px;"><strong>vue2.x的生命周期</strong><img src=".\images\生命周期.png" alt="lifecycle_2" style="zoom:33%;width:1200px" /></div><div style="border:1px solid black;width:510px;height:985px;float:left"><strong>vue3.0的生命周期</strong><img src=".\images\vue3-生命周期.png" alt="lifecycle_2" style="zoom:33%;width:2500px" /></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoWatch/>
+</template>
+
+<script>
+import DemoWatch from './components/Demo.vue'
+export default {
+    name: 'App',
+    components: {DemoWatch}
+}
+</script>
+```
+
+src\components\DemoComponent.vue
+
+```vue
+<template>
+  <h2>当前求和为：{{sum}}</h2>
+  <button @click="sum++">点我加1</button>
+</template>
+
+<script>
+import {onBeforeMount, onBeforeUpdate, onMounted, onUpdated,onBeforeUnmount,onUnmounted, ref} from 'vue'
+export default {
+  name: 'DemoComponent',
+  setup(){
+    console.log('----setup----');
+    //数据
+    let sum = ref(0);
+
+    //通过组合式API使用生命周期钩子
+    onBeforeMount(()=>{
+      console.log('----onBeforeMount----');
+    });
+    onMounted(()=>{
+      console.log('----onMounted----');
+    });
+    onBeforeUpdate(()=>{
+      console.log('----onBeforeUpdate----');
+    });
+    onUpdated(()=>{
+      console.log('----onUpdated----');
+    });
+    onBeforeUnmount(()=>{
+      console.log('----onBeforeUnmount----');
+    });
+    onUnmounted(()=>{
+      console.log('----onUnmounted----');
+    });
+
+    return {
+      sum
+    }
+  },
+  //通过配制形式使用的生命周期钩子
+  beforeCreate() {
+			console.log('---beforeCreate---')
+		},
+		created() {
+			console.log('---created---')
+		},
+		beforeMount() {
+			console.log('---beforeMount---')
+		},
+		mounted() {
+			console.log('---mounted---')
+		},
+		beforeUpdate(){
+			console.log('---beforeUpdate---')
+		},
+		updated() {
+			console.log('---updated---')
+		},
+		beforeUnmount() {
+			console.log('---beforeUnmount---')
+		},
+		unmounted() {
+			console.log('---unmounted---')
+		},
+}
+</script>
+```
+
+
+
+![image-20250228122543664](.\images\image-20250228122543664.png)
+
+总结：Vue3.0中可以继续使用Vue2.x中的生命周期钩子，但有有两个被更名：
+
+- - ```beforeDestroy```改名为 ```beforeUnmount```
+  - ```destroyed```改名为 ```unmounted```
+- Vue3.0也提供了 Composition API 形式的生命周期钩子，与Vue2.x中钩子对应关系如下：
+  - `beforeCreate`===>`setup()`
+  - `created`=======>`setup()`
+  - `beforeMount` ===>`onBeforeMount`
+  - `mounted`=======>`onMounted`
+  - `beforeUpdate`===>`onBeforeUpdate`
+  - `updated` =======>`onUpdated`
+  - `beforeUnmount` ==>`onBeforeUnmount`
+  - `unmounted` =====>`onUnmounted`
+
+
+
+
+
+### 4.9 hook函数
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoComponent/>
+    <hr/>
+    <hr/>
+    <TestComp/>
+</template>
+
+<script>
+import DemoComponent from './components/DemoComponent'
+import TestComp from './components/TestComp.vue'
+export default {
+    name: 'App',
+    components: {DemoComponent,TestComp}
+}
+</script>
+```
+
+src\hooks\usePoint.js
+
+```js
+import { reactive, onMounted, onBeforeUnmount } from "vue";
+export default function () {
+    //实现鼠标打点的相关数据
+    let point = reactive({
+        x: 0,
+        y: 0
+    })
+
+    //实现鼠标打点的相关方法
+    function savePoint(event) {
+        point.x = event.pageX;
+        point.y = event.pageY;
+        console.log(event.pageX, event.pageY);
+    }
+
+    //实现鼠标打点的相关的生命周期的沟子
+    onMounted(() => {
+        window.addEventListener('click', savePoint);
+    })
+
+    onBeforeUnmount(() => {
+        window.removeEventListener('click', savePoint)
+    }
+    )
+
+    return point;
+}
+```
+
+src\components\DemoComponent.vue
+
+```vue
+<template>
+  <h2>当前求和为：{{sum}}</h2>
+  <button @click="sum++">点我加1</button>
+  <hr/>
+  <h2>当前点击鼠标的坐标为:x:{{point.x}},y:{{point.y}}</h2>
+</template>
+
+<script>
+import { ref} from 'vue'
+import usePoint from '../hooks/usePoint'
+export default {
+  name: 'DemoComponent',
+  setup(){
+    console.log('----setup----');
+    //数据
+    let sum = ref(0);
+    let point = usePoint();
+
+    return {
+      sum,
+      point
+    }
+  },
+
+}
+</script>
+```
+
+src\components\TestComp.vue
+
+```vue
+<template>
+  <h2>我是Test组件</h2>
+  <h2>当前点击鼠标的坐标为:x:{{point.x}},y:{{point.y}}</h2>
+</template>
+
+<script>
+import usePoint from '../hooks/usePoint'
+export default {
+  name: 'DemoComponent',
+  setup(){
+    console.log('----test-setup----');
+    //数据
+    let point = usePoint();
+
+    return {
+      point
+    }
+  },
+
+}
+</script>
+```
+
+
+
+![image-20250228124054349](.\images\image-20250228124054349.png)
+
+
+
+总结：自定义hook函数
+
+- 什么是hook？—— 本质是一个函数，把setup函数中使用的Composition API进行了封装。
+
+- 类似于vue2.x中的mixin。
+
+- 自定义hook的优势: 复用代码, 让setup中的逻辑更清楚易懂。
 
 # 结束
 
