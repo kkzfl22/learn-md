@@ -17910,10 +17910,128 @@ export default {
 总结：自定义hook函数
 
 - 什么是hook？—— 本质是一个函数，把setup函数中使用的Composition API进行了封装。
-
 - 类似于vue2.x中的mixin。
-
 - 自定义hook的优势: 复用代码, 让setup中的逻辑更清楚易懂。
+
+
+
+### 4.10 toRef和toRefs
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoComponent/>
+    <hr/>
+    <hr/>
+    <TestComp/>
+</template>
+
+<script>
+import DemoComponent from './components/DemoComponent'
+import TestComp from './components/TestComp.vue'
+export default {
+    name: 'App',
+    components: {DemoComponent,TestComp}
+}
+</script>
+```
+
+src\components\DemoComponent.vue
+
+```vue
+<template>
+  <h2>姓名： {{ person.name }}</h2>
+  <h2>年龄: {{ person.age }}</h2>
+  <h2>薪资: {{ person.job.j1.salary }}K</h2>
+  <button @click="person.name += '~'">修改姓名</button>
+  <button @click="person.age++">增长年龄</button>
+  <button @click="person.job.j1.salary++">涨薪</button>
+  <hr />
+  <h4>{{ person }}</h4>
+  <h2>姓名2：{{ name }}</h2>
+  <h2>年龄2: {{ age }}</h2>
+  <!-- 使用toRef包装 -->
+  <!-- <h2>薪资2: {{ salary }}K</h2> -->
+  <h2>薪资2: {{ job.j1.salary }}K</h2>
+</template>
+
+<script>
+import { reactive,  toRefs } from "vue";
+export default {
+  name: "DemoWatch",
+  setup() {
+    //数据
+    let person = reactive({
+      name: "张三",
+      age: 18,
+      job: {
+        j1: {
+          salary: 20,
+        },
+      },
+    });
+
+    const name1 = person.name;
+    console.log("%%%", name1);
+
+    //将一个普通数据转换为响应式数据.
+    // const nameRef = toRef(person, "name");
+    //ObjectRefImpl{_object: Proxy(Object), _key: 'name', _defaultValue: undefined, __v_isRef: true, _value: undefined}
+    // console.log("ref:", nameRef);
+
+    //将对象中的属性都包装成响应式数据
+    const nameRef = toRefs(person);
+    //将每一个都包装为响应式数据
+    console.log("refs:", nameRef);
+
+    return {
+      person,
+      // //单独返回每个对象,并且是响应式
+      // name: toRef(person, "name"),
+      // age: toRef(person, "age"),
+      // salary: toRef(person.job.j1, "salary"),
+      ...toRefs(person)
+    };
+  },
+};
+</script>
+
+<style></style>
+
+```
+
+
+
+
+
+![image-20250228194145916](.\images\image-20250228194145916.png)
+
+总结：toRef
+
+- 作用：创建一个 ref 对象，其value值指向另一个对象中的某个属性。
+- 语法：```const name = toRef(person,'name')```
+- 应用:   要将响应式对象中的某个属性单独提供给外部使用时。
+
+
+- 扩展：```toRefs``` 与```toRef```功能一致，但可以批量创建多个 ref 对象，语法：```toRefs(person)```
+
+
 
 # 结束
 
