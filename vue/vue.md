@@ -17227,6 +17227,8 @@ export default {
 
 ### 4.7 watch函数
 
+#### 4.7.1 watch监视1
+
 src\main.js
 
 ```js
@@ -17392,6 +17394,101 @@ export default {
       console.log('person的job变化了',newValue,oldValue)
   },{deep:true}) //此处由于监视的是reactive素定义的对象中的某个属性，所以deep配置有效
   ```
+
+#### 4.7.2 watch监视ref
+
+src\main.js
+
+```js
+//引入的不再是Vue构造函数，引入的是一个名为createApp的工厂函数
+import { createApp } from 'vue'
+import App from './App.vue'
+
+//创建应用实例对象（类似于Vue2中的vm，但app比Vm更轻）
+const app = createApp(App)
+
+//挂载
+app.mount('#app')
+
+```
+
+src\App.vue
+
+```vue
+<template>
+    <DemoWatch/>
+</template>
+
+<script>
+import DemoWatch from './components/Demo.vue'
+export default {
+    name: 'App',
+    components: {DemoWatch}
+}
+</script>
+```
+
+src\components\Demo.vue
+
+```vue
+<template>
+  <h2>当前的求和信息为: {{ sum }}</h2>
+  <button @click="sum++">点我加1</button>
+  <hr />
+
+  <h2>当前的信息为: {{ msg }}</h2>
+  <button @click="msg += '!'">修改信息</button>
+  <hr />
+
+  <h2>姓名： {{ person.name }}</h2>
+  <h2>年龄: {{ person.age }}</h2>
+  <h2>薪资: {{ person.job.j1.salary }}K</h2>
+  <button @click="person.name += '~'">修改姓名</button>
+  <button @click="person.age++">增长年龄</button>
+  <button @click="person.job.j1.salary++">涨薪</button>
+</template>
+
+<script>
+import { ref, watch } from "vue";
+export default {
+  name: "DemoWatch",
+  setup() {
+    //数据
+    let sum = ref(0);
+    let msg = ref("你好啊");
+    let person = ref({
+      name: "张三",
+      age: 18,
+      job: {
+        j1: {
+          salary: 20,
+        },
+      },
+    });
+
+
+    //将收到：sum变了 1 0
+    watch(sum,(newValue,oldValue)=>{
+      console.log('sum变了',newValue,oldValue)
+    })
+
+    //监视到ref对象时，与reactive对象生成一致，都是Proxy(Object)对象，可以获取到最新的值，旧值无法获取。
+    watch(person,(newValue,oldValue)=>{
+      console.log('person变了',newValue,oldValue)
+    },{deep:true})
+
+    return {
+      sum,
+      msg,
+      person,
+    };
+  },
+};
+</script>
+
+<style></style>
+
+```
 
 
 
