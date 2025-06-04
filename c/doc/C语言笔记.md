@@ -424,7 +424,50 @@ int main(){
 
 相比之下更推荐使用const
 
-## 4. 数据类型
+## 4. 进制
+
+(1) 二进制：以0b或者0B开头表示
+
+(2) 十进制：正常的数字表示.
+
+(3) 十六进制： 以0x或者0X开头表示，此处的A-F不区分大小写。
+
+
+
+```c
+#include <stdio.h>
+
+int main(){
+    //二进制表示
+    int num1 = 0b10;
+    //十进制，正常
+    int num2 = 100;
+    //十六进制.
+    int num3 = 0x1f;
+
+    printf("二进制: %d \n",num1);
+    printf("十进制: %d \n",num2);
+    printf("十六进制: %d \n",num3);
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+二进制: 2 
+十进制: 100 
+十六进制: 31 
+```
+
+
+
+
+
+
+
+## 5. 数据类型
 
 ### 4.1 整数类型
 
@@ -530,6 +573,330 @@ long long类型 ll1=10000; ll2=-10000; ll3=200000
 ```
 
 
+
+精确宽度类型
+
+C 语言的整数类型（short、int、long）在不同计算机上，占用的字节宽度可能是不一样的。程序员有时需要精准的字节宽度，以提高代码的可移植性，尤其是嵌入式开发中，使用精确宽度类型可以确保代码在各种平台上的一致性。
+标准库的头文件 <stdint.h> 中定义了一些新的类型别名，如下：
+
+| 类型名称 | 含义            |
+| -------- | --------------- |
+| int8_t   | 8 位有符号整数  |
+| int16_t  | 16 位有符号整数 |
+| int32_t  | 32 位有符号整数 |
+| int64_t  | 64 位有符号整数 |
+| uint8_t  | 8 位无符号整数  |
+| uint16_t | 16 位无符号整数 |
+| uint32_t | 32 位无符号整数 |
+| uint64_t | 64 位无符号整数 |
+
+上面这些都是类型别名，编译器会指定它们指向的底层类型。比如，某个系统中，如果 int 类型为32位， int32_t 就会指向 int ；如果 long 类型为32位， int32_t 则会指向 long 。
+
+案例：
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+int main(){
+    
+    //定义32位等宽的整型
+    int32_t num1=56;
+    uint32_t num2 = 200;
+    
+    printf("num01=%d,num02=%u",num1,num2);
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+num01=56,num02=200
+```
+
+
+
+
+
+### 4.2 浮点数
+
+| 类型                 | 存储大小                   | 值范围                     | 有效小数位数 |
+| -------------------- | -------------------------- | -------------------------- | ------------ |
+| float 单精度         | 4 字节                     | 1.2E-38 到 3.4E+38         | 6 ~ 9        |
+| double 双精度        | 8 字节                     | 2.3E-308 到 1.7E+308       | 15 ~18       |
+| long double 长双精度 | 32位：10字节               | 32位：与 double 相同或更大 | 18或更多     |
+| 64位：16字节         | 64位：3.4E-4932到1.2E+4932 |                            |              |
+
+3）浮点型注意事项
+（1）各类型的存储大小和精度受到操作系统、编译器、硬件平台的影响。
+（2）浮点型数据有两种表示形式。
+十进制数形式：如：5.12、512.0f、.512（0.512 可以省略 0）
+科学计数法形式：如：5.12e2、5.12E-2
+开发中用到浮点型数字，建议使用double型，如精度要求更高可以使用long double 
+
+4）字面量后缀
+（1）浮点数字面量默认是double型，
+（2）如果需要表示float类型字面量，须加后缀 f 或 F。
+（3）如果需要表示long double类型字面量，需加后缀 l 或 L。
+
+5）格式占位符
+在C语言中，占位符是一种用于格式化输出的特殊字符，通常用于 printf() 等输出函数中，用于指定输出的格式和内容。
+
+（1）%f 是浮点类型的格式占位符，在printf中对应double类型（float类型会转换成double来处理）；默认会保留6位小数，可以指定小数位数，如：%.2f 表示保留2位小数。
+（2）%lf在printf中和 %f意思相同（C99标准加入），也对应double类型，默认保留6位小数，可以指定小数位数，如：%.2lf 表示保留2位小数。但需要注意的是，在scanf中 %lf和 %f含义不同：输入一个float类型数据时使用 %f；而输入double类型时必须使用 %lf。
+（3）%Lf 对应的是long double 类型，默认保留6位小数，可以指定小数位数，如： %.2Lf 表示保留2位小数。需要注意的是，输入输出 long double 类型都必须使用 %Lf 占位符。
+%e 对应科学计数法表示的浮点数，可以指定尾数部分所保留的小数位数，如 %.2e 表示尾数部分保留两位小数。
+
+![image-20250604192453691](.\images\image-20250604192453691.png)
+
+代码:
+
+```c
+#include <stdio.h>
+
+int main(){
+    //double类型
+    double d1 = 3.1415926;
+    double d2 = .123456;
+    double d3 = -2e12;
+    double d4 = 1.9823e2;
+
+    printf("d1=%f,d2=%.10f,d3=%.2lf,d4=%lf\n",d1,d2,d3,d4);
+    printf("d1=%e,d2=%e,d3=%e,d4=%e \n",d1,d2,d3,d4);
+
+    //float类型
+    float f1 = 3.1415f;
+    float f2 = .123456f;
+    float f3 = -2e12f;
+    float f4 = 1.9823e2f;
+    printf("f1=%f,f2=%f,f3=%f,f4=%f \n",f1,f2,f3,f4);
+    printf("f1=%e,f2=%e,f3=%e,f4=%e \n",f1,f2,f3,f4);
+
+
+    //long double类型
+    long double ld1=3.14L;
+    long double ld2=.1234L;
+    long double ld3=-2e3L;
+    long double ld4=1.982e2L;
+
+    printf("ld1=%LF,ld2=%LF,ld3=%LF,ld4=%LF \n",ld1,ld2,ld3,ld4);
+    printf("ld1=%e,ld2=%e,ld3=%e,ld4=%e  \n",ld1,ld2,ld3,ld4);
+    return 0;
+}
+```
+
+输出:
+
+```tex
+d1=3.141593,d2=0.1234560000,d3=-2000000000000.00,d4=198.230000
+d1=3.141593e+00,d2=1.234560e-01,d3=-2.000000e+12,d4=1.982300e+02 
+f1=3.141500,f2=0.123456,f3=-1999999991808.000000,f4=198.229996 
+f1=3.141500e+00,f2=1.234560e-01,f3=-2.000000e+12,f4=1.982300e+02 
+ld1=3.140000,ld2=0.123400,ld3=-2000.000000,ld4=198.200000 
+ld1=3.519001e-312,ld2=3.519001e-312,ld3=3.519001e-312,ld4=3.519001e-312 
+```
+
+
+
+### 4.3 字符串
+
+字符类型 char 可以表示单个字符，如一个数字、一个字母、一个符号。
+
+2）注意事项
+（1）char类型的字面量是用单引号括起来的单个字符。
+（2）可以使用转义字符 \ 表示特殊含义的字符。
+
+| 转义字符 | 说明   |
+| -------- | ------ |
+| \b       | 退格   |
+| \n       | 换行符 |
+| \r       | 回车符 |
+| \t       | 制表符 |
+| \”       | 双引号 |
+| \’       | 单引号 |
+| \\       | 反斜杠 |
+
+（3）多个字符称为字符串，在C语言中使用char数组表示，数组不是基本数据类型，而是构造类型。
+
+格式占位符：使用%c表示char类型。
+
+4）字符类型本质
+（1）C语言中，char类型本质是一个整数，是ASCII码中对应的数字，存储长度是 1 个字节，char类型也可以进行数学运算。
+（2）字符型同样分为signed char（无符号）和unsigned char（有符号），其中signed char取值范围-128 ~ 127，unsigned char取值范围0 ~ 255。默认是否带符号取决于当前运行环境。
+（3）字符型数据在计算中存储和读取的过程：
+
+
+
+ASCII（American Standard Code for Information Interchange）码是一种用于表示文本字符的字符编码标准，一共规定了128个字符的编码，比如空格“SPACE” 是32（二进制00100000），大写的字母A是65（二进制01000001）。
+
+![image-20250604194052781](.\images\image-20250604194052781.png)
+
+代码
+
+```c
+#include <stdio.h>
+
+int main(){
+    //char类型字符量需要使用单引号包裹
+    char c1 = 'a';
+    char c2 = '9';
+    char c3 = '\t';
+    printf("c1=%c,c2=%c,c3=%c| \n",c1,c2,c3);
+
+    //char的本质是整数，可以进行运算。
+    char b1 = 'b';
+    char b2 = 102;
+    printf("%c->%d \n",b1,b1);
+    printf("%c->%d \n",b2,b2);
+    printf("%c+%c=%d \n",b1,b2,b1+b2);
+
+    //char类型的范围
+    unsigned char c11 = 200; //无符号char的取值范围：0~255;
+    signed char c12 = 200; //有符号的取值范围-128~127,此会超出范围
+    char c13 = 200; //当前系统char的默认是signed char
+    printf("c12=%d,c12=%d,c13=%d, \n",c11,c12,c13);
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+c1=a,c2=9,c3=   | 
+b->98 
+f->102 
+b+f=200 
+c12=200,c12=-56,c13=-56, 
+```
+
+### 4.4 布尔类型
+
+布尔值用于表示真、假两种状态，通常用于逻辑运算和条件判断。
+
+2）声明布尔类型的三种方式
+（1）C89标准没有定义布尔类型，判断真假时以0为假，非0为真 ，但这种做法不直观，我们一般需要借助C语言的宏定义。
+
+（2）C99标准提供了_Bool 型，_Bool仍是整数类型，但与一般整型不同的是，_Bool变量只能赋值为0或1，非0的值都会被存储为1。 
+
+（3）C99标准还提供了一个头文件 <stdbool.h> 定义了bool代表_Bool，true代表1，false代表0。
+
+
+
+宏定义的方式
+
+```c
+#include <stdio.h>
+
+#define BOOL int
+#define TRUE  1;
+#define FALSE  0
+
+int main(){
+
+    BOOL isPASS = FALSE;
+    BOOL ISOK = TRUE;
+
+    printf("isPass=%d,isOK=%d \n",isPASS,ISOK);
+
+    if(isPASS)
+    {
+        printf("Pass");
+    }
+
+    if(ISOK)
+    {
+        printf("OK");
+    }
+
+
+    return 0;
+}
+```
+
+输出
+
+```tex
+isPass=0,isOK=1 
+OK
+```
+
+
+
+C99中的_Bool类型
+
+```c
+#include <stdio.h>
+
+
+int main(){
+
+    _Bool isPASS = 0;
+    _Bool ISOK = 1;
+
+    printf("isPass=%d,isOK=%d \n",isPASS,ISOK);
+
+    if(isPASS)
+    {
+        printf("Pass");
+    }
+
+    if(ISOK)
+    {
+        printf("OK");
+    }
+
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+isPass=0,isOK=1 
+OK
+```
+
+
+
+C99中的头文件方式
+
+```c
+#include <stdio.h>
+#include <stdbool.h>
+
+
+int main(){
+
+    bool isPASS = false;
+    bool ISOK = true;
+
+    printf("isPass=%d,isOK=%d \n",isPASS,ISOK);
+
+    if(isPASS)
+    {
+        printf("Pass");
+    }
+
+    if(ISOK)
+    {
+        printf("OK");
+    }
+
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+isPass=0,isOK=1 
+OK
+```
 
 
 
