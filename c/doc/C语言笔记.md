@@ -2116,21 +2116,172 @@ int main(){
 
 （2）循环输出数字 7~15
 
+```c
+#include <stdio.h>
+
+int main(){
+    //（2）循环输出数字 7~15
+    int start = 7;
+    int end = 15;
+    while(start <= end)
+    {
+        printf("当前数字是:%d \n",start);
+        start++;
+    }
+    return 0;
+}
+```
+
+输出：
+
+```tex
+当前数字是:7 
+当前数字是:8 
+当前数字是:9 
+当前数字是:10 
+当前数字是:11 
+当前数字是:12 
+当前数字是:13 
+当前数字是:14 
+当前数字是:15 
+```
+
 
 
 （3）倒序输出数字 56 ~ 43
+
+```c
+#include <stdio.h>
+
+int main(){
+    //（3）倒序输出数字 56 ~ 43
+    int end = 56;
+    int start = 43;
+    while(end >= start)
+    {
+        printf("倒序数字:%d \n",end);
+        end--;
+    }
+    return 0;
+}
+```
+
+输出：
+
+```tex
+倒序数字:56 
+倒序数字:55 
+倒序数字:54
+倒序数字:53
+倒序数字:52
+倒序数字:51
+倒序数字:50
+倒序数字:49
+倒序数字:48
+倒序数字:47
+倒序数字:46
+倒序数字:45
+倒序数字:44
+倒序数字:43
+```
 
 
 
 （4）输出10（包括10）以内所有的偶数
 
+```c
+#include <stdio.h>
+
+int main(){
+    //（4）输出10（包括10）以内所有的偶数
+    int num = 10;
+    while(num >= 0){
+        if(num % 2 == 0)
+        {
+            printf("偶数:%d \n",num);
+        }
+        
+        num--;
+    }
+    return 0;
+}
+```
+
+输出:
+
+```tex
+偶数:10 
+偶数:8 
+偶数:6 
+偶数:4 
+偶数:2 
+偶数:0 
+```
+
 
 
 （5）计算100以内（包括100）所有数字的和
 
+```c
+#include <stdio.h>
+
+int main(){
+    //（5）计算100以内（包括100）所有数字的和
+    int end = 100;
+    int index = 0;
+    int sum = 0;
+    while(index <= end){
+        sum+=index;
+        index++;
+    }
+
+    printf("100以内所有数字和:%d",sum);
+    return 0;
+}
+```
+
+输出:
+
+```tex
+100以内所有数字和:5050
+```
+
+
+
 
 
 (6) 计算10以内所有奇数的乘积
+
+```c
+#include <stdio.h>
+
+int main(){
+    
+    int start = 1;
+    int end = 10;
+
+    int sum = 1;
+    while(start < end)
+    {
+        if(start % 2 != 0)
+        {
+            sum *= start;
+        }
+
+        start++;
+    }
+
+    printf("10以内的奇数乘积是:%d",sum);
+
+    return 0;
+}
+```
+
+结果：
+
+```tex
+10以内的奇数乘积是:945
+```
 
 
 
@@ -2140,7 +2291,30 @@ int main(){
 
 实现需求：输入6位数密码，直到密码匹配成功结束循环。
 
+```c
+#include <stdio.h>
 
+int main(){
+    int passwrod = 654321;
+    int input = 0;
+    while(passwrod != input)
+    {
+        printf("请输入密码:");
+        scanf("%d",&input);
+    }
+    printf("密码正常，欢迎回家！");
+
+    return 0;
+}
+```
+
+结果：
+
+```tex
+请输入密码:123456
+请输入密码:654321
+密码正常，欢迎回家！
+```
 
 
 
