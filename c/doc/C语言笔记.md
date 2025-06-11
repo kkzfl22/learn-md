@@ -3261,7 +3261,136 @@ int main(){
 
 （4）编写程序，根据输入的月份和年份，求出该月的天数（1-12）, 就是需要考虑闰年（2月份 29）和平年（2月份 28）。
 
+```c
+#include <stdio.h>
+#include <stdbool.h>
+
+int main()
+{
+    int year, month;
+
+    printf("请输入年份：");
+    scanf("%d", &year);
+
+    printf("请输入月份: ");
+    scanf("%d", &month);
+
+    bool isRun = false;
+
+    // 判断是否为闰年
+    if (year % 400 == 0 || (year % 4 == 0))
+    {
+        printf("%d年为闰年", year);
+        isRun = true;
+    }
+    else
+    {
+        printf("%d年非闰年", year);
+    }
+    printf("\n");
+
+    switch (month)
+    {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+    case 10:
+    case 12:
+        printf("%d月有31天",month);
+        break;
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+        printf("%d月有30天",month);
+        break;
+    case 2:
+        if(isRun)
+        {
+            printf("2月为29天");
+        }
+        else{
+            printf("2月为28天");
+        }
+        break;
+    default:
+        break;
+    }
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+请输入年份：2024
+请输入月份: 2
+2024年为闰年
+2月为29天
+
+请输入年份：2023
+请输入月份: 2
+2023年非闰年
+2月为28天 
+```
+
+
+
 （5）输入星期几，如果是星期一到星期三，打印：AAA，星期四到星期五，打印： BBB，星期六到星期日，打印CCC，如果都不是，提示“输入错误”。
+
+```c
+#include <stdio.h>
+
+int main()
+{
+    int week = 0;
+    printf("请输入星期几：");
+    scanf("%d", &week);
+
+    switch (week)
+    {
+    case 1:
+    case 2:
+    case 3:
+        printf("AAA");
+        break;
+    case 4:
+    case 5:
+        printf("BBB");
+        break;
+    case 6:
+    case 7:
+        printf("CCC");
+        break;
+    default:
+        printf("输入错误");
+        break;
+    }
+
+    return 0;
+}
+
+```
+
+输出:
+
+```tex
+请输入星期几：3
+AAA
+
+请输入星期几：6
+CCC
+
+请输入星期几：99
+输入错误
+```
+
+
+
+
 
 （6）请使用for、while、do—while 三种形式打印1000——9999年内所有的闰年。
 
