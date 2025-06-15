@@ -4181,6 +4181,399 @@ fun01
 
 注意：实参的数量要与形参的数量一致，否则报错。
 
+```c
+#include <stdio.h>
+
+//在定义函数时，函数括号里的声明变量称为形式参数，称为形参
+int func(int x,int y){
+    return x + y;
+}
+
+int main(){
+    //在调用时传递的参数，称为实参
+    int sum = func(3,8);
+    printf("3+8=%d\n",sum);
+    return 0;
+}
+```
+
+输出：
+
+```tex
+3+8=11
+```
+
+### 主函数
+
+**作用**
+
+主函数是程序的入口函数，即所有的程序一定要包含一个主函数，程序总是从这个函数开始执行，如果没有该函数，程序就无法启动。
+
+主函数中可以调用其它函数，但其它函数不能反过来调用主函数，主函数也不能调用自己。
+
+**返回值**
+
+C语言约定，主函数返回值0表示运行成功，如果返回其它非零整数，就表示运行失败。
+
+默认情况下，如果主函数里面省略return 0 这一行，编译器会自动加上，即 main() 的默认返回值为0。但是为了保持统一的代码风格，不建议省略。
+
+**主函数的参数**
+
+```c
+int main(int argc, char *argv[])
+{
+    // 函数体
+}
+```
+
+案例：
+
+```c
+#include <stdio.h>
+
+/**
+ * argc 传递的参数大小
+ * 
+ * argv 传递的是参数的值
+ */
+int main(int argc, char *argv[])
+{ 
+    printf("param num:%d\n",argc);
+    //打印参数
+    for(int i =0 ;i < argc ;i++){
+        printf("%d --> %s\n",i,argv[i]);
+    }
+
+    return 0;
+}
+```
+
+编译
+
+```sh
+# 在命令行下执行：
+gcc -o demo 05-function-main.c
+
+demo.exe key1=value1 key2=value2
+```
+
+输出
+
+```tex
+D:\java\myself\learn\learn-md\c\chapter10>demo.exe key1=value1 key2=value2
+param num:3
+0 --> demo.exe
+1 --> key1=value1
+2 --> key2=value2
+```
+
+### 函数原型
+
+默认情况下，函数必须先声明，后使用。由于程序总是先运行main() 函数，导致所有其它函数都必须在main() 函数之前声明。
+
+如果想将函数声明写在后面，可以在程序开头处给出函数原型。函数原型，就是提前告诉编译器，每个函数的返回类型和参数类型。其它信息都不需要，也不用包括函数体，具体的函数实现可以后面再补上。
+
+```c
+#include <stdio.h>
+
+
+int main(){
+    printf("求最大数为:%d\n",max(10,20));
+    return 0;
+}
+
+
+int max(int a,int b)
+{
+    return a > b ? a : b;
+}
+```
+
+编译出现告警：
+
+```sh
+cmd /c chcp 65001>nul && D:\soft\c\mingw64\bin\gcc.exe -fdiagnostics-color=always -g D:\java\myself\learn\learn-md\c\chapter10\06-function-prototype.c -o D:\java\myself\learn\learn-md\c\chapter10\06-function-prototype.exe
+D:\java\myself\learn\learn-md\c\chapter10\06-function-prototype.c: In function 'main':
+D:\java\myself\learn\learn-md\c\chapter10\06-function-prototype.c:5:30: warning: implicit declaration of function 'max' [-Wimplicit-function-declaration]
+    5 |     printf("求最大数为:%d\n",max(10,20));
+      |
+```
+
+使用函数原型进行定义
+
+```c
+#include <stdio.h>
+
+//使用函数原型进行声明
+int max(int a,int b);
+
+int main(){
+    printf("求最大数为:%d\n",max(10,20));
+    return 0;
+}
+//函数定义
+int max(int a,int b)
+{
+    return a > b ? a : b;
+}
+```
+
+结果：
+
+```c
+求最大数为:20
+```
+
+
+
+### 函数的作用域
+
+作用域用于确定在代码中某个标识符（如变量、标识符常量、数组等）的可见性和访问范围，它决定了在程序的哪些部分可以引用或访问该标识符。
+
+作用域可以分为全局作用域、局部作用域、块级作用域。
+
+同一个作用域中不能声明同名的标识符。
+
+#### 全局作用域
+
+在函数和代码块（分支语句、循环语句等）以外定义的变量、标识符常量、数组等具有全局作用域，在程序的任何地方都可以被访问，通常称它们为全局变量、全局常量、全局数组等。
+
+```c
+#include <stdio.h>
+
+// 全局变量
+double money = 1.1;
+// 全局常量
+const double PI = 3.1415926;
+// 全避数组
+char msg[] = "Hello World";
+
+// 全局函数
+void func()
+{
+    printf("func 函数中使用全局数组:\n");
+    printf("money=%.2f \n", money);
+    printf("PI=%.2f \n", PI);
+    printf("msg=%s \n", msg);
+    printf("\n");
+    money += 100; // 修改全局变量的值
+}
+
+int main()
+{
+    // 调用func函数
+    func();
+
+    printf("func 函数中使用全局数组:\n");
+    printf("money=%.2f \n", money);
+    printf("PI=%.2f \n", PI);
+    printf("msg=%s \n", msg);
+    printf("\n");
+
+    // 调用func函数
+    func();
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+func 函数中使用全局数组:
+money=1.10 
+PI=3.14 
+msg=Hello World         
+
+func 函数中使用全局数组:
+money=101.10 
+PI=3.14 
+msg=Hello World         
+
+func 函数中使用全局数组:
+money=101.10 
+PI=3.14 
+msg=Hello World  
+```
+
+
+
+对于全局变量，如果没有显式指定初始值，它们将自动初始化为零值。
+
+对于全局数组，如果没有显式初始化它们，它们的元素将自动初始化为零值，字符数组，将初始化为空字符 \0。
+
+案例：
+
+```c
+#include <stdio.h>
+
+//定义全局变量不进行初始化赋值
+int a; //自动初始化为0
+double b; //自动初始化为0.0
+char c; //自动初始化为空字符\0
+
+//定义全局数组不进行初始化
+int arr[5]; //所有元素自动初始化为0
+char msg[6]; //所有元素自动初始化为空字符符\0
+
+
+int main(){
+    printf("a=%d \n",a); // a =0
+    printf("b=%f \n",b); // b = 0.000000
+    printf("c=%c \n",c); // c= 
+    printf("\n");
+
+    //计算数组的长度
+    int len = sizeof(arr) / sizeof(arr[0]);
+
+    //遍历数组
+    for(int i = 0;i<len; i++){
+        printf("%d ",arr[0]);
+    }
+
+    printf("\n\n");
+
+    printf("字符串数组:%s",msg);
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+a=0        
+b=0.000000 
+c=         
+
+0 0 0 0 0  
+
+字符串数组:
+```
+
+#### 局部作用域
+
+在函数内定义的变量、标识符常量、数组等具有局部作用域，只有在该函数内部才能被访问，通常称它们为局部变量、局部常量、局部数组等。需要注意的是，函数的形参也是局部变量。
+
+```c
+#include <stdio.h>
+
+//定义全局变量
+int num01 = 10;
+int num02 = 20;
+
+void func(int count){
+    //函数中定义变量、常量、数组，具有局部作用域
+    int num01 = 100;
+    const double PI01 = 3.14;
+    char msg01[] = "Hello Beijing";
+    //使用本作用域中的变量、常量、数组
+    printf("func函数:\n");
+    printf("本作用域变量:count=%d,num01=%d,PI01=%.2f,msg01=%s \n ",count,num01,PI01,msg01);
+    printf("全局变量:num02=%d \n",num02);
+    num01 +=1;
+    num02 +=1;
+    printf("----------------------------\n\n");
+}
+
+int main(){
+    //定义变量，作用域，仅限于主函数
+    int num02 = 100000;
+    //局部变量没有初始化
+    int num04;
+    int arr[5];
+
+    //调用函数
+    func(220);
+
+    //主函数中使用其他作用域中的变量
+    printf("main函数:\n");
+    printf("num02=%d \n ",num02);
+    printf("本作用域变量:num04=%d,arr[0]=%d,arr[4]=%d \n ",num04,arr[0],arr[4]);
+    return 0;
+}
+```
+
+输出：
+
+```tex
+func函数:
+本作用域变量:count=220,num01=100,PI01=3.14,msg01=Hello Beijing 
+ 全局变量:num02=20 
+----------------------------
+
+main函数:
+num02=100000 
+ 本作用域变量:num04=1884243920,arr[0]=8,arr[4]=1884243928 
+```
+
+#### 块级作用域
+
+块级作用域是C99标准引入的概念，在代码块（分支语句、循环语句等）中定义的变量、标识符常量、数组等具有块级作用域，只有在该代码块内部才能被访问，代码块通常具有花括号 `{}` 结构。 
+
+这些被称为块级变量、块级常量、块级数组等，同时也可以被称为局部变量、局部常量、局部数组，且与函数中的局部变量、局部常量、局部数组具有相同的特性。
+
+```c
+#include <stdio.h>
+
+int main()
+{
+    // 该代码块中具有块级作用域
+    {
+        // 块级变量
+        int a = 20;
+        // 块级常量
+        const double PI = 3.14;
+
+        printf("a*PI=%f \n", a * PI);
+    }
+
+    //分支语句具有块级作用域
+    if(1){
+        //局部数组
+        int nums[] = {10,20,30};
+        printf("%d %d %d \n",nums[0],nums[1],nums[2]);
+    }
+
+    //循环语句中的标识变量i是块级作用域
+    for(int i = 0;i<5;i++){
+        printf("%d ",i);
+    }
+
+    return 0;
+}
+```
+
+输出：
+
+```tex
+a*PI=62.800000 
+10 20 30       
+0 1 2 3 4 
+```
+
+#### 作用域和内存
+
+1）栈区域
+
+局部变量、局部数组等通常存储在栈（Stack）区，这些局部数据的内存分配和释放是自动管理的，它们的生命周期受限于其定义的函数或块级作用域，当函数返回或块级作用域结束时，这些变量的内存会被自动释放。
+
+函数每调用一次就创建一次局部数据，调用结束就销毁；下次调用再创建新的局部数据。
+
+2）全局静态区域
+
+全局变量、全局数组等存储在全局静态区，这些全局的数据在程序的整个生命周期内都存在，它们在程序启动时被分配，在程序结束时才被释放。
+
+
+
+![image-20250615211556565](.\images\image-20250615211556565.png)
+
+
+
+
+
+
+
 
 
 # 结束
