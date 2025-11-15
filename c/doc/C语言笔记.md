@@ -5105,11 +5105,40 @@ int main(){
 同类型指针相减的结果是一个 ptrdiff_t 类型数据，ptrdiff_t 类型是一个带符号的整数，格式输出中对应的格式占位符是 %td，相关案例如下
 
 ```c
+#include <stdio.h>
+
+int main(){
+    int nums[] = {10,20,30,40,50};
+    //声明两个指针指向第一元素和第4个元素
+    int *num1 = &nums[0];
+    int *num4 = &nums[4];
+
+    //计算两个指针相减，返回相隔多少距离
+    //低位地址减高位地址返回负数，
+    printf("num1-num4=%td,\n",num1-num4);
+    //高位地址减低位地址返回正数
+    printf("num4-num1=%td.\n",num4-num1);
+
+    double dv1 = 11.2;
+    double dv2 = 13.2;
+    double *d1 = &dv1;
+    double *d2 = &dv2;
+
+    //此也可以计算两个地址间的距离
+    printf("d1-d2 = %td.\n",d1-d2);
+    printf("d2-d1 = %td.\n",d2-d1);
+
+    return 0;
+} 
 ```
 
 输出:
 
 ```sh
+num1-num4=-4,
+num4-num1=4.
+d1-d2 = 1.
+d2-d1 = -1.
 ```
 
 
@@ -5119,14 +5148,221 @@ int main(){
 指针之间可以进行比较运算，如 ==、<、 <= 、 >、 >=，比较的是各自指向的内存地址的大小，返回值是 int 类型整数 1 （true）或 0  （false）。
 
 ```c
+#include <stdio.h>
+
+int main(){
+    int nums[] = {10,20,30,40,50};
+    double n = 1.2;
+
+    //创建第一个指针指向数组第一个元素
+    int *ptr1 = &nums[0];
+    //创建第二个指针指向数组第四个元素
+    int *ptr2 = &nums[3];
+    //创建第三个指针，还是指向第一个元素。
+    int *ptr3 = &nums[0];
+    //第四个指针指向第一个元素
+    double *ptr4 = &n;
+
+    //输出指针的地址
+    printf("ptr1=%p\n",ptr1);
+    printf("ptr2=%p\n",ptr2);
+    printf("ptr3=%p\n",ptr3);
+    printf("ptr4=%p\n",ptr4);
+
+    //进行指针的比较运算
+    printf("ptr1 > ptr2 : %d \n",ptr1 > ptr2);
+    printf("ptr1 < ptr2 : %d \n",ptr1 < ptr2);
+    printf("ptr1 == ptr3 : %d \n",ptr1 == ptr3);
+    printf("ptr1 > ptr1 : %d \n",ptr4 > ptr1);
+
+
+    return 0;
+}
 ```
 
 输出:
 
 ```sh
+ptr1=000000b415fff910
+ptr2=000000b415fff91c
+ptr3=000000b415fff910
+ptr4=000000b415fff908
+ptr1 > ptr2 : 0 
+ptr1 < ptr2 : 1 
+ptr1 == ptr3 : 1 
+ptr1 > ptr1 : 0 
+```
+
+### 11.6 指针和数组
+
+#### 11.6.1 数组名
+
+数组名在大多数情况下会被隐式地转换为指向数组第一个元素的指针，在特定情况下数组名可以被视为一个指针，具有一些指针的特性。
+
+但是数组名与真正的指针是不同的，主要有以下几点区别：
+
+1. 使用sizeof,数组名得到的是整个数组的大小；指针得到的是本身的大小。
+2. 数组名不能进行自增、自减运算。
+3. 数据名的指向不能修改。
+
+示例代码：
+
+```c
+#include <stdio.h>
+
+int main(){
+
+    //1,创建数组
+    int nums[] = {10,20,30,40,50};
+    //创建指针，指向数组的第一个元素
+    int *prt_array1 = &nums[0];
+
+
+    //数组名中存储了一第一个元素的地址
+    printf("数组名的元素地址和值,%p,%d\n",nums,*nums);
+    printf("第一个元素的地址和值,%p,%d\n",prt_array1,*prt_array1);
+
+    //进行比较是否为一致
+    if(nums == prt_array1)
+    {
+        printf("数组与第一个元素的指针相等\n");
+    }
+    else{
+        printf("数组与第一个元素的指针不相等\n");
+    }
+
+
+    //数组名与指针的真正差别
+    //sizeof数组名运算符返回的是整个数组的大小，sizeof指针返回的是指针本身的大小。
+    printf("%zu, %zu \n",sizeof nums,sizeof prt_array1);
+
+    //2, 数组名不能自增、自减运算
+    //nums++; 报错
+    prt_array1++;
+    printf("自增加后的元素:%p,%d \n",prt_array1,*prt_array1);
+
+    //3,数组名的指向不能修改。
+    int n = 100;
+    //nums=&n; 报错，指向不能修改。
+    prt_array1 = &n;
+    printf("修改指针的地址后：%p,%d\n",prt_array1,*prt_array1);
+
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+数组名的元素地址和值,000000bc6adffb80,10
+第一个元素的地址和值,000000bc6adffb80,10
+数组与第一个元素的指针相等
+20, 8
+自增加后的元素:000000bc6adffb84,20 
+修改指针的地址后：000000bc6adffb7c,100
 ```
 
 
+
+#### 11.6.2 指针数组
+
+指针数组（Pointer Array）是一个数组，其中的每个元素都是指针。
+
+语法规则：
+
+```sh
+数据类型 *指针数组名[长度];
+```
+
+示例代码
+
+```c
+#include <stdio.h>
+
+int main(){
+
+    //创建三个变量
+    int num1 = 10,num2 = 20,num3 = 30;
+    
+    //创建一个长度为3的指针数组
+    int *prt_array[3];
+
+    //给指针数组中的每个元素赋值
+    prt_array[0]=&num1;
+    prt_array[1]=&num2;
+    prt_array[2]=&num3;
+
+    //遍历指针数组打印
+    for(int i=0;i<3;i++){
+        printf("第%d个元素，地址：%p,值:%d\n",i,prt_array[i],*prt_array[i]);
+    }
+
+    return 0;
+}
+```
+
+输出
+
+```sh
+第0个元素，地址：000000d4c6fffe48,值:10
+第1个元素，地址：000000d4c6fffe44,值:20
+第2个元素，地址：000000d4c6fffe40,值:30
+```
+
+
+
+#### 11.6.3 数组指针
+
+数组指针（Array Pointer）是一个指针，它指向一个数组。注意，数组指针指向的是整个数组的地址而不是第一个元素的地址，虽然二者值是相同的，但在运算中会表现出不同。
+
+语法规则：
+
+>数据类型 (*数组指针名)[长度];
+
+示例代码：
+
+```c
+#include <stdio.h>
+
+int main(){
+    //数组
+    int arr[5]={10,20,30,40,50};
+
+    //创建指针指向数组，&arr表示整个数组的地址
+    int (*ptr)[5]=&arr;
+
+    //二者的值是相同的
+    printf("arr=%p \n",arr);
+    printf("ptr=%p \n",ptr);
+
+    //数组指针指向的是整个数组的地址，而不是第一个元素的地址。
+    //数组指针+1向后移动4*5=20个字节；数组+1会向后移动4个字节。
+    printf("arr+1=%p \n",arr+1);
+    printf("ptr+1=%p \n",ptr+1);
+
+    //使用数组指针遍历数组
+    for(int i=0;i<5;i++){
+        printf("%d\n",(*ptr)[i]);
+    }
+    
+    return 0;
+}
+```
+
+输出：
+
+```sh
+arr=0000001915fffbc0 
+ptr=0000001915fffbc0
+arr+1=0000001915fffbc4
+ptr+1=0000001915fffbd4
+10
+20
+30
+40
+50
+```
 
 # 结束
 
