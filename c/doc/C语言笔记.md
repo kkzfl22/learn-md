@@ -5396,6 +5396,172 @@ int num[9]={10,20,30,40,50,60,70,80,90};
 
 
 
+#### 11.6.5 字符指针
+
+1）基本介绍
+
+字符指针变量（简称字符指针）是C语言中的一种指针类型，它用于指向字符或字符串（字符数组），通常用于处理字符串（字符数组）。
+
+1）用字符指针指向一个字符串
+
+char *pStr= "hello tom";
+
+C语言对字符串" hello tom"是按字符数组处理的，在内存中开辟了一个字符数组用来存放字符串，程序在定义字符串指针pStr时只是把字符串首地址（即存放字符串的字符数组的首地址）赋给pStr。
+
+对应的内存布局图：
+
+
+
+![image-20251115225319431](.\images\image-20251115225319431.png)
+
+
+
+3）字符数组名和字符指针表示字符串的区别
+
+（1）对字符数组只能对各个元素赋值，不能对字符数组名重新赋值。
+
+```c
+char str[14];
+
+str=" hello tom"; //错误
+
+str[0] = 'i'; //ok
+```
+
+
+
+（2）字符指针是可变的，允许使用下面方法重新赋值，指向新的字符串。
+
+```c
+char *a = "hello tom"; 
+
+a = "tom";
+```
+
+
+
+
+
+
+
+#### 小题：
+
+```tex
+1. 定义一个函数，接收数组名或首元素指针 和 数组长度 作为参数，计算数组的平均数
+   函数原型： int get_avg(int *, int);
+```
+
+代码：
+
+```c
+#include <stdio.h>
+
+
+int get_avg(int *,int);
+
+int main(){
+
+    //1. 定义一个函数，接收数组名或首元素指针 和 数组长度 作为参数，计算数组的平均数
+   // 函数原型： int get_avg(int *, int);
+
+   int nums[5] = {10,20,30,40,50};
+   int length = 5;
+
+   int avgOut = get_avg(&nums[0],length);
+   int avgOut2 = get_avg(nums,length);
+
+   printf("平均值结果是%d\n",avgOut);
+   printf("平均值结果是%d\n",avgOut2);
+    return 0;
+}
+
+int get_avg(int *num_prt,int length)
+{
+    //读取首个值
+    // int sum = *num_prt;
+    // for(int i=1;i<length ;i++)
+    // {
+    //     num_prt++;
+    //     sum += *num_prt;
+    // }
+
+    int sum = 0;
+    //num_prt属于显示定义指向首个元素的指针。类型是int *
+    //指向首元素的指针也可以通过[下标]来访问数组元素。
+    for(int i=0;i<length;i++){
+        sum+=num_prt[i];
+    }
+
+    return sum / length;
+}
+
+```
+
+输出：
+
+```sh
+平均值结果是30
+平均值结果是30
+```
+
+小题2：
+
+```c
+2. 定义函数，接收一共字符串和字符，统计字符在字符串中出现的次数
+   函数原型:  int char_count(char *, char)   
+```
+
+代码
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+int char_count(char *, char);
+
+int main(){
+
+    //2. 定义函数，接收一共字符串和字符，统计字符在字符串中出现的次数
+    //   函数原型:  int char_count(char *, char)   
+    char *src="hello word !!!;";
+    int find_num = char_count(src,'!');
+    printf("查找的字符串一共找到%d次",find_num);
+    return 0;
+}
+
+
+int char_count(char *src, char item){
+    //1,计算得到字符数组的长度
+    int len = strlen(src);
+    char char_array[len];
+    strcpy(char_array,src);
+
+    char *char_first_point = &char_array[0];
+
+    int find_num = 0;
+    for(int i=0;i<len;i++)
+    {
+        char charValue = *char_first_point;
+        if(charValue == item)
+        {
+            find_num++;
+        }
+        char_first_point++;
+    }
+    return find_num;
+}
+```
+
+输出：
+
+```sh
+查找的字符串一共找到3次
+```
+
+
+
+
+
 ### 11.7 指针和函数
 
 #### 11.7.1 传递指针给函数
