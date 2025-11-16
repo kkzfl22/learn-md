@@ -5624,6 +5624,133 @@ num=102
 
 
 
+#### 11.7.2 指针函数（返回指针的函数）
+
+1）基本介绍和使用
+
+如果函数的返回值是一个指针，这样的函数称为指针函数。
+
+语法规则：
+
+返回类型 *指针函数名(参数列表)
+
+代码示例：
+
+请编写一个函数 strlong()，返回两个字符串中较长的一个。
+
+
+
+示例：
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+//指针函数，是个函数，返回值是指针。
+
+//返回字符串中较长的一个
+char *strLong(char *str1,char *str2){
+    int str_length_1 = strlen(str1);
+    int str_length_2 = strlen(str2);
+
+    if(str_length_1 > str_length_2){
+        return str1;
+    }
+    else{
+        return str2;
+    }
+}
+
+int main(){
+
+    printf("较长的字符串;%s",strLong("beijin","shanghai"));
+    printf("\n\n");
+
+    //获取用户输入作比较打印
+    //声明字符串数组时，需要固定长度。可以先预估下长度，再声明
+    char msg_01[100],msg_02[100];
+
+    printf("请输入第一个字符串:");
+    //此处msg_01，不需要写取地址符,因为字符数组，本身就是一个指针
+    //当传递msg_01时，就是首元素的地址。
+    scanf("%s",msg_01);
+    printf("请输入第二个字符串:");
+    scanf("%s",msg_02);
+    printf("较长的字符串:%s",strLong(msg_01,msg_02));
+
+    return 0;    
+}
+```
+
+输出：
+
+```sh
+较长的字符串;shanghai
+
+请输入第一个字符串:shanghai
+请输入第二个字符串:nullnullnullnull
+较长的字符串:nullnullnullnull
+```
+
+
+
+
+
+函数返回局部变量
+
+```c
+#include <stdio.h>
+
+//返回一个指向局部变量的指针。
+int *func(){
+    int num = 100;
+    return &num;
+}
+
+int main(){
+    
+    printf("\n");
+    int *p =  func();
+    printf("地址：%p,址:%d",p,*p);
+    return 0;
+}
+```
+
+输出：
+
+![image-20251116222432121](.\images\image-20251116222432121.png)
+
+原因解释：
+
+由于num声明在局部变量，当函数调用结束后，此num变量在栈中被销毁。
+
+解决办法：
+
+```c
+#include <stdio.h>
+
+//返回一个指向局部变量的指针。
+int *func(){
+    //将返回的类型变为static类型的，将不被销毁了
+    static int num = 100;
+    return &num;
+}
+
+int main(){
+    
+    printf("\n");
+    int *p =  func();
+    printf("地址：%p,址:%d",p,*p);
+    return 0;
+}
+```
+
+输出:
+
+```sh
+地址：00007ff72aa28000,址:100
+```
+
 
 
 
