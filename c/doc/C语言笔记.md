@@ -6171,11 +6171,380 @@ int main()
 | int (*p)()  | int (*)()  | p 是一个函数指针，指向一个返回整型数据的函数。     |
 | int **p     | int **     | p是一个指向指针的指针。                            |
 
+**函数练习**
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+/**
+ * 1. 定义函数，返回某个字符一个次出现在某个字符中的位置
+ * 2. 定义函数，返回某个字符最后一次出在在某个字符中的位置 
+ * 3. 定义函数，将一个字符数组中的小写字符转大写
+ * 4. 定义函数。将一个字符数组中的大写字符转小大 
+ */
+
+ /**
+  * @brief 定义函数，返回某个字符一个次出现在某个字符中的位置
+  * 
+  * @param src 定义的字符
+  * @param vs 查询的字符
+  * @return int 字符第一次出现的位置
+  * 
+  */
+int find_first_index(char *src,char vs)
+{
+    int find_index = -1;
+
+    int leng = strlen(src);
+    for(int i=0;i<leng;i++)
+    {
+        if(src[i] == vs)
+        {
+            find_index= i;
+            break;
+        }
+    }
+    return find_index;
+}
 
 
-## 12 结构
+
+ /**
+  * @brief 定义函数，返回某个字符最后一次出在在某个字符中的位置 
+  * 
+  * @param src 定义的字符
+  * @param vs 查询的字符
+  * @return int 字符最后一次次出现的位置
+  * 
+  */
+int find_last_index(char *src,char vs)
+{
+    int find_index = -1;
+
+    int leng = strlen(src);
+    for(int i=leng;i>=0;i--)
+    {
+        if(src[i] == vs)
+        {
+            find_index= i;
+            break;
+        }
+    }
+    return find_index;
+}
 
 
+ /**
+  * @brief 定义函数，将一个字符数组中的小写字符转大写
+  * 
+  * @param src 定义的字符
+  * @return char * 大写的字符
+  * 
+  */
+void upper_case(char *src,char *target)
+{
+    int leng = strlen(src);
+
+    for(int i=0;i<leng;i++)
+    {
+        if(src[i]>=97 && src[i]<= 122)
+        {
+            target[i]=src[i]-32;
+        }
+        else{
+            target[i]=src[i];
+        }
+    }
+}
+
+
+ /**
+  * @brief 定义函数，将一个字符数组中的大写字符转小写
+  * 
+  * @param src 定义的字符
+  * @return char * 小写的字符
+  * 
+  */
+void lower_case(char *src,char *target)
+{
+    int leng = strlen(src);
+
+    for(int i=0;i<leng;i++)
+    {
+        if(src[i]>=65 && src[i]<= 90)
+        {
+            target[i]=src[i]+32;
+        }
+        else{
+            target[i]=src[i];
+        }
+    }
+}
+
+
+int main()
+{   
+    printf("第一次字符出现的位置:%d\n",find_first_index("hello workd!",'k'));
+    printf("最后一次字符出现的位置:%d\n",find_last_index("hello world!",'o'));
+
+    char target[15];
+    upper_case("Hello Word!!",target);
+    printf("小写转大写:%s\n",target);
+    char out[15];
+    lower_case(target,out);
+    printf("大写转小写:%s\n",out);
+
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+第一次字符出现的位置:9
+最后一次字符出现的位置:7
+小写转大写:HELLO WORD!!
+大写转小写:hello word!!
+```
+
+
+
+
+
+## 12 自定义数据类型
+
+### 12.1 枚举
+
+**什么是枚举**
+
+枚举（Enumeration）是C语言中的一种用户自定义数据类型，用于定义一组相关的常量。枚举使我们可以为这些常量分配有意义的名字，从而提高代码的可读性和可维护性。
+如果我们定义一个变量，用来表示一周中的一天，该变量的值只能从七个有效值中选择，枚举可以帮助我们限制变量的有效值。
+
+**如何定义枚举**
+
+枚举使用 enum 关键字来定义，枚举名称和枚举元素名称都是标识符，定义一个枚举就是定义了一种枚举数据类型，语法如下：
+
+```c
+enum 枚举名称 
+{
+    枚举元素1,
+    枚举元素2,
+    ...
+    枚举元素N
+};
+```
+
+2）枚举常量
+枚举元素也称为枚举成员或枚举常量，具有如下特点：
+（1）枚举元素的值必须在同一枚举中是唯一的
+（2）枚举元素的值必须是整数类型，通常是int
+（3）如果没有为枚举元素指定值，编译器会自动为它们分配值，从0开始，依次递增。
+（4）定义枚举的时候也可以为枚举元素自定义值，需保证唯一性和整型类型。
+
+示例：
+
+```c
+#include <stdio.h>
+
+
+//定义枚举
+enum Weekday{
+    SUNDAY=0,
+    MONDAY=1,
+    TUSEDAY=2,
+    WEDNESDAY=3,
+    THURDAY=4,
+    FRIDAY=5,
+    SATURDAY=6
+};
+
+// 定义枚举类型，表示一月到十二月。 给枚举元素JANUARY设置了值1，后面的枚举元素从1开始自增，分别是 1到12
+enum Month 
+{
+    JANUARY = 1,
+    FEBRUARY,
+    MARCH,
+    APRIL,
+    MAY,
+    JUNE,
+    JULY,
+    AUGUST,
+    SEPTEMBER,
+    OCTOBER,
+    NOVEMBER,
+    DECEMBER
+};
+
+//定义四季的温度
+enum Season{
+    SPRING=18,
+    SUMMER=38,
+    AUTUMN=19,
+    WINTER=-1
+} season;
+
+int main(){
+    //遍历打印枚举数据
+    for(enum Weekday day=SUNDAY;day <SATURDAY;day++ )
+    {
+        printf("枚举：%d, ",day);
+    }
+    printf("\n");
+    printf("\n");
+
+    //遍历打印枚举数据
+    for(enum Month month=JANUARY;month < DECEMBER;month++)
+    {
+        printf("月份：%d, ",month);
+    }
+    printf("\n");
+    printf("\n");
+
+    // 如果枚举常量的值并不是连续的数字，则无法遍历
+    for(enum Season season=SPRING;season <= WINTER;season++)
+    {
+        printf("季节：%d, ",season);
+    }
+
+    printf("\n");
+    printf("\n");
+
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+枚举：0, 枚举：1, 枚举：2, 枚举：3, 枚举：4, 枚举：5, 
+
+月份：1, 月份：2, 月份：3, 月份：4, 月份：5, 月份：6, 月份：7, 月份：8, 月份：9, 月份：10, 月份：11,
+```
+
+**枚举变量**
+
+什么是枚举变量
+定义变量时指定类型是我们所定义的枚举类型，该变量称为枚举变量。枚举变量的值应该是枚举类型中的枚举常量中的一个，不能是其他值。
+
+2）定义枚举变量的语法
+（1）第一种：先定义枚举类型，再定义枚举变量。
+
+```c
+#include <stdio.h>
+
+//定义枚举
+enum Weekday{
+    SUNDAY=0,
+    MONDAY=1,
+    TUSEDAY=2,
+    WEDNESDAY=3,
+    THURDAY=4,
+    FRIDAY=5,
+    SATURDAY=6
+};
+
+int main(){
+   // 使用枚举类型定义枚举变量
+   enum Weekday day;
+}
+```
+
+（2）第二种：定义枚举类型的同时声明枚举变量。
+
+```c
+#include <stdio.h>
+
+int main(){
+   // 使用枚举类型定义枚举变量
+   enum Weekday{
+    SUNDAY=0,
+    MONDAY=1,
+    TUSEDAY=2,
+    WEDNESDAY=3,
+    THURDAY=4,
+    FRIDAY=5,
+    SATURDAY=6
+    } day;
+}
+```
+
+第三种：定义枚举类型的同时声明枚举变量，且省略枚举名称。
+
+```c
+#include <stdio.h>
+
+int main(){
+   // 使用枚举类型定义枚举变量
+   enum {
+    SUNDAY=0,
+    MONDAY=1,
+    TUSEDAY=2,
+    WEDNESDAY=3,
+    THURDAY=4,
+    FRIDAY=5,
+    SATURDAY=6
+    } day;
+}
+```
+
+
+
+
+
+**枚举在switch中使用**
+
+枚举可以与switch结合使用
+
+```c
+#include <stdio.h>
+
+//定义枚举
+enum Season{
+    SPRING=1,
+    SUMMER,
+    AUTUMN,
+    WINTER
+};
+
+int main()
+{
+    enum Season input_seacon;
+
+    printf("请输入您喜欢的季节:");
+    scanf("%d",&input_seacon);
+
+    switch (input_seacon)
+    {
+    case SPRING :
+        printf("你喜欢的季节是春天!");
+        break;
+    case SUMMER:
+        printf("你喜欢的季度是夏天!");
+        break;
+    case AUTUMN:
+        printf("你喜欢的季度是秋天!");
+        break;
+    case WINTER:
+        printf("你喜欢的季节是冬天！");
+        break;
+    default:
+        printf("输入的季度错误！");
+        break;
+    }
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+请输入您喜欢的季节:3
+你喜欢的季度是秋天!
+```
 
 
 
