@@ -6548,7 +6548,827 @@ int main()
 
 
 
+### 12.2 结构体
+
+**为什么需要结构体**
+
+C 语言内置的数据类型，除了几种原始的基本数据类型，只有数组属于复合类型，可以同时包含多个值，但是只能包含相同类型的数据，实际使用场景受限。
+
+
+
+![image-20251121091723759](.\images\image-20251121091723759.png)
+
+C语言提供了struct关键字，允许自定义复合数据类型，将不同类型的值组合在一起，这种类型称为结构体（structure）类型。
+
+C语言没有其他语言的对象（object）和类（class）的概念，struct 结构很大程度上提供了对象和类的功能。
+
+**声明结构体**
+
+格式：
+
+```c
+struct 结构体名
+{ 
+    数据类型1 成员名1;   
+    数据类型2 成员名2; 
+    ……
+    数据类型n 成员名n;
+};
+```
+
+
+
+**声明结构体变量**
+
+方式1: 先定义结构，然后再创建结构体变量
+
+```c
+#include <stdio.h>
+
+//1，定义结构体
+struct Student{
+    int id; //学号
+    char *name; //姓名
+    int age;  //年龄
+    int gender; //性别
+    char *address; //地址
+};
+
+int main(){
+    //声明变量
+    struct Student stu1,stu2;
+
+    return 0;
+}
+```
+
+方式2，在定义结构体的同时定义结构体变量
+
+```c
+#include <stdio.h>
+
+int main(){
+    //在定义结构体的同时定义结构体变量
+    struct Student{
+        int id; //学号
+        char *name; //姓名
+        int age;  //年龄
+        int gender; //性别
+        char *address; //地址
+    } stu1,stu2 ;
+
+    return 0;
+}
+```
+
+方式3： 在定义结构体的同时定义结构体变量，但可以不给出结构名
+
+```c
+#include <stdio.h>
+
+int main(){
+    //在定义结构体的同时定义结构体变量,不给出结构体的名称
+    struct {
+        int id; //学号
+        char *name; //姓名
+        int age;  //年龄
+        int gender; //性别
+        char *address; //地址
+    } stu1,stu2 ;
+
+    return 0;
+}
+```
+
+注意：在C语言中，结构体（struct）和结构体变量是两个不同的概念。
+
+（1）结构体是一种自定义的数据类型，像一种模板，定义了数据的格式。
+
+（2）结构体变量是根据结构体类型创建的变量，代表了一个具体的对象，用于存储数据。
+
+
+
+**成员的获取和赋值**
+
+成员是结构体的一个组成部分，一般是基本数据类型、也可以是数组、指针、结构体等。结构体的成员也可以称为属性。
+
+结构体和数组类似，也是一组数据的集合，结构体使用点号 . 获取单个成员，可以进行赋值和取值。
+
+方式1，成员变量挨个赋值
+
+```c
+#include <stdio.h>
+
+
+// //1，定义结构体
+struct Student{
+    int id; //学号
+    char *name; //姓名
+    int age;  //年龄
+    int gender; //性别
+    char *address; //地址
+};
+
+
+void print_student_info(struct Student stu){
+    printf("id:%d \n",stu.id);
+    printf("name:%s \n",stu.name);
+    printf("age:%d \n",stu.age);
+    printf("gender:%d \n",stu.gender);
+    printf("address:%s",stu.address);
+}
+
+int  main(){
+    struct Student stu1;
+
+    //对成员变量能赋值操作
+    stu1.id=1;
+    stu1.name="张三";
+    stu1.age=25;
+    stu1.gender=1;
+    stu1.address="上海";
+
+    //打印信息
+    print_student_info(stu1);
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+id:1 
+name:张三 
+age:25 
+gender:1 
+address:上海
+```
+
+方式2，使用大括号一次性对结构体的所有成员赋值。
+
+```c
+#include <stdio.h>
+
+
+// //1，定义结构体
+struct Student{
+    int id; //学号
+    char *name; //姓名
+    int age;  //年龄
+    int gender; //性别
+    char *address; //地址
+};
+
+
+void print_student_info(struct Student stu){
+    printf("id:%d \n",stu.id);
+    printf("name:%s \n",stu.name);
+    printf("age:%d \n",stu.age);
+    printf("gender:%d \n",stu.gender);
+    printf("address:%s",stu.address);
+}
+
+int  main(){
+    struct Student stu1 = {2,"李四",27,2,"北京"};
+
+    //打印信息
+    print_student_info(stu1);
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+id:2 
+name:李四 
+age:27 
+gender:2 
+address:北京
+```
+
+**结构体指针**
+
+**结构体指针介绍**
+
+结构体指针是指向结构体的指针变量，允许间接访问和操作结构体的成员，它提供了一种方便的方式来处理结构体数据。
+
+声明结构体指针的语法格式：
+
+```c
+struct 结构体名 *结构体指针变量名;
+```
+
+**声明结构体指针**
+
+通常需要先定义一个结构体变量，再创建结构体指针，并取结构体变量的地址作为结构体指针的值。
+
+```c
+#include <stdio.h>
+
+
+// //1，定义结构体
+struct Student{
+    int id; //学号
+    char *name; //姓名
+    int age;  //年龄
+    int gender; //性别
+    char *address; //地址
+};
+
+
+
+int  main(){
+    //先定义结构体变量
+    struct Student stu1;
+
+    //声明结构体指针并初始化
+    struct Student *stu_point = &stu1;
+    return 0;
+}
+```
+
+**通过结构体指针访问成员**
+
+结构体指针可以通过“->” 操作符访问结构体的成员。
+
+```c
+#include <stdio.h>
+
+//1，定义结构体
+struct Student{
+    int id; //学号
+    char *name; //姓名
+    int age;  //年龄
+    int gender; //性别
+    char *address; //地址
+};
+
+int  main(){
+    //先定义结构体变量
+    struct Student stu1 = {2,"小花",2,2,"北京"};
+    //通过结构体变量访问属性
+    printf("id=%d,name=%s,age=%d,gender=%d,address=%s\n",stu1.id,stu1.name,stu1.age,stu1.gender,stu1.address);
+    //声明结构体指针并初始化
+    struct Student *stu_point = &stu1;
+    //通过指针解引用 访问
+    printf("id=%d,name=%s,age=%d,gender=%d,address=%s\n",(*stu_point).id,(*stu_point).name,(*stu_point).age,(*stu_point).gender,(*stu_point).address);
+    //使用结构体指针使用->访问成员
+    printf("id=%d,name=%s,age=%d,gender=%d,address=%s\n",stu_point->id,stu_point->name,stu_point->age,stu_point->gender,stu_point->address);
+    
+    return 0;
+}
+```
+
+输出：
+
+```sh
+id=2,name=小花,age=2,gender=2,address=北京
+id=2,name=小花,age=2,gender=2,address=北京
+id=2,name=小花,age=2,gender=2,address=北京
+```
+
+总结：如果指针变量p指向一个结构体变量stu，以下3种用法等价：
+
+（1）stu.成员名
+
+（2）(*p).成员名
+
+（3）p->成员名
+
+### 12.3 案例
+
+**案例1**
+
+**小狗案例**
+
+（1）编写一个Dog结构体，包含name(char *)、age(int)、weight(double)属性。
+
+（2）编写一个say函数，返回字符串，方法返回信息中包含所有成员值。
+
+在main函数中，创建Dog结构体变量，调用say函数，将调用结果打印输出
+
+```c
+#include <stdio.h>
+
+/**
+ * 1）小狗案例
+ *（1）编写一个Dog结构体，包含name(char *)、age(int)、weight(double)属性。
+ *（2）编写一个say函数，返回字符串，方法返回信息中包含所有成员值。
+ *（3）在main函数中，创建Dog结构体变量，调用say函数，将调用结果打印输出。
+ */
+struct Dog{
+    char *name;
+    int age;
+    double weight;
+};
+
+/**
+ * 参数为结构体变量
+ */
+char *say(struct Dog dog)
+{
+    //内部修改,小狗的年龄
+    dog.age = 15;
+    static char printOut[64];
+    sprintf(printOut,"小狗的名字：%s,小狗的年龄：%d,小狗的重量：%.3f \n",dog.name,dog.age,dog.weight);
+    return printOut;
+}
+
+
+
+int main()
+{
+    //声明小狗
+    struct Dog dog = {"小黑",3,35.25};
+
+    //组装打印信息
+    char *outPrintDog = say(dog);
+
+    //可以观察到内部修改的值为15，
+    printf("输出：%s",outPrintDog);
+
+    
+    //由于是值传递，所以修改的方法内部的dog的age,不影响原对象
+    printf("小狗的的年级为:%d \n",dog.age);
+
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+输出：小狗的名字：小黑,小狗的年龄：15,小狗的重量：35.250 
+小狗的的年级为:3
+```
+
+**盒子案例**
+
+（1）编程创建一个Box结构体，在其中定义三个成员表示一个长方体的长、宽和高，长宽高可以通过控制台输入。
+
+（1）定义一个函数获取长方体的体积（volume）。
+
+（2）创建一个结构体指针，打印给定尺寸的长方体的体积。
+
+```c
+#include <stdio.h>
+
+/**
+ * （1）编程创建一个Box结构体，在其中定义三个成员表示一个长方体的长、宽和高，长宽高可以通过控制台输入。
+ *（1）定义一个函数获取长方体的体积（volume）。
+ *（2）创建一个结构体指针，打印给定尺寸的长方体的体积。
+ */
+struct Box{
+    double length;
+    double width;
+    double height;
+};
+
+double volume(struct Box *box){
+    return box->length * box->width * box->height;
+}
+
+
+int main()
+{
+    struct Box box;
+    //创建结构体指针
+    struct Box *p_box = &box;
+
+    //获取用户输入的长方体的、长宽高
+    printf("请输入长度:");
+    scanf("%lf",&(p_box->length));
+
+    printf("请输入宽度:");
+    scanf("%lf",&(p_box->width));
+
+
+    printf("请输入高度:");
+    scanf("%lf",&(p_box->height));
+
+    //计算体积
+    double result = volume(p_box);
+
+    printf("体积为:%.2f",result);
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+请输入长度:10
+请输入宽度:20
+请输入高度:30
+体积为:6000.00
+```
+
+
+
+**景区门票案例**
+
+（1）一个景区根据游人的年龄收取不同价格的门票。
+
+（1）请编写游人结构体（Visitor），根据年龄段决定能够购买的门票价格并输出。
+
+（2）规则：年龄>18，门票为20元，其它情况免费。
+
+（3）可以循环从控制台输入名字和年龄，打印门票收费情况，如果名字输入n，则退出程序。
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+/**
+ * 3）景区门票案例
+ *（1）一个景区根据游人的年龄收取不同价格的门票。
+ *（2）请编写游人结构体（Visitor），根据年龄段决定能够购买的门票价格并输出。
+ *（3）规则：年龄>18，门票为20元，其它情况免费。
+ *（4）可以循环从控制台输入名字和年龄，打印门票收费情况，如果名字输入n，则退出程序。
+ */
+struct Visitor
+{
+    char name[16];
+    int age;
+    int money;
+};
+
+void count_money(struct Visitor *vis)
+{
+    if (vis->age > 18)
+    {
+        vis->money = 20;
+    }
+    else
+    {
+        vis->money = 0;
+    }
+}
+
+int main()
+{
+
+    while (1)
+    {
+
+        // 定义结构和结构指针
+        struct Visitor vis;
+        struct Visitor *p_vis = &vis;
+
+        // 接收用户的输入
+        printf("请输入名称:(输入n退出)");
+        scanf("%s", &(p_vis->name));
+
+        if (strcmp("n", p_vis->name) == 0)
+        {
+            break;
+        }
+
+        printf("请输入年龄:");
+        scanf("%d", &(p_vis->age));
+
+        // 计算门票价格
+        count_money(p_vis);
+        printf("门票的价格为:%d \n", p_vis->money);
+
+        printf("计算下一位：\n\n");
+    }
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+请输入名称:(输入n退出)junjun
+请输入年龄:256
+门票的价格为:20 
+计算下一位：
+
+请输入名称:(输入n退出)n
+```
+
+
+
+### 12.4 共同体
+
+**什么是共用体**
+
+有时需要一种数据结构，不同的场合表示不同的数据类型。比如，如果只用一种数据结构表示学生的“成绩”，这种结构就需要有时是整数（80、90），有时是字符（'A'、'B'），有时是浮点数（80.5、60.5）。
+
+C语言提供了共用体类型（Union 结构），用来自定义可以灵活变更的数据结构。它内部可以包含各种属性，但同一时间只能有一个属性，因为所有属性都保存在同一个内存地址，后面写入的属性会覆盖前面的属性。这样做的最大好处是节省空间。
+
+“共用体”与“结构体”的定义形式相似，但它们的含义是不同的。
+
+（1）结构体变量所占内存长度，可以认为是各成员占的内存长度的叠加；每个成员分别占有其自己的内存单元。
+
+（2）共用体变量所占的内存长度等于最长的成员的长度；几个成员共用一个内存区。
+
+**声明共用体**
+
+```c
+union 共用体类型名称
+{
+    数据类型 成员名1;
+    数据类型 成员名2;
+    …
+    数据类型 成员名n;
+};
+```
+
+例：
+
+```c
+union data
+{
+    int m;
+    float x;
+    char c;
+};
+```
+
+上例中，union命令定义了一个包含三个属性的数据类型data。虽然包含三个属性，但是同一时间只能取到一个属性。最后赋值的属性，就是可以取到值的那个属性。
+
+
+
+**声明共用体变量**
+
+**1）*****\*方式1：先定义共用体类型，再定义共用体变量\****
+
+```c
+// 声明共用体类型
+union data 
+{
+    short m;
+    float x;
+    char c;
+};
+
+// 声明共用体变量
+union data a, b;
+```
+
+
+
+**1）*****\*方式2：定义共用体类型的同时定义共用体变量\****
+
+```c
+union data 
+{
+    short m;
+    float x;
+    char c;
+} a, b;
+```
+
+
+
+**2）*****\*方式3：\*******\*在定义时也可以不给出\*******\*共用体\*******\*名\****
+
+```c
+union 
+{
+    short m;
+    float x;
+    char c;
+} a, b;
+```
+
+ **共用体内存分析**
+
+以上一节方式2中共用体变量a为例，它由3个成员组成，分别是m、x和c，系统会按照最长的成员为它分配内存，由于成员x的长度最长，它占4个字节，所以共用体变量a的内存空间也为4个字节。
+
+![image-20251127185831964](.\images\image-20251127185831964.png)
+
+**成员的获取和赋值**
+
+同结构体一样，共用体也使用点号.获取单个成员，可以进行赋值和取值。
+
+```c
+1）方式1：
+union data a;
+a.c = 4;
+
+2）方式2：声明共用体变量的同时，给任一成员赋值
+union data a = {.c = 4};
+
+3）方式3：声明共用体变量的同时，给首成员赋值
+union data a = {8};
+```
+
+案例：
+
+```c
+#include <stdio.h>
+
+union data{
+    int a;
+    float b;
+    char c;
+};
+
+int main()
+{
+    union data item = {.c ='a'};
+
+    //输出各信息
+    printf("a=%d\n",item.a);
+    printf("b=%f\n",item.b);
+    printf("c=%c\n",item.c);
+
+    printf("\n\n");
+
+
+    item.b = 98.0;
+
+    //输出各信息
+    printf("a=%d\n",item.a);
+    printf("b=%f\n",item.b);
+    printf("c=%c\n",item.c);
+
+
+    printf("\n\n");
+
+    
+    union data item_3 = {99};
+
+    //输出各信息
+    printf("a=%d\n",item_3.a);
+    printf("b=%f\n",item_3.b);
+    printf("c=%c\n",item_3.c);
+
+    printf("\n\n");
+
+
+    return  0;
+}
+```
+
+输出:
+
+```c
+a=97
+b=0.000000
+c=a
+
+
+a=1120141312
+b=98.000000
+c=
+
+
+a=99
+b=0.000000
+c=c
+```
+
+
+
+### 12.5 案例
+
+现有一张关于学生信息和教师信息的表格。学生信息包括姓名、编号、性别、职业、 分数，教师的信息包括姓名、编号、性别、职业、教学科目：可以参考下面的表格。
+
+请利用共用体，只使用一个结构体保存每个人的信息。
+
+| **Name**   | **Num** | **Sex** | **Profession** | **Score / Course** |
+| ---------- | ------- | ------- | -------------- | ------------------ |
+| **孙二娘** | 501     | 女(f)   | 学生(s)        | 89.5               |
+| **吴用**   | 1011    | 男(m)   | 老师(t)        | math               |
+| **顾大嫂** | 109     | 女(f)   | 老师(t)        | English            |
+| **林冲**   | 982     | 男(m)   | 学生(s)        | 95.0               |
+
+```c
+#include <stdio.h>
+#define TOTAL 2
+
+// 学生信息包括姓名、编号、性别、职业、 分数，
+// 教师的信息包括姓名、编号、性别、职业、教学科目
+enum gender
+{
+    girl = 1,
+    man = 2
+};
+
+enum input_type
+{
+    student = 's',
+    teacher = 't'
+};
+
+// 共同体分数或者科目
+union score_or_course
+{
+    float score;
+    char course[32];
+};
+
+struct people
+{
+    char name[32];            // 名称
+    int seq;                  // 编号
+    enum gender sex;          // 性别
+    enum input_type profession;     // 职业
+    union score_or_course sc; // 共同体分数或者科目
+};
+
+int main()
+{
+    // 定义一个结构体数组
+    struct people people_array[TOTAL];
+
+    // 输入人员信息
+    for (int i = 0; i < TOTAL; i++)
+    {
+        printf("请输入人员信息: 姓名 编号 性别(1/2) 职业(s/t)");
+        scanf("%s %d %c %c",
+              people_array[i].name,
+              &(people_array[i].seq),
+              (char *)&(people_array[i].sex),
+              (char *)&(people_array[i].profession));
+
+        printf("打印信息3：%s %d %c %c \n \n",
+               people_array[i].name,
+               people_array[i].seq,
+               people_array[i].sex,
+               people_array[i].profession);
+
+        // 检查当前输入的类型，按类型填充工同体
+        // 如果当前为老师，则输入教学科目
+        if ((char)people_array[i].profession == teacher)
+        {
+            printf("请输入教学科目:");
+            scanf("%s", &(people_array[i].sc.course));
+        }
+        else if ((char)people_array[i].profession == student)
+        {
+            printf("请输入学生成绩:");
+            scanf("%f", &(people_array[i].sc.score));
+        }
+        printf("\n");
+
+        // 刷新
+        fflush(stdin);
+    }
+
+    // 输出人员信息
+    printf("姓名\t编号\t性别\t职业\t科目/分数\n");
+    for (int i = 0; i < TOTAL; i++)
+    {
+        // 如果当前为老师
+        if (people_array[i].profession == teacher)
+        {
+            printf("%s %d %c %c %s \n",
+                   people_array[i].name,
+                   people_array[i].seq,
+                   people_array[i].sex,
+                   people_array[i].profession,
+                   people_array[i].sc.course);
+        }
+        // 如果当前为学生
+        else if (people_array[i].profession == student)
+        {
+            printf("%s %d %c %c %f \n",
+                   people_array[i].name,
+                   people_array[i].seq,
+                   people_array[i].sex,
+                   people_array[i].profession,
+                   people_array[i].sc.score);
+        }
+    }
+
+    return 0;
+}
+```
+
+输出:
+
+```c
+请输入人员信息: 姓名 编号 性别(1/2) 职业(s/t)张三 11 1 s
+打印信息3：张三 11 1 s 
+
+请输入学生成绩:65
+
+请输入人员信息: 姓名 编号 性别(1/2) 职业(s/t)李四 22 2 t
+打印信息3：李四 22 2 t 
+
+请输入教学科目:数学
+
+姓名    编号    性别    职业    科目/分数
+张三 11 1 s 65.000000
+李四 22 2 t 数学
+```
+
+
+
 # 结束
+
+
 
 
 
