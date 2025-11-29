@@ -7366,6 +7366,595 @@ int main()
 
 
 
+### 12.6 typedef
+
+**介绍**
+
+C语言允许为一个数据类型起一个新的别名，就像给人起“绰号”一样。
+
+起别名的目的不是为了提高程序运行效率，而是为了编码方便。例如，有一个结构体的名字是 student，定义一个结构体变量stu1，代码如下：
+
+```c
+struct student stu1;
+```
+
+struct 看起来就是多余的，但不写又会报错。如果为 struct student起了一个别名 Student，书写起来就简单了：
+
+```c
+Student stu1;
+```
+
+这种写法更加简练，意义也非常明确，不管是在标准头文件中还是以后的编程实践中，都会大量使用这种别名。
+
+**typedef应用场景**
+
+用typedef声明数组类型、指针类型，结构体类型、共用体类型等，使得编程更加方便。
+
+1）为某个基本类型起别名
+
+typedef 命令用来为某个类型起别名。
+
+```c
+typedef 类型名 别名;
+```
+
+习惯上，常把用typedef声明的类型名的第1个字母用大写表示，以便与系统提供的标准类型标识符相区别。
+
+```c
+#include <stdio.h>
+
+int main(){
+    //使用Inter为int类型起别名，作用于int一致.
+    typedef int Integer;
+
+    Integer a,b;
+    a = 10;
+    b = 20;
+
+
+    //为类型 unsign char 起别名 Byte
+    typedef unsigned char Byte;
+    Byte c = 'z';
+
+
+    return 0;
+}
+```
+
+注意：使用 typedef 可以为基本类型一次起多个别名。
+
+```c
+typedef int chocolate, doughnut, mushroom; //一次性为 int 类型起了三个别名
+```
+
+ **为结构体、共用体起别名**
+
+为 struct、union等命令定义的复杂数据结构创建别名，从而便于引用。
+
+```c
+//方式1.
+struct Treenode 
+{
+    // ...
+};
+
+typedef struct Treenode Tree;  //Tree 是 struct Treenode 的别名
+
+//typedef也可以与struct定义结构体的命令写在一起。
+typedef struct Treenode
+{
+    char *name;
+    int legs;
+    int speed;
+} Tree;
+
+//还可以省略结构体的名称，直接使用别名
+typedef struct
+{
+    char *name;
+    int legs;
+    int speed;
+} Tree;
+
+
+//共同体与结构体类似
+typedef union
+{
+    short count;
+    float weight;
+    float volume;
+} Quantity;
+//上例中，union命令定义了一个包含三个属性的数据类型，typedef 命令为它起别名为Quantity。
+
+```
+
+指针起别名:
+
+```c
+typedef int *intptr;
+int a=10;
+intptr x = &a;
+//intptr是int*的别名。不过，使用的时候要小心，这样不容易看出来，变量 x 是一个指针类型。
+
+typedef char *String;
+char *str1="hello"; //定义指针的写法
+String str2="hello"; //别名的写法
+//为字符指针起别名为 String，以后使用String声明变量时，就可以轻易辨别该变量是字符串。
+```
+
+给数组起别名:
+
+```c
+//给int[5]取别名
+typedef int fiveInts[5];
+fiveInts={10,20,30,40,50};
+
+typedef int Num[10];
+Num a;
+
+//使用 typedef 为数组指针取别名。
+typedef int (*IntArrayPtr)[5];
+int array[5]={10,20,30,40,50};
+//使用别名定义数组指针
+IntArrayPtr intPtr=&array;
+
+```
+
+**案例**
+
+```c
+#include <stdio.h>
+
+// 给字符指针取别名
+typedef char *String;
+
+//给结构体取别名
+typedef struct {
+    int id;
+    String name;
+    String profile;
+} User;
+
+
+int main(){
+    //声明一个User变量
+    User u;
+
+    //初始化结构体变量赋值
+    u.id = 101;
+    u.name="小丽";
+    u.profile="不积小流无以成江海";
+
+    //打印结构体变量的属性
+    printf("id=%d\n",u.id);
+    printf("name=%s\n",u.name);
+    printf("profile=%s\n",u.profile);
+    
+
+    return 0;
+}
+```
+
+输出:
+
+```c
+id=101
+name=小丽
+profile=不积小流无以成江海
+```
+
+
+
+## 13 动态内存分配
+
+
+
+![image-20251128125116476](.\images\image-20251128125116476.png)
+
+动态内存分配指根据需要向系统申请所需大小的空间，由于未在声明部分定义其为变量或者数组，不能通过变量名或者数组名来引用这些数据，只能通过***\*指针\****来引用）
+
+### 13.1 void指针（无类型指针）
+
+C99允许定义一个类型为void的指针变量，它可以指向任何类型的数据。
+
+**void 指针作用**
+
+指针变量必须有类型，否则编译器无法知道如何解读内存块保存的二进制数据。但是，有时候向系统请求内存的时候，还不确定会有什么类型的数据写入内存，需要要先获得内存块，稍后再确定写入的数据类型。
+
+这种情况下就可以使用 void 指针，它只有内存块的地址信息，没有类型信息，等到使用该块内存的时候，再向编译器补充说明，里面的数据类型是什么。
+
+**void 指针特点**
+
+（1）void 指针与其他所有类型指针之间是互相转换关系，任一类型的指针都可以转为 void 指针，而 void 指针也可以转为任一类型的指针。
+
+（2）由于不知道 void 指针指向什么类型的值，所以不能用 * 运算符取出它指向的值（解引用）。
+
+```c
+#include <stdio.h>
+
+int main()
+{
+    int num = 45;
+    double pi = 3.1415926;
+
+    // int类型的指针转为void指针
+    void *viprt = &num;
+    // double类型的指针转为void指针
+    void *vdprt = &pi;
+
+    // void类型的指针转换为int类型指针并解引用
+    //隐式类型转换
+    //int *intptr = viprt;
+    //显示类型转换，一般使用显示转换，更明显
+    int *intptr = (int *)viprt;
+    printf("整数值:%d \n",*intptr);
+
+    //void类型的指针转换为double类型指针并解引用
+    //隐式转换
+    //double *doubleptr = vdprt;
+    //显示类型转换，
+    double *doubleptr = (double *)vdprt;
+    printf("浮点数:%f \n",*doubleptr);
+
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+整数值:45 
+浮点数:3.141593 
+```
+
+建议：
+
+（1）其他类型指针赋给 void指针，使用隐式转换即可，因为 void 指针不包含指向的数据类型的信息，通常是安全的。
+
+（2）void 指针赋给其他类型指针，建议使用显式类型转换，这样更加安全，如果使用隐式类型转换，有些编译器会触发警告。
+
+
+
+### 13.2 内存分配相关的函数
+
+头文件 <stdlib.h> 声明了四个关于内存动态分配的函数：
+
+malloc() 函数
+
+malloc() 函数用于分配一块连续的内存空间。
+
+```c
+void *malloc(size_t size);
+```
+
+**返回值说明：**
+
+如果内存分配成功，返回一个void指针，指向新分配内存块的地址；如果分配失败（例如内存不足），返回一个空指针（NULL）。
+
+**参数说明：**
+
+size是要分配的内存块的大小，以字节为单位。
+
+
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(){
+
+    //分配一个int类型4字节大小的内存
+    int *p;
+    p = (int *)malloc(sizeof(int));
+
+    //判断分配是否成功
+    if(p == NULL)
+    {
+        printf("内存分配失败");
+        return -1;
+    }
+
+    //如果分配成功，则可以直接使用
+    *p = 120;
+
+    printf("p指向的内存地址：%p,值为：%d",p,*p);
+
+    //释放内存
+    free(p);
+
+
+    return 0;
+}
+```
+
+输出：
+
+```shell
+p指向的内存地址：000002448b194680,值为：120
+```
+
+![img](.\images\wps1.png)
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#define TOTAL 10
+
+int main(){
+    //分配一个数组的空间
+    //这是定义的数组首元素的指针
+    int *p;
+    p = (int *)malloc(TOTAL * sizeof(int));
+
+    if(NULL == p)
+    {
+        printf("内存分配失败!");
+        return -1;
+    }
+
+    //组分配的内存中填充数据
+    for(int i=0;i<TOTAL;i++){
+        p[i]=i*10;
+    }
+
+    //数出填充的数据
+    for(int i=0;i<TOTAL;i++){
+        printf("元素:%d,地址:%p,值:%d \n",i,&p[i],p[i]);
+    }
+
+    //释放内存
+    free(p);
+
+    return 0;
+}
+```
+
+
+
+输出：
+
+```sh
+元素:0,地址:000001e627f54680,值:0 
+元素:1,地址:000001e627f54684,值:10 
+元素:2,地址:000001e627f54688,值:20 
+元素:3,地址:000001e627f5468c,值:30 
+元素:4,地址:000001e627f54690,值:40 
+元素:5,地址:000001e627f54694,值:50 
+元素:6,地址:000001e627f54698,值:60 
+元素:7,地址:000001e627f5469c,值:70 
+元素:8,地址:000001e627f546a0,值:80 
+元素:9,地址:000001e627f546a4,值:90
+```
+
+
+
+**calloc函数**
+
+calloc() 函数用于分配内存并将其初始化为零，它在分配内存块时会自动将内存中的每个字节都设置为零。
+
+```c
+void *calloc(size_t numElements, size_t sizeOfElement);
+```
+
+如果内存分配成功，返回一个 void 指针，指向新分配内存块的地址；如果分配失败（例如内存不足），返回一个空指针（NULL）。
+
+参数:
+
+（1）numElements是要分配的元素的数量。
+
+（2）sizeOfElement是每个元素的大小（以字节为单位）。
+
+案例:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#define TOTAL 10
+
+int main(){
+    //定义整型指针
+    int *p;
+    //内存分配
+    p = (int *)calloc(TOTAL,sizeof(int));
+
+    //检查内存分配是否成功
+    if(NULL == p)
+    {
+        printf("内存分配失败!");
+        return -1;
+    }
+
+    //输出数组的的元素与值
+    for(int i=0;i<TOTAL;i++){
+        printf("元素:%d,地址:%p,值:%d\n",i,&p[i],p[i]);
+    }
+
+    //释放内存
+    free(p);
+
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+元素:0,地址:0000014fe5dd4680,值:0
+元素:1,地址:0000014fe5dd4684,值:0
+元素:2,地址:0000014fe5dd4688,值:0
+元素:3,地址:0000014fe5dd468c,值:0
+元素:4,地址:0000014fe5dd4690,值:0
+元素:5,地址:0000014fe5dd4694,值:0
+元素:6,地址:0000014fe5dd4698,值:0
+元素:7,地址:0000014fe5dd469c,值:0
+元素:8,地址:0000014fe5dd46a0,值:0
+元素:9,地址:0000014fe5dd46a4,值:0
+```
+
+
+
+**realloc函数**
+
+realloc() 函数用于重新分配malloc() 或calloc() 函数所获得的内存块的大小。
+
+```c
+void* realloc(void *ptr, size_t size);
+```
+
+返回一个指向重新分配内存块的指针。如果内存重新分配成功，返回的指针可能与原始指针相同，也可能不同；如果内存分配失败，返回返回一个空指针（NULL）。
+
+如果在原内存块上进行缩减，通常返回的原先的地址。
+
+（1）ptr是要重新分配的内存块的指针。
+
+（1）size是新的内存块的大小（以字节为单位）。
+
+注意，本案例中使用了<malloc.h>头文件中的_msize()函数，该函数可以获取指定内存块的大小。
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <malloc.h>
+
+int main(){
+    //声明指针
+    int *p;
+    
+    //首次分配内存
+    p = (int *)malloc(sizeof(int)*10);
+    printf("指针的地址:%p,内存大小:%d\n",p,_msize(p));
+
+    //调整内存大小
+    p = (int *)realloc(p,sizeof(int)*100);
+    printf("指针的地址:%p,内存大小:%d\n",p,_msize(p));
+
+    //再调整内存大小
+    p = (int *)realloc(p,sizeof(int)*220);
+    printf("指针的地址:%p,内存大小:%d\n",p,_msize(p));
+
+    
+    //释放内存
+    free(p);
+
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+指针的地址:000001d7ed1c4680,内存大小:40
+指针的地址:000001d7ed1c4680,内存大小:400
+指针的地址:000001d7ed1c4680,内存大小:880
+```
+
+**free**
+
+如果动态分配的内存空间没有被正确释放，这种情况称为内存泄漏，内存泄漏会导致系统中的可用内存逐渐减少，直到耗尽系统可用的内存资源。
+
+free() 函数用于释放动态分配的内存，以便将内存返回给操作系统，防止内存泄漏。
+
+```c
+void free(void *ptr);
+```
+
+没有有返回值。
+
+ptr是指向要释放的内存块的指针，ptr必须是malloc() 或calloc() 动态分配的内存块地址。
+
+**注意：**
+
+（1）分配的内存块一旦释放，就不应该再次操作已经释放的地址，也不应该再次使用 free() 对该地址释放第二次。
+
+（1）如果忘记调用free()函数，会导致无法访问未回收的内存块，构成内存泄漏。
+
+
+
+### 13.3  内存分配的案例
+
+动态创建数组，输入5个学生的成绩，再定义一个函数检测成绩低于60分的，输出不合格的成绩。
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#define TOTAL 5
+
+
+
+
+int main(){
+    //动态创建数组，输入5个学生的成绩，再定义一个函数检测成绩低于60分的，输出不合格的成绩。
+    double *p;
+    p = (double *)malloc(sizeof(double)*TOTAL);
+
+    //对分配的内存做初始化操作
+    for(int i=0;i<TOTAL;i++)
+    {
+        p[i]=0;
+    }
+
+    //获取用户输入的5个学生成功
+   for(int i=0;i<TOTAL;i++)
+    {
+        printf("请输入第%d个学生的成功: \n",i);
+        scanf("%lf",p+i);
+    }
+
+    //检查分数
+    check(p);
+
+
+    //释放内存
+    free(p);
+
+    return 0;
+}
+
+
+void check(double *p)
+{
+    printf("打印不合格的分数：\n");
+    for(int i=0;i<TOTAL;i++)
+    {
+       if(p[i]<60.0)
+       {
+            printf("第%d个学生成功不合格,分数是:%.2f\n",i,p[i]);
+       }
+    }
+}
+```
+
+输出:
+
+```c
+请输入第0个学生的成功: 
+56.82
+请输入第1个学生的成功: 
+96.65
+请输入第2个学生的成功: 
+57.33
+请输入第3个学生的成功: 
+89.23
+请输入第4个学生的成功: 
+75.66
+打印不合格的分数：
+第0个学生成功不合格,分数是:56.82
+第2个学生成功不合格,分数是:57.33
+```
+
+
+
+### 13.4 内存分配的原则 
+
+（1）**避免分配大量的小内存块。**分配堆上的内存有一些系统开销，所以分配许多小的内存块比分配几个大内存块的系统开销大。
+
+（2）**仅在需要时分配内存。**只要使用完堆上的内存块，就需要及时释放它，否则可能出现内存泄漏。
+
+（3）**总是确保释放**已**分配的内存。**在编写分配内存的代码时，就要确定好在代码的什么地方释放内存。
+
 # 结束
 
 
