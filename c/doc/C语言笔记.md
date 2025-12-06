@@ -8348,7 +8348,267 @@ int main(){
 
 
 
+### 14.3 文件包含
+
+`#include` 指令用于引入标准库头文件、自定义头文件或其他外部源代码文件，以便在当前源文件中使用其中定义的函数、变量、宏等内容。
+
+![image-20251206204532187](images\image-20251206204532187.png)
+
+一个源文件可以导入多个头文件，一个头文件也可以被多个源文件导入。
+
+标准库头文件、自定义头文件的扩展名都是 .h。
+
+#### 14.3.1 导入标准头文件
+
+标准库头文件是系统提供的头文件，直接引入即可，像我们前面用过的 stdio.h、stdbool.h、string.h、time.h 等。引入标准库头文件需要使用尖括号将文件名包裹起来，格式如下：
+
+```c
+#include <头文件名.h>
+```
+
+
+
+#### 14.3.2 导入自定义头文件
+
+自定义头文件的文件名写在双引号里面， 格式如下：
+
+```c
+#include "文件名.h"
+```
+
+建议把所有的常量、宏、系统全局变量和函数原型写在自定义的头文件中，在需要的时候随时引用这些头文件。
+
+1）使用相对路径
+
+如果自定义的头文件在源文件的同级目录或源文件所在目录的下级目录，使用 ./ 开头的路径，./ 可以省略。
+
+如果自定义的头文件在源文件所在目录的上级或者更上级，使用 ../ 开头的路径。
+
+1）使用绝对路径
+
+绝对路径是文件在文件系统中的完整路径，它从文件系统的盘符（Windows系统）或根目录（Linux系统、MacOS系统）开始，沿着文件系统的目录结构一直到达目标文件。
+
+Windows 系统中使用绝对路径引入自定义头文件，示例如下：
+
+```c
+#include "C:\Preparation\Embedded\01CLang\code\project\foo.h"
+```
+
+Linux系统或MacOS系统中使用绝对路径引入自定义头文件，示例如下：
+
+```c
+#include "/usr/local/lib/foo.h"
+```
+
+需要注意的是，通常我们建议使用相对路径引入自定义头文件，因为相对路径更加灵活和可移植。
+
+
+
+
+
+### 14.4 条件编译
+
+#### 14.4.1 #if
+
+\#if...#endif指令用于预处理器的条件判断，满足条件时，内部的行会被编译，否则就被编译器忽略。
+
+![image-20251206205052554](images\image-20251206205052554.png)
+
+
+
+#if … #else … #endif
+
+![image-20251206205427214](images\image-20251206205427214.png)
+
+#if … #elif … #else … #endif
+
+![image-20251206205521484](images\image-20251206205521484.png)
+
+
+
+```c
+#if 0
+  const double pi = 3.1415; // 不会执行
+#endif
+
+//上面示例中，#if后面的0，表示判断条件不成立。所以，内部的变量定义语句会被编译器忽略。#if 0这种写法常用来当作注释使用，不需要的代码就放在#if 0里面。
+
+//#if后面的判断条件，通常是一个表达式。如果表达式的值不等于0，就表示判断条件为真，编译内部的语句；如果表达式的值等于0，表示判断条件为伪，则忽略内部的语句。
+
+
+
+#define FOO 1
+#if FOO
+  printf("defined\n");
+#else
+  printf("not defined\n");
+#endif
+
+
+
+#if HAPPY_FACTOR == 0
+  printf("I'm not happy!\n");
+#elif HAPPY_FACTOR == 1
+  printf("I'm just regular\n");
+#else
+  printf("I'm extra happy!\n");
+#endif
+
+```
+
+
+
+#### 14.4.2 #ifdef
+
+\#ifdef...#endif指令用于判断某个宏是否定义过。
+
+有时源码文件可能会重复加载某个库，为了避免这种情况，可以在库文件里使用#define定义一个空的宏。通过这个宏，判断库文件是否被加载了。
+
+```c
+#define EXTRA_HAPPY
+
+
+#ifdef EXTRA_HAPPY
+  printf("I'm extra happy!\n");
+#else
+  printf("I'm just regular\n");
+#endif
+
+
+//#ifdef...#else...#endif可以用来实现条件加载。
+//通过判断宏MAVIS是否定义过，实现加载不同的头文件。
+#ifdef MAVIS
+  #include "foo.h"
+  #define STABLES 1
+#else
+  #include "bar.h"
+  #define STABLES 2
+#endif
+
+```
+
+#### 14.4.3 #if defined
+
+上一节的`#ifdef`指令，等同于`#if defined`。
+
+```c
+#ifdef FOO
+// 等同于
+#if defined FOO
+```
+
+使用此语言也可以完成多重判断
+
+```c
+#if defined FOO
+  x = 2;
+#elif defined BAR
+  x = 3;
+#else
+  x = 4;
+#endif
+```
+
+
+
+#### 14.4.4 #ifndef
+
+\#ifndef...#endif指令跟#ifdef...#endif正好相反。它用来判断，如果某个宏没有被定义过，则执行指定的操作。
+
+```c
+//针对宏EXTRA_HAPPY是否被定义过，#ifdef和#ifndef分别指定了两种情况各自需要编译的代码。
+#ifdef EXTRA_HAPPY
+  printf("I'm extra happy!\n");
+#endif
+
+#ifndef EXTRA_HAPPY
+  printf("I'm just regular\n");
+#endif
+```
+
+\#ifndef常用于防止重复加载。举例来说，为了防止头文件myheader.h被重复加载，可以把它放在#ifndef...#endif里面加载。
+
+```c
+//宏MYHEADER_H对应文件名myheader.h的大写。只要#ifndef发现这个宏没有被定义过，就说明该头文件没有加载过，从而加载内部的代码，并会定义宏MYHEADER_H，防止被再次加载。
+#ifndef MYHEADER_H
+  #define MYHEADER_H
+  #include "myheader.h"
+#endif
+```
+
+
+
+#### 14.4.5 案例
+
+1）具体要求
+
+开发一个C语言程序，让它暂停 5 秒以后再输出内容"helllo, C语言!~"，并且要求跨平台，在Windows和Linux下都能运行，如何处理。
+
+2）提示
+
+（1）Windows平台下的暂停函数的原型是void Sleep(DWORD dwMilliseconds)，参数的单位是“毫秒”，位于<windows.h>头文件。
+
+（2）Linux平台下暂停函数的原型是unsigned int sleep (unsigned int seconds)，参数的单位是“秒”，位于 <unistd.h> 头文件。
+
+```c
+#include <stdio.h>
+
+#if _WIN32 //如果是windows平台，就引入<windows.h>
+    #include <windows.h>    
+    #define SLEEP(t) Sleep(t * 1000) //windows平台单位是毫秒，由秒至毫秒*1000
+    #define PLATFORM "Windows"
+#elif __linux__ //如果是linux平台，就引入<unistd.h>
+    #include <unistd.h>
+    #define SLEEP sleep
+    #define PLATFORM "Linux"
+#endif
+
+int main(){
+    printf("start run ... \n");
+
+    SLEEP(3);
+
+    printf("hello,C语言,当前平台:%s \n",PLATFORM);
+
+    return 0;
+}
+```
+
+不同平台上运行
+
+```sh
+// windows平台
+start run ... 
+hello,C语言,当前平台:Windows 
+
+
+//linux平台
+[root@mes01 language]# gcc 10-if-compile.c -o compile
+[root@mes01 language]# ls
+10-if-compile.c  compile
+[root@mes01 language]# ./compile 
+start run ... 
+hello,C语言,当前平台:Linux 
+```
+
+#### 14.4.6 预处理命令总结
+
+| 指令      | 说明                                                        |
+| --------- | ----------------------------------------------------------- |
+| \#include | 包含一个源代码文件                                          |
+| \#define  | 定义宏                                                      |
+| \#undef   | 取消定义宏                                                  |
+| #if       | 如果给定的条件为真，则编译下面的代码                        |
+| #ifdef    | 如果宏已经定义，则编译下面的代码                            |
+| #ifndef   | 如果宏没有定义，则编译下面的代码                            |
+| #elif     | 如果前面的#if给定条件不为真，当前条件为真，则编译下面的代码 |
+| #endif    | 结果一个#if......#else条件编译块                            |
+
+
+
 # 结束
+
+
 
 
 
