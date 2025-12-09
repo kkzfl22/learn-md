@@ -8964,6 +8964,374 @@ FILE *fopen( const char *filename, const char *mode );
 | **ab+**  | **读写二进制模式**。  打开一个二进制文件，读取或追加写入文件。如果文件不存在，则会创建一个新文件并读写；如果文件存在，读取或在已有内容后面追加写入。 |
 | **a+b**  | **读写二进制模式。**  **打开一个二进制文件，读取或追加写入文件。如果文件不存在，则会创建一个新文件并读写；如果文件存在，读取或在已有内容后面追加写入。** |
 
+
+
+#### 15.6.2 关闭文件
+
+文件读写完毕后，一定要关闭文件，使用fclose( ) 函数可以关闭文件。该函数位于标准库的 stdio.h 头文件中。
+
+```c
+int fclose(FILE *stream);
+```
+
+***\*返回值说明：\****
+
+返回一个整数值，通常为零（0），表示关闭操作成功。如果关闭失败，它返回特殊值EOF （EOF 是一个定义在 stdio.h 头文件中的常量，值通常为 -1）。
+
+***\*参数说明：\****
+
+stream是一个指向 FILE 结构的指针，表示要关闭的文件流。
+
+
+
+#### 15.6.3 写入文件
+
+**fputc函数**
+
+fputc() 函数用于逐字符写入文件。位于标准库的stdio.h 头文件中。
+
+```c
+int fputc(int character, FILE *stream);
+```
+
+返回值：
+
+返回一个整数值，通常是写入的字符的ASCII码值。如果写入成功，返回的值与输入的 character 值相同；如果写入失败，它返回特殊值 EOF。
+
+**参数说明：**
+
+（1）character是要写入的字符，通常以整数形式表示，即字符的ASCII码值。
+
+（2）stream是一个指向 FILE 结构的指针，表示要写入字符的文件流。
+
+```c
+#include <stdio.h>
+
+int main(){
+    
+    //1,打写文件,w表示仅写入数据，后续做覆盖处理,a，追加模式。
+    //FILE *writeFile = fopen("data.txt","w");
+    FILE *writeFile = fopen("data.txt","a");
+
+    //如果文件打开失败，则退出
+    if(writeFile == NULL)
+    {
+        printf("文件打开失败!");
+        return -1;
+    }
+
+    char putValue = 'a';
+    int putResult = fputc(putValue,writeFile);
+
+    //写入文件时出现错误
+    if(putResult == EOF)
+    {
+        printf("写入文件时出现错误!");
+    }
+    else{
+        printf("fputc成功写入,写入字符: %d 返回值: %d。\n",putValue,putResult);
+    }
+
+    //关闭文件
+    fclose(writeFile);
+    
+    return 0;
+}
+```
+
+**fputs函数**
+
+fputs() 函数用于将字符串写入文件。位于标准库的stdio.h 头文件中。
+
+```c
+int fputs(const char *str, FILE *stream);
+```
+
+返回值说明：
+
+返回一个整数值，如果写入成功，则返回非负整数（通常是成功写入的字符数，具体取决于编译器），否则返回特殊值 EOF。
+
+参数说明：
+
+（1）str是要写入的字符串，通常以 const char* 指针的形式传递。
+
+（1）stream是指向输出流的指针，通常是文件指针。
+
+```c
+#include <stdio.h>
+
+int main(){
+    
+    //1,打写文件,w表示仅写入数据，后续做覆盖处理,a，追加模式。
+    //FILE *writeFile = fopen("data.txt","w");
+    FILE *writeFile = fopen("data.txt","a");
+
+    //如果文件打开失败，则退出
+    if(writeFile == NULL)
+    {
+        printf("文件打开失败!");
+        return -1;
+    }
+
+    //写入字符数组
+    const char *put_text = "\nfputs data value: this is Test";
+    int result = fputs(put_text,writeFile);
+
+    if(result != EOF)
+    {
+        printf("fputs写入成功,返回值: %d",result);
+    }
+
+    //关闭文件
+    fclose(writeFile);
+
+    return 0;
+}
+```
+
+输出:
+
+```sh
+fputs写入成功,返回值: 0
+```
+
+
+
+**fprintf函数**
+
+fprintf() 函数用于格式化写入文件。位于标准库的stdio.h 头文件中。
+
+```c
+int fprintf(FILE *stream, const char *format, ...);
+```
+
+***\*返回值说明：\****
+
+返回一个整数值，如果写入成功，则返回非负整数（通常是成功写入的字符数，具体取决于编译器），否则返回特殊值 EOF。
+
+***\*参数说明：\****
+
+（1）stream是一个指向 FILE 结构的指针，表示要写入的文件流。
+
+（2）format是一个格式化字符串，类似于 printf() 函数中的格式化字符串。
+
+（3）...表示可变数量的参数，根据格式化字符串中的格式占位符对应。
+
+```c
+#include <stdio.h>
+
+int main(){
+    
+    //1,打写文件,w表示仅写入数据，后续做覆盖处理,a，追加模式。
+    //FILE *writeFile = fopen("data.txt","w");
+    FILE *writeFile = fopen("data.txt","a");
+
+    //如果文件打开失败，则退出
+    if(writeFile == NULL)
+    {
+        printf("文件打开失败!");
+        return -1;
+    }
+
+    //写入字符数组
+    char *datavalueout = "这是一段内容占位符";
+    const char *put_text = "\n fprintf data value: this is Test data out , %s";
+    int result = fprintf(writeFile,put_text,datavalueout);
+
+    if(result != EOF)
+    {
+        printf("fprintf写入成功,返回值: %d",result);
+    }
+
+    //关闭文件
+    fclose(writeFile);
+    
+    return 0;
+}
+```
+
+输出:
+
+```shell
+fprintf写入成功,返回值: 73
+```
+
+
+
+
+
+#### 15.6.4 读取文件
+
+**fgetc函数**
+
+fgetc() 函数用于从文件中逐字符读取。位于标准库的stdio.h 头文件中。
+
+```c
+int fgetc(FILE *stream);
+```
+
+***\*返回值说明：\****
+
+如果读取成功，它返回所读取字符的ASCII码值（0-255之间的整数），如果到达文件结束或发生错误，它返回特殊值 EOF。
+
+***\*参数\*******\*说明：\****
+
+stream是一个指向 FILE 结构的指针，表示要写入字符的文件流。
+
+```c
+#include <stdio.h>
+
+int main(){
+
+    //1,打开文件
+    FILE *read_filie = fopen("data.txt","r");
+
+    if(read_filie == NULL)
+    {
+        printf("文件打开失败");
+        return -1;
+    }
+
+    char ch;
+    //使用fgetc逐个字符的读取
+    while((ch = fgetc(read_filie)) != EOF)
+    {
+        printf("%c",ch);
+    }
+
+    //关闭打开的文件
+    fclose(read_filie);
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+a
+afputs data value: this is Test
+fputs data value: this is Test
+ fprintf data value: this is Test data out , 这是一段内容占位符
+```
+
+
+
+**fgets函数**
+
+fgets() 函数从文件中逐行读取，遇到换行符即读取结束，读取的内容中包含换行符。该函数位于标准库的stdio.h 头文件中。
+
+```c
+char *fgets(char *str, int num, FILE *stream);
+```
+
+返回值说明：
+
+如果读取成功，它返回指向 str 的指针；如果到达文件结束或发生错误，它返回一个空指针（NULL）。
+
+参数说明:
+
+（1）str是一个指向字符数组的指针，用于存储读取的字符串。
+
+（2）num是要读取的最大字符数（包括字符串终止符 \0），通常是str的长度。
+
+（3）stream是一个文件流，通常是标准输入流（stdin）或其他文件流，用于指定从哪里读取数据。
+
+```c
+#include <stdio.h>
+
+int main(){
+
+    //1,打开文件
+    FILE *read_filie = fopen("data.txt","r");
+
+    if(read_filie == NULL)
+    {
+        printf("文件打开失败");
+        return -1;
+    }
+
+    char buffer[5];
+    //使用fgetc逐个字符的读取
+    while((fgets(buffer,sizeof(buffer),read_filie)) != NULL)
+    {
+        //fputs(buffer, stdout);
+        printf("%s",buffer);
+    }
+
+    //关闭打开的文件
+    fclose(read_filie);
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+a
+afputs data value: this is Test
+fputs data value: this is Test
+ fprintf data value: this is Test data out , 这是一段内容占位符
+```
+
+
+
+**fscanf函数**
+
+fscanf() 函数用于从文件中解析数据并存储到变量中，使用空白字符（空格、制表符、换行符等）分隔内容赋值给不同的变量。该函数位于标准库的stdio.h 头文件中。
+
+```c
+int fscanf(FILE *stream, const char *format, ...);
+```
+
+返回值 ;
+
+返回成功读取和分配的参数数目，如果没有成功读取任何参数，它返回 0；如果读取过程中发生错误，它返回特殊值 EOF。
+
+参数：
+
+（1）stream是一个指向 FILE 结构的指针，表示要从中读取数据的文件流。
+
+（2）format是一个格式化字符串，类似于 printf() 函数中的格式化字符串。
+
+（3）... 表示可变数量的参数，根据格式化字符串中的格式指定要存储数据的变量。
+
+```c
+#include <stdio.h>
+
+int main(){
+
+    //1,打开文件
+    FILE *read_filie = fopen("data.txt","r");
+
+    if(read_filie == NULL)
+    {
+        printf("文件打开失败");
+        return -1;
+    }
+
+    char name[20],age[4],address[32];
+
+    fscanf(read_filie,"%s %s %s",name,age,address);
+
+    printf("姓名:%s,年龄:%s,地址：%s",name,age,address);
+
+    //关闭打开的文件
+    fclose(read_filie);
+
+    return 0;
+}
+```
+
+输出：
+
+```sh
+姓名:小花,年龄:29,地址：上海
+```
+
+
+
 # 结束
 
 
