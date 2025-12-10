@@ -21,6 +21,11 @@ int main(){
     getchar(); //获取缓冲区中的换行符。
     scanf("%c",&ch2);
 
+    int age;
+    printf("请输入第二个字符：");
+    getchar(); //获取缓冲区中的换行符。
+    scanf("%d",&age);
+
     printf("请输入字符串:");
     scanf("%s",msg); //遇到空格就结束了，即遇到空白符结束
     
