@@ -145,6 +145,48 @@ void destoryLinkedList(LinkedList *list)
 }
 
 /**
+ * 获取指定位置的元素
+ */
+int getElementAt(LinkedList *list,size_t index)
+{
+    int result = 0;
+    Node *nodeTmp = list->head;
+    if(index == 0)
+    {
+        result = nodeTmp->value;
+    }
+    {
+        for(int i=0;i<index;i++)
+        {
+           nodeTmp = nodeTmp->next;
+        }
+
+       result =  nodeTmp->value;
+    }
+
+    return result;
+}
+
+
+/**
+ * 修改指定元素的值
+ */
+void modifyAt(LinkedList *list,size_t index,int element)
+{
+    Node *nodeTmp = list->head;
+    if(index == 0)
+    {
+        nodeTmp->value=element;
+    }
+    else{
+        for(int i=0;i<index;i++){
+            nodeTmp = nodeTmp->next;
+        }
+        nodeTmp->value = element;
+    }
+}
+
+/**
  * 打印信息
  */
 void printLinkedList(LinkedList *list)
@@ -155,6 +197,8 @@ void printLinkedList(LinkedList *list)
         printf("节点值%d \t", firstNode->value);
         firstNode = firstNode->next;
     }
+
+    printf("\n");
 }
 
 int main()
@@ -177,6 +221,13 @@ int main()
         //deleteEnd(&temp);
         deleteAt(&temp,0);
     }
+
+    printf("获取指定元素:%d\n",getElementAt(&temp,1));
+
+    printLinkedList(&temp);
+
+    //修改指定的元素
+    modifyAt(&temp,1,55);
 
     printLinkedList(&temp);
 
